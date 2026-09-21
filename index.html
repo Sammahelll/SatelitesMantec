@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./sat-sync.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#0d1117;
@@ -123,6 +124,7 @@
   .badge.atencion{background:rgba(240,180,41,.14); color:var(--warn);}
   .badge.critico{background:rgba(239,68,68,.14); color:var(--crit);}
   .badge.na{background:rgba(124,139,163,.12); color:var(--muted);}
+  .badge.intervencion{background:rgba(59,130,246,.14); color:var(--accent);}
   .tag-mono{font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:12.5px;}
 
   /* mini badges for the health matrix */
@@ -273,9 +275,13 @@
       <input id="eqBusqueda" type="search" placeholder="Buscar por TAG o nombre…">
       <label class="chk"><input type="checkbox" id="eqMostrarArchivados"> mostrar archivados</label>
       <div class="spacer"></div>
+      <button class="ghost" id="btnPlantillaEquipos">Descargar plantilla</button>
+      <button class="ghost" id="btnImportEquipos">Importar Excel</button>
+      <input type="file" id="equiposFileInput" accept=".xlsx,.xls,.csv" style="display:none">
       <button class="ghost" id="btnExportSalud">Exportar CSV</button>
       <button class="ghost" id="btnRefreshEquipos">Actualizar</button>
     </div>
+    <div id="importEquiposStatus" style="margin:0 0 10px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;"></div>
     <div class="table-scroll" id="equiposTableWrap"></div>
   </section>
 
@@ -294,6 +300,8 @@
         <option value="thermovision">ThermoVision</option>
         <option value="refrigeracion">Refrigeración</option>
         <option value="alineacion">Alineación</option>
+        <option value="motor_pro_intervencion">Motor Pro · Intervención</option>
+        <option value="refrigeracion_intervencion">Refrigeración · Intervención</option>
       </select>
       <input id="anBusqueda" type="search" placeholder="Buscar en resumen o TAG…">
       <div class="spacer"></div>
@@ -411,7 +419,24 @@ const MODULOS = [
   {key:'refrigeracion', icon:'🧊', name:'Refrigeración Pro', short:'REF', desc:'Análisis predictivo de climatización industrial.', color:'#06b6d4', href:'./refrigeracion_pro.html'},
   {key:'alineacion',   icon:'🎯', name:'Alineación Láser', short:'ALI', desc:'Seguimiento de alineación láser (TKSA 41).', color:'#7c8ba3', href:'./alineacion_laser.html'},
 ];
-const SEV_ORDEN = {critico:3, atencion:2, ok:1};
+// Motor Pro y Refrigeración Pro suben su historial de intervenciones con
+// modulo:'motor_pro_intervencion'/'refrigeracion_intervencion' y severidad:
+// 'intervencion' — no son módulos de análisis propios, son el mismo módulo
+// subiendo un tipo de registro distinto. A propósito NO van en MODULOS:
+// esa lista también genera la grid de cards (renderModulos) y las columnas
+// de la matriz de salud, y estas dos entradas duplicarían a Motor/Refrigeración
+// ahí. Este mapa aparte solo les da nombre legible donde corresponde
+// (timeline del equipo, tabla de análisis, filtro fModulo).
+const MODULOS_INTERVENCION_LABELS = {
+  motor_pro_intervencion: 'Motor Pro · Intervención',
+  refrigeracion_intervencion: 'Refrigeración · Intervención'
+};
+// intervencion:0 explícito — es un evento histórico, no un resultado de
+// ensayo, así que nunca debe pesar más que ok/atencion/critico al calcular
+// el peor estado de un equipo (undefined > x ya daba false, pero dejarlo
+// escrito evita que el próximo valor de severidad que se agregue rompa este
+// supuesto en silencio).
+const SEV_ORDEN = {critico:3, atencion:2, ok:1, intervencion:0};
 
 let equiposCache = [];
 let analisisCache = [];      // resultado crudo de la última carga (bulk)
@@ -429,12 +454,12 @@ function fmtFecha(iso){
 
 function badgeSeveridad(sev){
   const cls = sev || 'na';
-  const label = {ok:'OK', atencion:'ATENCIÓN', critico:'CRÍTICO'}[sev] || 's/d';
+  const label = {ok:'OK', atencion:'ATENCIÓN', critico:'CRÍTICO', intervencion:'INTERVENCIÓN'}[sev] || 's/d';
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
 function nombreModulo(key){
-  return (MODULOS.find(m=>m.key===key)||{}).name || key;
+  return (MODULOS.find(m=>m.key===key)||{}).name || MODULOS_INTERVENCION_LABELS[key] || key;
 }
 
 function rangoADias(rango){
@@ -975,6 +1000,126 @@ document.getElementById('eqBusqueda').oninput = renderEquiposTable;
 document.getElementById('eqMostrarArchivados').onchange = async () => { await cargarEquiposCache(); renderEquiposTable(); };
 document.getElementById('btnRefreshEquipos').onclick = async () => { await cargarEquiposCache(); renderEquiposTable(); };
 document.getElementById('btnExportSalud').onclick = exportarSaludCSV;
+
+// ---- eventos: importación masiva de equipos (Excel) — migración inicial ----
+document.getElementById('btnPlantillaEquipos').onclick = downloadTemplateEquipos;
+document.getElementById('btnImportEquipos').onclick = () => document.getElementById('equiposFileInput').click();
+document.getElementById('equiposFileInput').onchange = handleEquiposFileUpload;
+
+const EQUIPOS_TEMPLATE_HEADERS = ['TAG','Nombre','Tipo','Ubicacion'];
+
+function downloadTemplateEquipos(){
+  const sample = [
+    EQUIPOS_TEMPLATE_HEADERS,
+    ['MOT-BOMBA-01', 'Motor bomba de agua 01', 'Motor', 'Planta A · Sala de bombas'],
+    ['TAB-GENERAL-PLANTA', 'Tablero general', 'Tablero eléctrico', 'Planta A · Sala eléctrica'],
+    ['AC-OFICINA-02', 'Aire acondicionado oficina 2', 'Refrigeración', 'Edificio administrativo']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(sample);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Equipos');
+  XLSX.writeFile(wb, 'plantilla_equipos_hub.xlsx');
+}
+
+function handleEquiposFileUpload(evt){
+  const file = evt.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('importEquiposStatus');
+  status.style.color = '';
+  status.textContent = 'Procesando…';
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, defval:''});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      await importEquiposRows(rows, status);
+    }catch(err){
+      console.error(err);
+      status.style.color = 'var(--crit)';
+      status.textContent = '❌ Error al procesar el archivo: ' + err.message;
+    }
+    evt.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findColEquipos(row, names){
+  for (const n of names){
+    for (const key of Object.keys(row)){
+      if (key.trim().toLowerCase() === n.toLowerCase()) return row[key];
+    }
+  }
+  return '';
+}
+
+// Importa fila por fila (secuencial, no en paralelo) para no saturar Supabase
+// en una migración grande y para poder reportar exactamente qué fila falló.
+// Se resuelve "ya existe" contra el catálogo (equiposCache, recién refrescado)
+// y se llama a SatSync.actualizarEquipo() explícitamente cuando corresponde,
+// para dejar registro explícito de qué se creó vs. qué se actualizó en cada
+// fila. (Desde sat-sync.js v2, buscarOCrearEquipo() también rellena los campos
+// vacíos por su cuenta, pero mantener la lógica acá hace explícito el flujo
+// de la migración y el conteo creados/actualizados de abajo.)
+// Mismo criterio que en el Hub de Campo (index móvil), para que las dos
+// puertas de entrada de equipos se comporten igual.
+async function importEquiposRows(rows, status){
+  if (!SatSync.estaConfigurado()){
+    status.style.color = 'var(--crit)';
+    status.textContent = '⚠️ Conectá Supabase primero (⚙️ arriba), antes de importar.';
+    return;
+  }
+  if(!rows.length){
+    status.style.color = 'var(--warn)';
+    status.textContent = 'El archivo no tiene filas.';
+    return;
+  }
+  status.textContent = 'Cargando catálogo actual…';
+  await cargarEquiposCache(); // catálogo fresco antes de decidir crear vs. actualizar
+  const existentesPorTag = new Map(equiposCache.map(e=>[e.tag, e]));
+
+  let creados = 0, actualizados = 0, fail = 0;
+  const errores = [];
+  for(let i=0; i<rows.length; i++){
+    const row = rows[i];
+    const tag = String(findColEquipos(row, ['TAG','Tag']) || '').trim();
+    if(!tag){ fail++; errores.push(`Fila ${i+2}: sin TAG`); continue; }
+    const nombre = String(findColEquipos(row, ['Nombre']) || '').trim();
+    const tipo = String(findColEquipos(row, ['Tipo']) || '').trim();
+    const ubicacion = String(findColEquipos(row, ['Ubicacion','Ubicación']) || '').trim();
+    try{
+      const existente = existentesPorTag.get(tag);
+      if(existente){
+        // Solo se pisan los campos que la fila realmente trae — una celda
+        // vacía en el Excel no borra un dato que ya estaba cargado.
+        const cambios = {};
+        if(nombre) cambios.nombre = nombre;
+        if(tipo) cambios.tipo = tipo;
+        if(ubicacion) cambios.ubicacion = ubicacion;
+        if(Object.keys(cambios).length) await SatSync.actualizarEquipo(existente.id, cambios);
+        actualizados++;
+      } else {
+        const nuevo = await SatSync.buscarOCrearEquipo(tag, { tipo, nombre, ubicacion });
+        existentesPorTag.set(tag, nuevo); // por si el mismo TAG se repite dentro del mismo archivo
+        creados++;
+      }
+    }catch(err){
+      console.error('[MANTEC] error importando equipo', tag, err);
+      errores.push(`Fila ${i+2} (${tag}): ${err.message}`);
+      fail++;
+    }
+    status.style.color = '';
+    status.textContent = `Importando… ${i+1}/${rows.length}`;
+  }
+  await cargarEquiposCache();
+  renderEquiposTable();
+  status.style.color = fail ? 'var(--warn)' : 'var(--ok)';
+  status.textContent = fail
+    ? `✅ ${creados} creado(s) · ${actualizados} actualizado(s) · ⚠️ ${fail} con error (ver consola).`
+    : `✅ ${creados} creado(s) · ${actualizados} actualizado(s) correctamente.`;
+  if(errores.length) console.warn('[MANTEC] errores de importación de equipos:', errores);
+  showToast(fail ? `Importado con ${fail} error(es) — ver detalle abajo` : 'Importación de equipos completa', fail ? 'error' : 'success');
+}
 
 // ---- eventos: análisis (toolbar + paginación) ----
 document.getElementById('fRango').onchange = () => { renderStats(); analisisPage = 1; renderAnalisisTable(); };
