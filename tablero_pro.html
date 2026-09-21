@@ -556,7 +556,7 @@ const DEFAULT_THRESHOLDS = {
   desbI:  [10, 20, 30],
   thdV:   [3, 5, 8],
   fp:     [0.95, 0.90, 0.85],   // inverso
-  rAisl:  [100, 10, 1]          // inverso (MΩ)
+  rAisl:  [100, 25, 5]          // inverso (MΩ) — IEEE 43-2013, mismo criterio que Motor Pro
 };
 const THRESHOLD_META = {
   deltaT: {label:'ΔT Termografía (°C sobre ambiente)', unit:'°C', inverse:false},
@@ -584,10 +584,25 @@ let detailChart      = null;
 // ═══════════════════════════════════════════════════════════
 //  3. PERSISTENCE
 // ═══════════════════════════════════════════════════════════
+// v1 (histórico) = umbrales iniciales · v2 (actual) = rAisl recalibrado a
+// IEEE 43-2013 [100,25,5]. Subir este número cada vez que cambien
+// DEFAULT_THRESHOLDS o se agregue/quite un parámetro de diagnóstico.
+const SCHEMA_VERSION = 2;
+let thresholdsMigrated = false; // true si se descartaron umbrales de localStorage por ser de un esquema viejo
+
 function loadState() {
   try {
     const c = JSON.parse(localStorage.getItem('tablero_pro_cfg') || '{}');
-    if (c.thresholds) thresholds = {...DEFAULT_THRESHOLDS, ...c.thresholds};
+    const storedVersion = c.schemaVersion || 1;
+    // Umbrales de un esquema anterior (p. ej. rAisl:[100,10,1]) se descartan a
+    // propósito en vez de mezclarse con los defaults nuevos: aplicar el spread
+    // encima dejaría un híbrido inconsistente y el fix de recalibración quedaría
+    // en el código pero sin efecto real para ese técnico.
+    if (c.thresholds && storedVersion >= SCHEMA_VERSION) {
+      thresholds = {...DEFAULT_THRESHOLDS, ...c.thresholds};
+    } else if (c.thresholds) {
+      thresholdsMigrated = true; // se usan los DEFAULT_THRESHOLDS ya asignados arriba
+    }
     if (c.panelsRegistry) for (const [k,v] of Object.entries(c.panelsRegistry)) panelsRegistry.set(k,v);
     if (c.circuitsMeta) for (const [k,v] of Object.entries(c.circuitsMeta)) circuitsMeta.set(k,v);
     if (c.readingsData) {
@@ -595,6 +610,9 @@ function loadState() {
         readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: v.params, obs: v.obs || [] });
       }
     }
+    // Los datos crudos no se tocan — lo único que cambia es la EVALUACIÓN: los
+    // mismos valores se reevalúan solos con los umbrales nuevos en el próximo render.
+    if (thresholdsMigrated) saveState(); // persiste ya con el esquema vigente
   } catch(e){ console.warn('loadState error', e); }
 }
 function saveState() {
@@ -603,6 +621,7 @@ function saveState() {
     rdSerial[k] = { dates: v.dates.map(d=>d.toISOString()), params: v.params, obs: v.obs || [] };
   }
   localStorage.setItem('tablero_pro_cfg', JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
     thresholds,
     panelsRegistry: Object.fromEntries(panelsRegistry),
     circuitsMeta: Object.fromEntries(circuitsMeta),
@@ -786,6 +805,14 @@ function importRows(rows){
     if (!circuitsMeta.has(key)){
       circuitsMeta.set(key, {name: circuitName, type: circuitType, sistema: circuitSystem});
       circuitsCreated++;
+    } else {
+      const existing = circuitsMeta.get(key);
+      // Solo corregir hacia Monofásico (más restrictivo que el default Trifásico),
+      // nunca al revés, para no convertir un circuito trifásico real por un dato
+      // mal cargado en una fila — mismo criterio que usamos en Motor Pro.
+      if ((!existing.sistema || existing.sistema === 'Trifásico') && circuitSystem === 'Monofásico'){
+        existing.sistema = circuitSystem;
+      }
     }
 
     const tempAmb = numOrNaN(findCol(row,['Temp_Ambiente_C','TempAmbiente']));
@@ -1072,7 +1099,6 @@ function renderGrid(){
     const badgeLabel = level<0 ? 'Sin datos' : STATUS_LABELS[level];
     const panelId = getPanelId(k);
     const panel = panelsRegistry.get(panelId) || {};
-    const mmClass = (v)=> v<0?'':STATUS.includes(STATUS[v])?'':''; // placeholder no-op
     const subDeltaClass = diag.subs.deltaT>=0?STATUS[diag.subs.deltaT]:'';
     const subDesbIClass = diag.subs.desbI>=0?STATUS[diag.subs.desbI]:'';
     const subFPClass = diag.subs.fp>=0?STATUS[diag.subs.fp]:'';
@@ -1167,6 +1193,7 @@ function openDetail(k){
     <div class="mstat"><div class="mstat-lbl">Factor de Potencia</div><div class="mstat-val">${!isNaN(diag.fp)?fmt(diag.fp,2):'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">THD Tensión</div><div class="mstat-val">${!isNaN(diag.thdV)?fmt(diag.thdV,1)+'%':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">R. Aislación</div><div class="mstat-val">${!isNaN(diag.rAisl)?fmt(diag.rAisl,0)+' MΩ':'—'}</div></div>
+    <div class="mstat"><div class="mstat-lbl">Fase Máx.</div><div class="mstat-val">${diag.faseMax?escHtml(diag.faseMax):'—'}</div></div>
   </div>
 
   <div class="modal-section-title">Diagnóstico</div>
@@ -1210,20 +1237,28 @@ function openDetail(k){
     if (!ctx) return;
     if (detailChart) detailChart.destroy();
     const labels = d.dates.map(fmtDate);
-    const deltaTSeries = d.dates.map((_,i)=> (d.params.TempMax[i] - d.params.TempAmb[i]));
-    const iRSeries = d.params.I_R;
+    // Eje X numérico (índice de la lectura) en vez de categorías de texto: es lo
+    // que exige el plugin de decimation (necesita parsing:false + datos {x,y}),
+    // sin depender de un adapter de fechas — mismo criterio que Motor Pro.
+    const deltaTSeries = d.dates.map((_,i)=> ({x:i, y:(d.params.TempMax[i] - d.params.TempAmb[i])}));
+    const iRSeries = d.params.I_R.map((v,i)=>({x:i, y:v}));
     detailChart = new Chart(ctx, {
       type:'line',
-      data:{ labels, datasets:[
+      data:{ datasets:[
         { label:'ΔT (°C)', data:deltaTSeries, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,.1)', yAxisID:'y', tension:.3 },
         { label:'Corriente R (A)', data:iRSeries, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.1)', yAxisID:'y1', tension:.3 }
       ]},
       options:{
         responsive:true, maintainAspectRatio:false,
+        parsing:false,
         interaction:{mode:'index', intersect:false},
-        plugins:{legend:{labels:{color:'#cdd9f0'}}},
+        plugins:{
+          legend:{labels:{color:'#cdd9f0'}},
+          tooltip:{locale:'es-PY', callbacks:{title:(items)=>labels[items[0]?.parsed?.x] ?? ''}},
+          decimation:{enabled:true, algorithm:'lttb', samples:200}
+        },
         scales:{
-          x:{ticks:{color:'#5e7a9a'}, grid:{color:'#1e2d45'}},
+          x:{type:'linear', ticks:{color:'#5e7a9a', maxTicksLimit:8, callback:v=>labels[Math.round(v)] ?? ''}, grid:{color:'#1e2d45'}},
           y:{position:'left', ticks:{color:'#f97316'}, grid:{color:'#1e2d45'}},
           y1:{position:'right', ticks:{color:'#3b82f6'}, grid:{display:false}}
         }
@@ -1455,6 +1490,7 @@ function exportCSV(){
 function clearAllData(){
   if (!confirm('¿Borrar TODOS los tableros, circuitos y lecturas? Esta acción no se puede deshacer.')) return;
   panelsRegistry.clear(); circuitsMeta.clear(); readingsData.clear();
+  _capturaActual = null; // si había una captura del hub en edición, queda descartada
   saveState();
   renderAll();
 }
@@ -1514,6 +1550,14 @@ async function guardarEnLaNube(){
     if(!diag || diag.overall < 0) continue;
     const tag = getPanelName(getPanelId(k));
     if(!tag){ fail++; continue; }
+    // Tag plano (solo el panel), NO compuesto con el circuito. El hub de campo
+    // solo conoce el TAG del tablero (el técnico no elige circuito al capturar),
+    // así que un tag compuesto acá creaba un segundo "equipo" fantasma en el
+    // catálogo compartido — el hub de escritorio mostraba "TAB-GENERAL-PLANTA"
+    // (vacío, creado por el hub de campo) y "TAB-GENERAL-PLANTA / General" (con
+    // datos, creado por Tablero Pro) como si fueran dos equipos
+    // distintos. El circuito sigue yendo en `datos.circuito` — si el hub de
+    // escritorio necesita distinguir severidad por circuito, filtra por ahí.
     const health = healthScoreFromLevel(diag.overall, diag.subs);
     const nivel  = STATUS[diag.overall];
     const msgs   = diagnosisMessages(diag).filter(m=>m.sev!=='good');
@@ -1586,6 +1630,23 @@ function renderCapturasBadge(){
   b.textContent = _capturasPendientes.length;
   b.classList.toggle('hidden', _capturasPendientes.length===0);
 }
+// Chequea capturas pendientes sin abrir el modal — para que el badge avise
+// apenas se carga la página, igual que en Motor Pro y Refrigeración Pro.
+async function actualizarBadgeCapturas(){
+  const badge = document.getElementById('capturasBadge');
+  if(!badge) return;
+  if(typeof SatSync === 'undefined' || !SatSync.init() || typeof SatSync.listarCapturasPendientes !== 'function'){
+    badge.classList.add('hidden');
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'tablero_pro' });
+    renderCapturasBadge();
+  }catch(err){
+    console.warn('[SatSync] no se pudo chequear capturas pendientes', err);
+    badge.classList.add('hidden');
+  }
+}
 
 // Busca un circuito existente cuyo nombre coincida con el TAG plano que
 // manda el Hub de Campo; si no existe, crea un tablero + circuito "General"
@@ -1656,7 +1717,14 @@ function copiarCapturaAFormulario(i){
 loadState();
 populatePanelTypeSelect();
 renderAll();
+if (thresholdsMigrated){
+  const status = document.getElementById('loadStatus');
+  status.className = 'load-status ok';
+  status.textContent = '⚠️ Los umbrales de diagnóstico se actualizaron (aislación a IEEE 43-2013). Revisá la pestaña Umbrales.';
+  setTimeout(()=>{ if (status.textContent.startsWith('⚠️ Los umbrales')) status.textContent = ''; }, 12000);
+}
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
+actualizarBadgeCapturas(); // avisa si hay capturas del hub sin importar
 
 </script>
 </body>

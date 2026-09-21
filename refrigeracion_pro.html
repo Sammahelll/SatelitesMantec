@@ -1998,7 +1998,7 @@ function exportCSV(){
 }
 
 function clearAllData(){
-  if (!confirm('¿Borrar TODOS los equipos y lecturas? Esta acción no se puede deshacer.')) return;
+  if (!confirm('¿Borrar TODOS los equipos, lecturas e intervenciones? Esta acción no se puede deshacer.')) return;
   equiposRegistry.clear(); readingsData.clear(); intervenciones = [];
   saveState();
   renderAll();
@@ -2202,14 +2202,16 @@ function renderIntervenciones(){
 }
 
 // Sube una intervención puntual al hub (SatSync), reusando el canal genérico de análisis
-// del módulo (no hay severidad real para una intervención, se guarda como informativa).
+// del módulo. severidad: 'intervencion' (no 'ok') — es un evento histórico, no un resultado
+// de ensayo/lectura; mismo criterio que Motor Pro, evita que aparezca en verde en vistas
+// por severidad del hub.
 async function guardarIntervencionEnNube(rec){
   if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
   try{
     await SatSync.guardarAnalisis({
       modulo: 'refrigeracion_intervencion',
       equipo_tag: rec.eqTag,
-      severidad: 'ok',
+      severidad: 'intervencion',
       resumen: `${rec.tipo}: ${rec.descripcion.slice(0,140)}`,
       datos: { id: rec.id, fecha: rec.fecha, tipo: rec.tipo, descripcion: rec.descripcion }
     });
@@ -2304,6 +2306,23 @@ function renderCapturasBadge(){
   b.textContent = _capturasPendientes.length;
   b.classList.toggle('hidden', _capturasPendientes.length===0);
 }
+// Chequea capturas pendientes sin abrir el modal — para que el badge avise
+// apenas se carga la página, igual que en Motor Pro.
+async function actualizarBadgeCapturas(){
+  const badge = document.getElementById('capturasBadge');
+  if(!badge) return;
+  if(typeof SatSync === 'undefined' || !SatSync.init() || typeof SatSync.listarCapturasPendientes !== 'function'){
+    badge.classList.add('hidden');
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'refrigeracion' });
+    renderCapturasBadge();
+  }catch(err){
+    console.warn('[SatSync] no se pudo chequear capturas pendientes', err);
+    badge.classList.add('hidden');
+  }
+}
 
 // Busca un equipo existente cuyo TAG coincida con el que manda el Hub de Campo;
 // si no existe, lo crea (tipo por defecto 'AC Split', editable luego en Equipos).
@@ -2365,6 +2384,7 @@ loadState();
 populateEquipoTypeSelect();
 renderAll();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
+actualizarBadgeCapturas(); // avisa si hay capturas del hub sin importar
 
 </script>
 </body>

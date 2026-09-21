@@ -245,6 +245,7 @@ let equiposHub = new Map();        // tag -> {nombre, tipo, ubicacion} — catá
 let _capturasPendientes = [];      // capturas crudas desde el Hub de Campo, sin procesar
 let _capturaActual = null;         // captura en edición dentro del form "Registrar alineación"
 let _avisoCaptura = null;          // TAG mostrado en el aviso "copiado desde el hub"
+let _detalleEquipoId = null;       // equipo mostrado en la pestaña "detalle" (antes era window._detalleEquipoId)
 
 function genId(){ return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
@@ -360,18 +361,47 @@ function diagnosticarEquipo(equipoId){
 // ═══════════════════════════════════════════════════════════
 let currentTab = 'equipos';
 
+let _formSnapshot = null;         // valores del form "nueva" al salir por accidente sin guardar
+const NUEVA_FORM_FIELDS = ['fEquipo','fFecha','fTecnico','fMotivo','afOffV','afOffH','afAngV','afAngH',
+  'alOffV','alOffH','alAngV','alAngH','fSemaforo','fPataDetectada','fPataDetalle','fObs','fProxima'];
+
+function snapshotFormNueva(){
+  const snap = {};
+  for(const id of NUEVA_FORM_FIELDS){
+    const el = document.getElementById(id);
+    if(el) snap[id] = el.value;
+  }
+  return snap;
+}
+function restoreFormNueva(snap){
+  for(const id of NUEVA_FORM_FIELDS){
+    const el = document.getElementById(id);
+    if(el && snap[id] !== undefined) el.value = snap[id];
+  }
+}
+
 function switchTab(tab){
+  // Antes esto borraba _avisoCaptura/_capturaActual (y con ellos, todo lo tipeado)
+  // apenas se tocaba otro tab por error — en celular pasa todo el tiempo. Ahora
+  // se guarda el estado del form y se restaura al volver a "nueva", en vez de
+  // descartarlo. Solo se limpia al confirmar "Guardar alineación" (más abajo).
+  if(currentTab === 'nueva' && tab !== 'nueva'){
+    _formSnapshot = snapshotFormNueva();
+  }
   currentTab = tab;
-  if(tab !== 'nueva'){ _avisoCaptura = null; _capturaActual = null; }
   document.querySelectorAll('#tabNav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   render();
+  if(tab === 'nueva' && _formSnapshot){
+    restoreFormNueva(_formSnapshot);
+    _formSnapshot = null;
+  }
 }
 
 function render(){
   const main = document.getElementById('mainArea');
   if(currentTab === 'equipos') main.innerHTML = renderEquiposTab();
   else if(currentTab === 'nueva') main.innerHTML = renderNuevaAlineacionTab();
-  else if(currentTab === 'detalle') main.innerHTML = renderDetalleEquipo(window._detalleEquipoId);
+  else if(currentTab === 'detalle') main.innerHTML = renderDetalleEquipo(_detalleEquipoId);
   wireEvents();
 }
 
@@ -402,7 +432,8 @@ function renderEquiposTab(){
     <div class="row" style="justify-content:space-between; margin-bottom:14px;">
       <h2 style="margin:0;">Equipos</h2>
       <div style="display:flex;gap:8px;">
-        <button class="btn secondary" onclick="sincronizarEquiposHub().then(()=>render())">🔄 Sincronizar equipos del hub</button>
+        <button class="btn secondary" onclick="sincronizarYRenderEquipos()">🔄 Sincronizar equipos del hub</button>
+        <button class="btn secondary" onclick="exportCSV()">⬇️ Exportar CSV</button>
         <button class="btn secondary" id="btnNuevoEquipo">+ Nuevo equipo</button>
       </div>
     </div>
@@ -444,11 +475,10 @@ function renderNuevaAlineacionTab(){
         <div class="field">
           <label>Motivo de la intervención</label>
           <select id="fMotivo">
-            <option>Mantenimiento programado</option>
-            <option>Reemplazo de rodamientos / sello</option>
-            <option>Vibración alta (alarma)</option>
-            <option>Falla de acoplamiento</option>
-            <option>Otro</option>
+            <option value="preventivo">Preventivo / rutina</option>
+            <option value="correctivo">Correctivo</option>
+            <option value="instalacion">Instalación nueva</option>
+            <option value="otro">Otro</option>
           </select>
         </div>
       </div>
@@ -516,7 +546,7 @@ function renderDetalleEquipo(equipoId){
     [...hist].reverse().map(a => `<tr class="clickable" data-open-informe="${a.id}">
       <td class="mono" data-label="Fecha">${fmtDate(a.fecha)}</td>
       <td data-label="Técnico">${escapeHtml(a.tecnico||'—')}</td>
-      <td data-label="Motivo">${escapeHtml(a.motivo||'—')}</td>
+      <td data-label="Motivo">${escapeHtml(motivoLabel(a.motivo))}</td>
       <td class="mono" data-label="Offset as-left (V/H)">${fmtNum(a.asLeft?.offV)} / ${fmtNum(a.asLeft?.offH)}</td>
       <td data-label="Resultado">${semaforoBadge(a.semaforo)}</td>
       <td style="text-align:right; color:var(--accent-dark); font-size:12.5px;">Ver informe →</td>
@@ -666,7 +696,7 @@ function openInformeTrabajo(equipoId, alineacionId){
     <div class="kv"><span class="k">Equipo</span><span>${escapeHtml(eq.tag)} — ${escapeHtml(eq.planta||'')}</span></div>
     <div class="kv"><span class="k">Fecha</span><span>${fmtDate(a.fecha)}</span></div>
     <div class="kv"><span class="k">Técnico</span><span>${escapeHtml(a.tecnico||'—')}</span></div>
-    <div class="kv"><span class="k">Motivo</span><span>${escapeHtml(a.motivo||'—')}</span></div>
+    <div class="kv"><span class="k">Motivo</span><span>${escapeHtml(motivoLabel(a.motivo))}</span></div>
     <div class="kv"><span class="k">Resultado</span><span>${semaforoBadge(a.semaforo)}</span></div>
 
     <div class="compare">
@@ -697,10 +727,30 @@ function openInformeTrabajo(equipoId, alineacionId){
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// El <select> de motivo guarda el código (preventivo/correctivo/instalacion/otro)
+// para hablar el mismo idioma que el hub — esto lo traduce a etiqueta legible
+// dondequiera que se muestre un registro guardado.
+const MOTIVO_LABELS = { preventivo:'Preventivo / rutina', correctivo:'Correctivo', instalacion:'Instalación nueva', otro:'Otro' };
+function motivoLabel(m){ return MOTIVO_LABELS[m] || m || '—'; }
+
+function validarRangos(reglas){
+  for(const [id, min, max, etiqueta] of reglas){
+    const el = document.getElementById(id);
+    if(!el || el.value === '') continue;
+    const v = parseFloat(el.value);
+    if(isNaN(v)) continue;
+    if(v < min || v > max){
+      alert(`⚠️ ${etiqueta}: ${v} está fuera de rango (${min}–${max}).`);
+      el.focus();
+      return false;
+    }
+  }
+  return true;
+}
 
 function wireEvents(){
   document.querySelectorAll('[data-open-equipo]').forEach(el => {
-    el.addEventListener('click', () => { window._detalleEquipoId = el.dataset.openEquipo; currentTab='detalle'; render(); setTimeout(()=>drawTrend(el.dataset.openEquipo),0); });
+    el.addEventListener('click', () => { _detalleEquipoId = el.dataset.openEquipo; currentTab='detalle'; render(); setTimeout(()=>drawTrend(el.dataset.openEquipo),0); });
   });
   const btnNuevoEquipo = document.getElementById('btnNuevoEquipo');
   if(btnNuevoEquipo) btnNuevoEquipo.onclick = () => openNuevoEquipoModal();
@@ -709,7 +759,7 @@ function wireEvents(){
   if(btnVolver) btnVolver.onclick = () => switchTab('equipos');
 
   document.querySelectorAll('[data-open-informe]').forEach(el => {
-    el.addEventListener('click', () => openInformeTrabajo(window._detalleEquipoId, el.dataset.openInforme));
+    el.addEventListener('click', () => openInformeTrabajo(_detalleEquipoId, el.dataset.openInforme));
   });
 
   const fEquipo = document.getElementById('fEquipo');
@@ -740,6 +790,20 @@ function wireEvents(){
         equiposRegistry.set(equipoId, { tag:hubTag, planta:hubEq.ubicacion||'', rpm:'', tipoAcople:'', tempTrabajo:'' });
       }
     }
+
+    // Validación básica de rangos — no reemplaza el juicio del técnico, solo
+    // atrapa errores de tipeo obvios (offsets/ángulos fuera de todo rango físico
+    // razonable de una alineación láser) antes de guardar.
+    if(!validarRangos([
+      ['afOffV', -50, 50, 'Offset vertical (as-found)'],
+      ['afOffH', -50, 50, 'Offset horizontal (as-found)'],
+      ['afAngV', -50, 50, 'Ángulo vertical (as-found)'],
+      ['afAngH', -50, 50, 'Ángulo horizontal (as-found)'],
+      ['alOffV', -50, 50, 'Offset vertical (as-left)'],
+      ['alOffH', -50, 50, 'Offset horizontal (as-left)'],
+      ['alAngV', -50, 50, 'Ángulo vertical (as-left)'],
+      ['alAngH', -50, 50, 'Ángulo horizontal (as-left)']
+    ])) return;
 
     const registro = {
       id: genId(),
@@ -781,7 +845,7 @@ function wireEvents(){
     }
     _avisoCaptura = null;
 
-    window._detalleEquipoId = equipoId;
+    _detalleEquipoId = equipoId;
     currentTab = 'detalle';
     render();
     setTimeout(()=>drawTrend(equipoId),0);
@@ -839,6 +903,23 @@ function renderCapturasBadge(){
   if(!b) return;
   b.textContent = _capturasPendientes.length;
   b.classList.toggle('hidden', _capturasPendientes.length===0);
+}
+// Chequea capturas pendientes sin abrir el modal — para que el badge avise
+// apenas se carga la página, igual que en Motor Pro, Refrigeración Pro y Tablero Pro.
+async function actualizarBadgeCapturas(){
+  const b = document.getElementById('capturasBadge');
+  if(!b) return;
+  if(typeof SatSync === 'undefined' || !SatSync.init() || typeof SatSync.listarCapturasPendientes !== 'function'){
+    b.classList.add('hidden');
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'alineacion' });
+    renderCapturasBadge();
+  }catch(err){
+    console.warn('[SatSync] no se pudo chequear capturas pendientes', err);
+    b.classList.add('hidden');
+  }
 }
 
 function copiarCapturaAFormulario(i){
@@ -922,6 +1003,39 @@ async function publicarEquipoEnHub(name, tipo){
   }
 }
 
+// El botón de "Sincronizar equipos del hub" no daba ninguna señal de éxito/error —
+// esto da feedback explícito en los dos casos, en vez del silencio de antes.
+async function sincronizarYRenderEquipos(){
+  const ok = await sincronizarEquiposHub(false);
+  if(ok) alert(`Catálogo actualizado (${equiposHub.size} equipo(s) del hub).`);
+  render();
+}
+
+// Export CSV del historial de alineaciones — mismo criterio que Motor Pro,
+// Refrigeración Pro y Tablero Pro.
+function exportCSV(){
+  if(!alineaciones.size){ alert('Sin datos para exportar.'); return; }
+  let rows = ['TAG,Planta,Fecha,Tecnico,Motivo,Semaforo,OffV_AF,OffH_AF,AngV_AF,AngH_AF,OffV_AL,OffH_AL,AngV_AL,AngH_AL,PataBlanda,DetallePata,ProximaRevision,Observaciones'];
+  for(const [eqId, list] of alineaciones.entries()){
+    const eq = equiposRegistry.get(eqId) || {};
+    for(const a of list){
+      rows.push([
+        `"${eq.tag||''}"`, `"${eq.planta||''}"`, a.fecha, `"${a.tecnico||''}"`, `"${motivoLabel(a.motivo)}"`,
+        a.semaforo,
+        a.asFound?.offV||'', a.asFound?.offH||'', a.asFound?.angV||'', a.asFound?.angH||'',
+        a.asLeft?.offV||'', a.asLeft?.offH||'', a.asLeft?.angV||'', a.asLeft?.angH||'',
+        a.pataBlanda?.detectada||'', `"${(a.pataBlanda?.detalle||'').replace(/"/g,'""')}"`,
+        a.proximaRevision||'', `"${(a.observaciones||'').replace(/"/g,'""')}"`
+      ].join(','));
+    }
+  }
+  const blob = new Blob([rows.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `alineacion_laser_historial_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
 function mapSemaforoASeveridad(semaforo){
   if(semaforo === 'rojo') return 'critico';
   if(semaforo === 'amarillo') return 'atencion';
@@ -951,6 +1065,7 @@ async function guardarEnLaNube(registro, equipo){
 loadData();
 render();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
+actualizarBadgeCapturas(); // avisa si hay capturas del hub sin importar
 </script>
 </body>
 </html>

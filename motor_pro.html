@@ -2099,6 +2099,11 @@ function importarCapturaHub(cap){
     if(!m.vNom && d.vNom) m.vNom = d.vNom;
     if(!m.iNom && d.iNom) m.iNom = d.iNom;
     if(!m.rpm && d.rpm) m.rpm = d.rpm;
+    if(!m.hilos && d.hilos) m.hilos = d.hilos;
+    // El sistema solo se corrige hacia Monofásico (más restrictivo que el default
+    // Trifásico) — nunca al revés, para no convertir un motor real trifásico en
+    // monofásico por un dato mal cargado en el hub.
+    if((!m.sistema || m.sistema === 'Trifásico') && d.sistema === 'Monofásico') m.sistema = d.sistema;
   }
 
   const seis = (d.hilos || '3') === '6';
