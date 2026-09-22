@@ -1137,6 +1137,12 @@ function handleFileUpload(evt){
       status.textContent = `✅ ${result.rows} ensayo(s) · ${result.motors} motor(es)`;
       saveState();
       renderAll();
+
+      // Publicar a la nube los análisis de todos los motores con ensayos
+      // (fire-and-forget, uno por uno para no saturar la conexión).
+      (async () => {
+        for (const k of readingsData.keys()) await publicarAnalisisMotor(k).catch(() => {});
+      })();
     } catch(err){
       console.error(err);
       status.className = 'load-status err';
@@ -1522,6 +1528,10 @@ function saveManualReading(){
   const status = document.getElementById('loadStatus');
   status.className = 'load-status ok';
   status.textContent = `✅ Ensayo guardado: ${getMotorName(key)}` + (governingWinding ? ` (devanado ${governingWinding} gobierna el diagnóstico)` : '');
+
+  // Publicar el análisis actualizado del motor a la nube (fire-and-forget:
+  // no bloquea ni afecta la UI si falla, ej. sin conexión).
+  publicarAnalisisMotor(key).catch(() => {});
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2279,6 +2289,10 @@ async function abrirCapturasPendientes(){
       : `📥 ${ok} captura(s) importada(s) desde el hub de campo.`;
   }
   if(fail) console.warn('[MotorPro] capturas con error:', errores);
+
+  // Publicar a la nube los análisis de los motores con ensayos, ahora que
+  // las capturas importadas ya están en readingsData (fire-and-forget).
+  for (const k of readingsData.keys()) await publicarAnalisisMotor(k).catch(() => {});
 }
 
 // Convierte una captura del hub (tabla capturas_campo) en un ensayo de Motor Pro.
@@ -2357,6 +2371,44 @@ function mapNivelASeveridad(nivel){
   return 'ok';
 }
 
+// Publica el análisis del motor `k` a la tabla `analisis`. Fire-and-forget:
+// pensada para llamarse sin bloquear desde saveManualReading/handleFileUpload/
+// abrirCapturasPendientes, de forma que el ensayo quede guardado en la UI
+// igual aunque la subida a la nube falle (offline, sin conexión, etc.).
+// Devuelve true (publicado), false (falló) o null (no aplica — sin
+// diagnóstico válido o sin TAG, no cuenta como error en guardarEnLaNube).
+async function publicarAnalisisMotor(k){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
+  const diag = diagnoseMotor(k);
+  if (!diag || diag.overall < 0) return null;
+  const tag = getMotorName(k);
+  if (!tag) return null;
+  const m = motorsRegistry.get(k) || {};
+  const nivel  = STATUS[diag.overall];
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const msgs   = diagnosisMessages(diag, prevEvaluation(k)).filter(x => x.sev !== 'good');
+  const resumen = msgs.length ? msgs[0].title.replace(/^[^\w]+/, '') : 'Sin hallazgos relevantes';
+  try {
+    await SatSync.guardarAnalisis({
+      modulo: 'motor_pro',
+      equipo_tag: tag,
+      severidad: mapNivelASeveridad(nivel),
+      resumen,
+      datos: {
+        motor: tag, tipo: m.type, sistema: m.sistema, kw: m.kw,
+        vNom: m.vNom, iNom: m.iNom, rpm: m.rpm,
+        health, nivel, ip: diag.ip, rAisl: diag.rAisl, rAislCorr: diag.rAislCorr,
+        desbR: diag.desbR, desbI: diag.desbI,
+        fecha: diag.date, hallazgos: msgs
+      }
+    });
+    return true;
+  } catch (err) {
+    console.warn('[SatSync] no se pudo publicar análisis de', tag, err);
+    return false;
+  }
+}
+
 async function guardarEnLaNube(){
   if(!readingsData.size){ alert('Generá el informe primero.'); return; }
   const statusEl = document.getElementById('nubeStatus');
@@ -2371,32 +2423,8 @@ async function guardarEnLaNube(){
   btn.disabled = true;
   let ok = 0, fail = 0;
   for (const k of readingsData.keys()){
-    const diag = diagnoseMotor(k);
-    if(!diag || diag.overall < 0) continue;
-    const tag = getMotorName(k);
-    if(!tag){ fail++; continue; }
-    const health = healthScoreFromLevel(diag.overall, diag.subs);
-    const nivel  = STATUS[diag.overall];
-    const msgs   = diagnosisMessages(diag, prevEvaluation(k)).filter(m=>m.sev!=='good');
-    const resumen = msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Sin hallazgos relevantes';
-    const m = motorsRegistry.get(k) || {};
-    try{
-      await SatSync.guardarAnalisis({
-        modulo: 'motor_pro',
-        equipo_tag: tag,
-        severidad: mapNivelASeveridad(nivel),
-        resumen,
-        datos: {
-          motor: tag, tipo: m.type, sistema: m.sistema, kw: m.kw, vNom: m.vNom, iNom: m.iNom, rpm: m.rpm,
-          health, nivel, ip: diag.ip, rAisl: diag.rAisl, rAislCorr: diag.rAislCorr,
-          desbR: diag.desbR, desbI: diag.desbI, fecha: diag.date, hallazgos: msgs
-        }
-      });
-      ok++;
-    }catch(err){
-      console.error('[SatSync] error guardando', tag, err);
-      fail++;
-    }
+    const r = await publicarAnalisisMotor(k);
+    if (r === true) ok++; else if (r === false) fail++;
   }
   btn.disabled = false;
   statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';

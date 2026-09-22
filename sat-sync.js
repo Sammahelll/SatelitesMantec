@@ -634,10 +634,45 @@
     return avisos;
   }
 
+  // Calcula severidad a partir de un valor y umbrales.
+  // modo: 'max'   → valor alto es malo (temperatura, vibración)
+  //       'min'   → valor bajo es malo (aislamiento, presión)
+  //       'rango' → desviarse del rango es malo (tensión, pH)
+  function calcularSeveridad(valor, umbrales, modo = 'max') {
+    if (valor === null || valor === undefined || isNaN(valor)) return 'ok';
+    const v = parseFloat(valor);
+
+    if (modo === 'max') {
+      if (umbrales.critico !== undefined && v >= umbrales.critico) return 'critico';
+      if (umbrales.alerta  !== undefined && v >= umbrales.alerta)  return 'atencion';
+      return 'ok';
+    }
+    if (modo === 'min') {
+      if (umbrales.critico !== undefined && v <= umbrales.critico) return 'critico';
+      if (umbrales.alerta  !== undefined && v <= umbrales.alerta)  return 'atencion';
+      return 'ok';
+    }
+    if (modo === 'rango') {
+      if (v < umbrales.min || v > umbrales.max) return 'critico';
+      return 'ok';
+    }
+    return 'ok';
+  }
+
+  // Severidad global = la peor de todas las severidades individuales.
+  // Se usa cuando el análisis tiene varios sub-chequeos (ej: 4 rodamientos).
+  function peorSeveridad(severidades) {
+    const orden = { critico: 3, atencion: 2, ok: 1 };
+    return (severidades || [])
+      .filter(s => s && orden[s])
+      .sort((a, b) => orden[b] - orden[a])[0] || 'ok';
+  }
+
   global.SatSync = {
     init, estaConfigurado, guardarConfig, leerConfig,
     listarEquipos, buscarOCrearEquipo, actualizarEquipo, archivarEquipo,
     guardarAnalisis, listarAnalisis, subirImagen,
+    calcularSeveridad, peorSeveridad,
     guardarCaptura, listarCapturasPendientes, marcarCapturaProcesada,
     buscarEquipoPorTag, guardarFichas, quitarModuloDeEquipo, renombrarEquipo,
     listarMediciones, guardarMediciones, borrarMedicion, cargarConfigApp, guardarConfigApp,
