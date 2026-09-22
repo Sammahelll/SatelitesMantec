@@ -381,7 +381,7 @@ header{
   <div class="panel-box">
     <div class="panel-box-title">➕ Registrar tablero</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-      <button class="btn-small" onclick="sincronizarEquiposHub().then(()=>{renderPanelsList();alert('Catálogo del hub actualizado ('+equiposHub.size+' equipos).');})">🔄 Sincronizar equipos del hub</button>
+      <button class="btn-small" onclick="importarEquiposDelHub().then(n=>alert(n ? 'Importados '+n+' tablero(s) del hub.' : 'No hay tableros nuevos para importar. Si esperabas ver alguno, probá «🔄 Recargar» (puede que ya tenga ficha en la nube).'))">🔄 Importar tableros del hub</button>
       <span style="font-size:.8rem;color:var(--muted);">trae el catálogo compartido para reusar el mismo TAG entre módulos</span>
     </div>
     <datalist id="hubTagsDatalist"></datalist>
@@ -1798,6 +1798,74 @@ async function sincronizarEquiposHub(silencioso){
     if(!silencioso) alert('No se pudo leer el catálogo de equipos del hub: ' + err.message);
     return false;
   }
+}
+
+// ── Importar tableros del catálogo del hub ──
+// Matchea tipo/tag/nombre contra patrones típicos de tablero eléctrico para
+// no traer motores, bombas, equipos de refrigeración, etc.
+const RE_TABLERO = /tablero|tgbt|^tab|tab-|ccm|capacitor|ats|transferenc|alimentador|distribuci/i;
+
+function pareceTablero(e){
+  const blob = `${e.tipo||''} ${e.tag||''} ${e.nombre||''}`;
+  return RE_TABLERO.test(blob);
+}
+function yaExistePanel(tag){
+  const t = String(tag||'').trim().toLowerCase();
+  for (const p of panelsRegistry.values()){
+    if (String(p.name||'').trim().toLowerCase() === t) return true;
+  }
+  return false;
+}
+function tipoPanelDesdeHub(tipoHub){
+  const t = String(tipoHub||'').toLowerCase().trim();
+  if (!t) return PANEL_TYPES[0];
+  return PANEL_TYPES.find(p => p.toLowerCase() === t) || PANEL_TYPES[0];
+}
+
+// Trae el catálogo del hub y crea un panel local por cada equipo que parezca
+// tablero y no exista todavía. Devuelve la cantidad importada.
+// saveState() dispara subirCambios() → SatSync.guardarFichas(MODULO, …)
+// así que a esos equipos se les crea su ficha tablero_pro en Supabase.
+async function importarEquiposDelHub(silencioso){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    if (!silencioso) alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return 0;
+  }
+  try{
+    const rows = await SatSync.listarEquipos();
+    equiposHub = new Map(rows.map(e => [e.tag, e]));
+    actualizarDatalistHub();
+  }catch(err){
+    if (!silencioso) alert('No se pudo leer el catálogo del hub: ' + err.message);
+    return 0;
+  }
+  let importados = 0, conFicha = 0;
+  for (const e of equiposHub.values()){
+    if (!e || !e.tag) continue;
+    if (yaExistePanel(e.tag)) continue;
+    if (!pareceTablero(e))    continue;
+    // Si el equipo ya tiene ficha tablero_pro en la nube, NO lo importamos
+    // desde acá: bajarTodo() es el que lo trae con toda su data (circuitos +
+    // lecturas). Importarlo vacío lo sobrescribiría con {circuitos:{}} en la
+    // próxima subida (guardarFichas sube con noPisar:false por defecto).
+    if (e.ficha && e.ficha[MODULO] && !e.ficha[MODULO].eliminada){ conFicha++; continue; }
+    const id = genId();
+    panelsRegistry.set(id, {
+      name: e.tag,
+      type: tipoPanelDesdeHub(e.tipo),
+      location: e.ubicacion || '',
+      ampNominal: 0
+    });
+    importados++;
+  }
+  if (importados){
+    saveState();      // sube las fichas nuevas
+    renderAll();
+  }
+  if (!silencioso && conFicha && !importados){
+    console.info(`[Tablero Pro] ${conFicha} tablero(s) con ficha en la nube quedaron pendientes — usá "🔄 Recargar" para traerlos completos.`);
+  }
+  return importados;
 }
 
 async function publicarEquipoEnHub(name, tipo){
