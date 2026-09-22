@@ -1,0 +1,2357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANTEC – Bomba Pro V1.0 · Análisis Hidráulico y de Sellos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./sat-sync.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #07090f;
+  --surface: #0d1117;
+  --card: #111827;
+  --card2: #141d2e;
+  --border: #1e2d45;
+  --border2: #263548;
+  --text: #cdd9f0;
+  --muted: #5e7a9a;
+  --good: #10c98a;
+  --elevated: #f0b429;
+  --warning: #f97316;
+  --critical: #ef4444;
+  --good-bg: rgba(16,201,138,.12);
+  --elevated-bg: rgba(240,180,41,.12);
+  --warning-bg: rgba(249,115,22,.12);
+  --critical-bg: rgba(239,68,68,.12);
+  --accent: #0891b2;
+  --accent2: #22d3ee;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;}
+code,.mono{font-family:'Share Tech Mono',monospace;}
+button,select,input{font-family:'Rajdhani',sans-serif;}
+
+/* ── HEADER ── */
+header{
+  background:linear-gradient(135deg,#0d1117 0%,#0d2530 100%);
+  border-bottom:1px solid var(--border);
+  padding:16px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);
+}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:38px;height:38px;background:var(--accent);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;}
+.logo-title{font-size:1.4rem;font-weight:700;letter-spacing:1px;color:#fff;}
+.logo-sub{font-size:.7rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:20px;}
+.hstat{text-align:center;}
+.hstat-val{font-size:1.3rem;font-weight:700;}
+.hstat-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+
+/* ── UPLOAD BAR ── */
+.upload-bar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:12px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.file-label{
+  background:var(--accent);color:#fff;padding:7px 20px;border-radius:30px;
+  cursor:pointer;font-weight:600;font-size:.9rem;
+  transition:background .2s;letter-spacing:.5px;
+}
+.file-label:hover{background:#0e7490;}
+.file-label input{display:none;}
+.load-status{font-size:.85rem;color:var(--muted);}
+.load-status.ok{color:var(--good);}
+.load-status.err{color:var(--critical);}
+.btn-small{
+  background:var(--card);border:1px solid var(--border2);color:var(--text);
+  padding:5px 14px;border-radius:20px;
+  font-size:.83rem;cursor:pointer;transition:all .2s;
+}
+.btn-small:hover{border-color:var(--accent);color:var(--accent2);}
+.btn-small.danger:hover{border-color:var(--critical);color:var(--critical);}
+
+/* ── TABS ── */
+.tabs{
+  display:flex;gap:2px;background:var(--surface);
+  border-bottom:1px solid var(--border);padding:0 24px;overflow-x:auto;
+}
+.tab-btn{
+  padding:12px 22px;background:transparent;border:none;cursor:pointer;
+  font-weight:600;font-size:1rem;white-space:nowrap;
+  color:var(--muted);transition:.2s;border-bottom:3px solid transparent;
+}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent);}
+.tab-content{display:none;padding:24px;max-width:1500px;margin:0 auto;}
+.tab-content.active{display:block;}
+
+/* ── SUMMARY BAR ── */
+.summary-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;
+}
+.sum-card{
+  background:var(--card);border-radius:10px;padding:14px 18px;
+  border:1px solid var(--border);position:relative;overflow:hidden;
+  display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .2s;
+}
+.sum-card:hover{border-color:var(--border2);}
+.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.sum-card.good::before{background:var(--good);}
+.sum-card.elevated::before{background:var(--elevated);}
+.sum-card.warning::before{background:var(--warning);}
+.sum-card.critical::before{background:var(--critical);}
+.sum-icon{font-size:1.5rem;}
+.sum-num{font-size:1.8rem;font-weight:700;}
+.sum-lbl{font-size:.78rem;color:var(--muted);margin-top:2px;}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+.filter-btn{
+  background:var(--card);border:1px solid var(--border);color:var(--muted);
+  padding:5px 14px;border-radius:20px;
+  font-size:.88rem;cursor:pointer;transition:all .2s;
+}
+.filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent2);background:rgba(8,145,178,.1);}
+.filter-btn.f-good.active{border-color:var(--good);color:var(--good);background:var(--good-bg);}
+.filter-btn.f-elevated.active{border-color:var(--elevated);color:var(--elevated);background:var(--elevated-bg);}
+.filter-btn.f-warning.active{border-color:var(--warning);color:var(--warning);background:var(--warning-bg);}
+.filter-btn.f-critical.active{border-color:var(--critical);color:var(--critical);background:var(--critical-bg);}
+.search-box{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:5px 14px;border-radius:20px;
+  font-size:.92rem;outline:none;min-width:200px;
+}
+.search-box:focus{border-color:var(--accent);}
+.sort-sel{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:5px 14px;border-radius:20px;
+  font-size:.88rem;outline:none;cursor:pointer;
+}
+.sep{flex:1;}
+
+/* ── GRID / CARD ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;}
+.mcard{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  cursor:pointer;transition:all .2s;overflow:hidden;position:relative;
+}
+.mcard:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4);}
+.mcard-header{
+  padding:12px 16px 9px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+.mname{font-size:.98rem;font-weight:700;color:#fff;letter-spacing:.5px;}
+.mpoint{font-size:.73rem;color:var(--muted);margin-top:1px;}
+.mpoint-badge{
+  display:inline-block;background:rgba(8,145,178,.15);color:var(--accent2);
+  border:1px solid rgba(8,145,178,.25);padding:1px 7px;border-radius:4px;
+  font-size:.66rem;font-family:'Share Tech Mono';letter-spacing:.5px;margin-top:3px;
+}
+.mbadge{
+  font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;
+  text-transform:uppercase;letter-spacing:1px;white-space:nowrap;
+}
+.badge-good{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.badge-elevated{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.badge-warning{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.badge-critical{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);animation:pulse-border .8s ease-in-out infinite alternate;}
+@keyframes pulse-border{from{border-color:rgba(239,68,68,.3);}to{border-color:rgba(239,68,68,.8);}}
+
+.mcard-body{padding:12px 16px;display:flex;gap:12px;align-items:center;}
+.health-ring-wrap{flex-shrink:0;}
+.health-ring{transform:rotate(-90deg);}
+.health-ring circle{fill:none;stroke-width:4;}
+.health-num{font-size:1rem;font-weight:700;}
+.mmetrics{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;}
+.mm-item{display:flex;flex-direction:column;}
+.mm-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.mm-val{font-size:.86rem;font-weight:700;font-family:'Share Tech Mono';}
+.mm-val.good{color:var(--good);}
+.mm-val.elevated{color:var(--elevated);}
+.mm-val.warning{color:var(--warning);}
+.mm-val.critical{color:var(--critical);}
+.mcard-footer{padding:7px 16px;border-top:1px solid var(--border);font-size:.7rem;color:var(--muted);display:flex;justify-content:space-between;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-state .ei{font-size:3rem;margin-bottom:12px;}
+
+/* ── MODAL ── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(3,5,10,.75);
+  z-index:1000;backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:40px 16px;
+}
+.modal-overlay.open{display:flex;}
+.modal-box{
+  background:var(--surface);border:1px solid var(--border2);border-radius:16px;
+  max-width:920px;width:100%;overflow:hidden;
+}
+.modal-head{
+  padding:18px 26px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(135deg,#0d1117 0%,#0d2530 100%);
+}
+.modal-title{font-size:1.2rem;font-weight:700;color:#fff;}
+.modal-sub{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:22px 26px;}
+.modal-section-title{font-size:.72rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:20px 0 10px;}
+.modal-section-title:first-child{margin-top:0;}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+.mstat{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 12px;}
+.mstat-lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.mstat-val{font-size:1.15rem;font-weight:700;font-family:'Share Tech Mono';margin-top:2px;}
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;height:260px;}
+.diag-box{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:9px;padding:12px 16px;margin-bottom:8px;}
+.diag-box.warning{border-left-color:var(--warning);}
+.diag-box.critical{border-left-color:var(--critical);}
+.diag-box.elevated{border-left-color:var(--elevated);}
+.diag-title{font-weight:700;font-size:.9rem;margin-bottom:3px;}
+.diag-action{font-size:.82rem;color:var(--muted);}
+.rtable{width:100%;border-collapse:collapse;}
+.rtable th{text-align:left;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;border-bottom:1px solid var(--border2);}
+.rtable td{padding:6px 10px;border-bottom:1px solid var(--border);font-size:.82rem;font-family:'Share Tech Mono';}
+
+/* ── FORMS / CONFIG ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:18px;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.fld input,.fld select,.fld textarea{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:8px;font-size:.92rem;outline:none;
+}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--accent);}
+.panel-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+.panel-box-title{font-weight:700;color:#fff;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+.th-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.th-item-lbl{font-size:.78rem;font-weight:700;color:#fff;margin-bottom:8px;}
+.th-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:.78rem;}
+.th-row label{flex:1;color:var(--muted);}
+.th-row input{width:70px;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:5px;font-family:'Share Tech Mono';font-size:.8rem;}
+
+/* ── REPORT TAB ── */
+.fleet-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:20px;}
+.fleet-box-title{font-size:.85rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.fleet-text{font-size:.95rem;line-height:1.6;}
+.section-divider{border:none;border-top:1px solid var(--border);margin:26px 0 16px;position:relative;}
+.section-divider[data-label]::after{
+  content:attr(data-label);position:absolute;top:-11px;left:0;background:var(--bg);
+  padding:0 10px;font-size:.72rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;font-weight:700;
+}
+.plan-table{width:100%;border-collapse:collapse;}
+.plan-table th{text-align:left;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border2);}
+.plan-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:.84rem;}
+.prio-badge{font-family:'Share Tech Mono';font-weight:700;padding:2px 8px;border-radius:5px;font-size:.75rem;}
+.prio-critical{background:var(--critical-bg);color:var(--critical);}
+.prio-warning{background:var(--warning-bg);color:var(--warning);}
+.prio-elevated{background:var(--elevated-bg);color:var(--elevated);}
+.action-bar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+.note-box{margin-top:16px;padding:12px 18px;background:rgba(8,145,178,.06);border:1px solid rgba(8,145,178,.15);border-radius:10px;font-size:.8rem;color:var(--muted);}
+
+/* ── MISC ── */
+.hidden{display:none !important;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:5px;}
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE (≤680px) — versión adaptada para celular/tablet
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 680px){
+  header{padding:12px 16px;flex-wrap:wrap;gap:10px;}
+  .logo-title{font-size:1.1rem;}
+  .logo-sub{font-size:.62rem;letter-spacing:1px;}
+  .logo-icon{width:32px;height:32px;font-size:16px;border-radius:8px;}
+  .header-right{gap:14px;width:100%;justify-content:space-between;}
+  .hstat-val{font-size:1.05rem;}
+  .hstat-lbl{font-size:.58rem;}
+
+  .upload-bar{padding:10px 16px;gap:8px;}
+  .file-label{padding:6px 14px;font-size:.82rem;}
+  .btn-small{padding:6px 12px;font-size:.8rem;}
+  .load-status{width:100%;order:1;}
+
+  .tabs{padding:0 10px;}
+  .tab-btn{padding:10px 14px;font-size:.88rem;}
+  .tab-content{padding:14px;}
+
+  .summary-bar{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .sum-card{padding:12px 14px;}
+  .sum-num{font-size:1.5rem;}
+
+  .toolbar{gap:6px;}
+  .search-box{min-width:0;flex:1 1 100%;order:1;}
+  .sort-sel{flex:1;}
+
+  .grid{grid-template-columns:1fr;}
+
+  .modal-overlay{padding:0;align-items:stretch;}
+  .modal-box{max-width:100%;width:100%;min-height:100vh;border-radius:0;}
+  .modal-head{padding:14px 16px;}
+  .modal-body{padding:16px;}
+  .form-grid{grid-template-columns:1fr;}
+  .th-grid{grid-template-columns:1fr;}
+  .mgrid{grid-template-columns:repeat(2,1fr);}
+
+  .rtable, .plan-table{border:none;}
+  .rtable thead, .plan-table thead{display:none;}
+  .rtable tbody tr, .plan-table tbody tr{
+    display:block;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:8px 10px;
+  }
+  .rtable td, .plan-table td{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    border:none;padding:5px 0;font-size:.82rem;white-space:normal;
+  }
+  .rtable td::before, .plan-table td::before{
+    content:attr(data-label);color:var(--muted);font-family:'Rajdhani',sans-serif;
+    text-transform:uppercase;font-size:.65rem;letter-spacing:.5px;flex-shrink:0;
+  }
+}
+
+/* ── Indicadores (detalle y vista previa) ── */
+.crit-btn{background:var(--card);border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:20px;font-size:.88rem;cursor:pointer;transition:all .2s;}
+.crit-btn:hover,.crit-btn.active{border-color:var(--accent);color:var(--accent2);background:rgba(8,145,178,.1);}
+.chk-inline{display:flex;align-items:center;gap:6px;font-size:.88rem;color:var(--muted);cursor:pointer;}
+.chk-inline input{accent-color:var(--accent);}
+.ind-cover{font-size:.78rem;color:var(--muted);margin:2px 0 8px;}
+.ind-row{padding:6px 0;border-top:1px solid var(--border);}
+.ind-main{display:flex;align-items:center;gap:8px;}
+.ind-dot{width:9px;height:9px;border-radius:50%;background:var(--border2);flex-shrink:0;}
+.ind-dot.info{background:var(--accent);} .ind-dot.good{background:var(--good);} .ind-dot.elevated{background:var(--elevated);}
+.ind-dot.warning{background:var(--warning);} .ind-dot.critical{background:var(--critical);}
+.ind-lbl{flex:1;font-size:.92rem;}
+.ind-val{font-family:'Share Tech Mono',monospace;font-size:.86rem;color:#fff;text-align:right;}
+.ind-val.good{color:var(--good);} .ind-val.elevated{color:var(--elevated);} .ind-val.warning{color:var(--warning);} .ind-val.critical{color:var(--critical);}
+.ind-nota{font-size:.76rem;color:var(--muted);margin:2px 0 0 17px;line-height:1.3;}
+.nd,.ind-val.nd,.mm-val.nd{color:var(--muted);font-style:italic;font-weight:400;font-family:'Rajdhani',sans-serif;}
+.hint-txt{font-size:.78rem;color:var(--muted);margin:6px 0 12px;line-height:1.4;}
+.hint-txt b{color:var(--text);}
+.ref-tag{color:var(--elevated);font-size:.7rem;margin-left:4px;}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.venc{color:var(--warning);font-weight:700;}
+.sel-inline{margin:4px 0 8px;}
+.sel-inline select{background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 10px;border-radius:8px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">💧</div>
+    <div>
+      <div class="logo-title">BOMBA PRO</div>
+      <div class="logo-sub">MANTEC · Análisis Hidráulico y de Sellos</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="hstat"><div class="hstat-val" id="hsBombas">0</div><div class="hstat-lbl">Bombas</div></div>
+    <div class="hstat"><div class="hstat-val" id="hsLecturas">0</div><div class="hstat-lbl">Lecturas</div></div>
+    <div class="hstat"><div class="hstat-val" id="hsSalud" style="color:var(--good);">—</div><div class="hstat-lbl">Salud Flota</div></div>
+  </div>
+</header>
+
+<div class="upload-bar">
+  <label class="file-label">📂 Importar Excel/CSV<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)"></label>
+  <button class="btn-small" style="border-color:var(--accent);color:var(--accent2);" onclick="openManualEntry()">✍️ Cargar medición manual</button>
+  <button class="btn-small" style="border-color:var(--good);color:var(--good);" onclick="abrirCapturasPendientes()">📥 Capturas de campo <span id="capturasBadge" class="hidden" style="margin-left:4px;">0</span></button>
+  <button class="btn-small" onclick="downloadTemplate()">⬇️ Descargar plantilla</button>
+  <button class="btn-small" onclick="exportCSV()">⬇️ Exportar historial CSV</button>
+  <span class="load-status" id="loadStatus"></span>
+  <span id="nubeEstado" style="font-size:.78rem;font-weight:600;margin-left:8px;"></span>
+  <div class="sep"></div>
+  <button class="btn-small" onclick="clearAllData()">🔄 Recargar desde la nube</button>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+  <button class="tab-btn" data-tab="bombas" onclick="switchTab('bombas')">💧 Bombas</button>
+  <button class="tab-btn" data-tab="config" onclick="switchTab('config')">⚙️ Umbrales</button>
+  <button class="tab-btn" data-tab="informe" onclick="switchTab('informe')">📋 Informe</button>
+</div>
+
+<!-- ═══ DASHBOARD TAB ═══ -->
+<div class="tab-content active" id="tab-dashboard">
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="toolbar">
+    <button class="filter-btn active" data-f="all" onclick="setStatusFilter('all')">Todos</button>
+    <button class="filter-btn f-good" data-f="good" onclick="setStatusFilter('good')">🟢 Normal</button>
+    <button class="filter-btn f-elevated" data-f="elevated" onclick="setStatusFilter('elevated')">🟡 Elevado</button>
+    <button class="filter-btn f-warning" data-f="warning" onclick="setStatusFilter('warning')">🟠 Alerta</button>
+    <button class="filter-btn f-critical" data-f="critical" onclick="setStatusFilter('critical')">🔴 Crítico</button>
+    <input class="search-box" id="searchBox" placeholder="🔎 Buscar bomba…" oninput="renderGrid()">
+    <select class="sort-sel" id="sortSel" onchange="renderGrid()">
+      <option value="health_asc">Salud (peor primero)</option>
+      <option value="name_asc">Nombre A-Z</option>
+      <option value="npsh_asc">Margen NPSH (menor primero)</option>
+      <option value="date_desc">Última medición (más reciente)</option>
+      <option value="date_asc">Última medición (más antigua / pendientes)</option>
+    </select>
+    <button class="crit-btn active" data-crit="todas" onclick="setCritFilter('todas')">Todas las clases</button>
+    <button class="crit-btn" data-crit="AB" onclick="setCritFilter('AB')">Clase A/B</button>
+    <button class="crit-btn" data-crit="C" onclick="setCritFilter('C')">Clase C</button>
+    <button class="crit-btn" data-crit="DE" onclick="setCritFilter('DE')">Clase D/E</button>
+    <label class="chk-inline"><input type="checkbox" id="soloVenc" onchange="renderGrid()"> Solo vencidas / pendientes (<span id="cVenc">0</span>)</label>
+    <div class="sep"></div>
+  </div>
+  <div class="grid" id="cardGrid"></div>
+</div>
+
+<!-- ═══ BOMBAS TAB ═══ -->
+<div class="tab-content" id="tab-bombas">
+  <div class="panel-box">
+    <div class="panel-box-title">➕ Registrar bomba</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn-small" onclick="sincronizarEquiposHub().then(()=>{renderBombasList();alert('Catálogo del hub actualizado ('+equiposHub.size+' equipos).');})">🔄 Sincronizar equipos del hub</button>
+      <button class="btn-small" onclick="openImportLista()">📋 Importar lista pegada</button>
+      <span style="font-size:.8rem;color:var(--muted);">trae el catálogo compartido para reusar el mismo TAG entre módulos (Vibración, Termografía, Motor Pro)</span>
+    </div>
+    <datalist id="hubTagsDatalist"></datalist>
+    <div class="form-grid"><div class="fld"><label>Nombre / TAG de la bomba</label><input id="newBombName" list="hubTagsDatalist" placeholder="Ej: BBA-ENFRIAMIENTO-01"></div></div>
+    <div id="newBombFicha"></div>
+    <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="createBomb()">Crear bomba</button>
+  </div>
+  <div class="fld" style="margin-bottom:10px;"><input id="bombSearch" placeholder="🔎 Buscar bomba en la lista…" oninput="renderBombasList()"></div>
+  <div id="bombasRegistryList"></div>
+</div>
+
+<!-- ═══ CONFIG TAB ═══ -->
+<div class="tab-content" id="tab-config">
+  <div class="panel-box">
+    <div class="panel-box-title">⚙️ Umbrales de diagnóstico (editables)</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">
+      Valores orientativos para bombas centrífugas comparados contra el punto de diseño cargado en la ficha de cada bomba (caudal nominal, ΔP nominal y NPSH requerido). Ajustalos a tu criterio o al del fabricante.
+    </p>
+    <div class="th-grid" id="thresholdGrid"></div>
+    <button class="btn-small" style="margin-top:14px;background:var(--accent);color:#fff;border:none;" onclick="saveThresholdsFromUI()">💾 Guardar umbrales</button>
+    <button class="btn-small" style="margin-top:14px;" onclick="resetThresholds()">↺ Restaurar por defecto</button>
+  </div>
+  <div class="panel-box">
+    <div class="panel-box-title">🔧 Opciones de comparación y rondas</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">
+      Tolerancias para decidir si dos mediciones se pueden comparar entre sí, presión atmosférica local (para el NPSH calculado) y cadencia de rondas por clase de criticidad.
+    </p>
+    <div class="th-grid" id="opcionesGrid"></div>
+    <button class="btn-small" style="margin-top:14px;background:var(--accent);color:#fff;border:none;" onclick="saveOpcionesFromUI()">💾 Guardar opciones</button>
+  </div>
+  <div class="panel-box">
+    <div class="panel-box-title">🧷 Criterio de evaluación de sello / acople (no numérico)</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px;">
+      El estado del sello se evalúa por criterio cualitativo (seleccionado al cargar la medición), no por umbral numérico. Este es el criterio actual por tipo de acople:
+    </p>
+    <div id="sealCriteriaBox" class="th-grid"></div>
+  </div>
+</div>
+
+<!-- ═══ INFORME TAB ═══ -->
+<div class="tab-content" id="tab-informe">
+  <div class="action-bar">
+    <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="generateOfflineReport()">🔄 Generar informe</button>
+    <button class="btn-small" onclick="copyReport()">📋 Copiar como texto</button>
+    <button class="btn-small" id="btnGuardarNube" onclick="guardarEnLaNube()">☁️ Guardar en la nube</button>
+  </div>
+  <div id="nubeStatus" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
+  <div id="reportSections"><div class="empty-state"><div class="ei">📋</div>Generá el informe para ver el diagnóstico consolidado de la flota de bombas.</div></div>
+</div>
+
+<!-- ═══ MODAL CARGA MANUAL ═══ -->
+<div class="modal-overlay" id="manualOverlay" onclick="if(event.target===this)closeManualEntry()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">✍️ Cargar medición manual</div>
+        <div class="modal-sub">Todo es opcional salvo el TAG: lo que falte figura como “Sin datos”</div>
+      </div>
+      <button class="modal-close" onclick="closeManualEntry()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section-title">Bomba</div>
+      <datalist id="meTagsDatalist"></datalist>
+      <div class="form-grid">
+        <div class="fld"><label>TAG de la bomba</label><input id="me_bombTag" list="meTagsDatalist" autocomplete="off" oninput="onManualBombChange()" onchange="onManualBombChange()" placeholder="Ej: BBA-ENFRIAMIENTO-01"></div>
+        <div class="fld"><label>Fecha y hora de la medición</label><input type="datetime-local" id="me_fecha"></div>
+      </div>
+      <div class="hint-txt" id="me_bombInfo"></div>
+      <div class="form-grid hidden" id="me_newBombWrap">
+        <div class="fld"><label>Tipo de bomba</label><select id="me_newBombTipo" onchange="onManualBombChange()"></select></div>
+        <div class="fld"><label>Tipo de acople / sello</label><select id="me_newBombAcople" onchange="onManualBombChange()"></select></div>
+        <div class="fld"><label>Clase de criticidad</label><select id="me_newBombCrit"><option value="AB">A/B</option><option value="C">C</option><option value="DE" selected>D/E</option></select></div>
+      </div>
+
+      <div class="modal-section-title">💧 Punto de operación (hidráulico)</div>
+      <div class="form-grid">
+        <div class="fld"><label>Unidad de presión</label><select id="me_unidadP"></select></div>
+        <div class="fld"><label>Presión de descarga</label><input type="number" step="any" id="me_presDesc"></div>
+        <div class="fld"><label>Presión de succión</label><input type="number" step="any" id="me_presSucc"></div>
+        <div class="fld"><label id="me_nivelLbl">Nivel del tanque (m)</label><input type="number" step="any" id="me_nivel"></div>
+        <div class="fld"><label>Caudal medido (m³/h)</label><input type="number" step="any" id="me_caudal"></div>
+        <div class="fld"><label>Apertura válvula de descarga (%)</label><input type="number" step="any" min="0" max="100" id="me_valvula"></div>
+        <div class="fld"><label>Densidad de esta medición (opcional)</label><input type="number" step="0.001" id="me_dens" placeholder="Solo si cambió la concentración"></div>
+        <div class="fld"><label>Temp. del fluido (°C) — NPSH del agua</label><input type="number" step="any" id="me_tfluido"></div>
+        <div class="fld"><label>NPSH disponible en sitio (m) — opcional</label><input type="number" step="any" id="me_npshd" placeholder="Si lo dejás vacío se calcula"></div>
+      </div>
+      <div class="hint-txt">Sin manómetro de succión, el nivel del tanque permite estimarla si la ficha de la bomba lo tiene configurado. La apertura de la válvula sirve para saber si esta medición se puede comparar con la referencia.</div>
+
+      <div class="modal-section-title">🧷 Inspección: sello / fugas / acople y cavitación</div>
+      <div class="form-grid">
+        <div class="fld"><label>Estado del sello / acople</label><select id="me_sello"></select></div>
+        <div class="fld"><label>Ruido de cavitación</label><select id="me_ruido"><option value="">No inspeccionado</option><option value="ninguno">Ninguno</option><option value="leve">Leve</option><option value="fuerte">Fuerte</option></select></div>
+      </div>
+
+      <div class="modal-section-title">Observaciones</div>
+      <div class="fld"><textarea id="me_obs" rows="2" placeholder="Opcional"></textarea></div>
+
+      <div class="modal-section-title">Diagnóstico en vivo</div>
+      <div id="me_preview"></div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveManualReading()">💾 Guardar medición</button>
+        <button class="btn-small" onclick="closeManualEntry()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CAPTURAS DE CAMPO ═══ -->
+<div class="modal-overlay" id="capturasOverlay" onclick="if(event.target===this)cerrarCapturasPendientes()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">📥 Capturas pendientes de campo</div>
+        <div class="modal-sub">Cargadas desde el Hub de Campo — sin diagnóstico todavía</div>
+      </div>
+      <button class="modal-close" onclick="cerrarCapturasPendientes()">✕</button>
+    </div>
+    <div class="modal-body" id="capturasLista">
+      <div class="empty-state"><div class="ei">📡</div>Buscando capturas pendientes…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL DETALLE ═══ -->
+<div class="modal-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-sub" id="modalSub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL FICHA / IMPORTAR LISTA ═══ -->
+<div class="modal-overlay" id="fichaOverlay" onclick="if(event.target===this)closeFichaModal()">
+  <div class="modal-box">
+    <div class="modal-head"><div><div class="modal-title" id="fichaTitle">—</div></div><button class="modal-close" onclick="closeFichaModal()">✕</button></div>
+    <div class="modal-body" id="fichaBody"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  1. CONSTANTS
+// ═══════════════════════════════════════════════════════════
+const BOMB_TIPOS = ['Centrífuga convencional','Centrífuga acople magnético','Centrífuga multietapa','Otra'];
+const ACOPLE_TIPOS = ['Sello mecánico','Empaquetadura (prensaestopa)','Acople magnético (sin sello)'];
+const CRIT_LBL = {AB:'A/B', C:'C', DE:'D/E'};
+const FLUIDOS = ['Agua','Hipoclorito de sodio','Soda cáustica','Ácido sulfúrico','Otro'];
+const P_UNITS = {bar:{f:1, lbl:'bar'}, kgf:{f:0.980665, lbl:'kgf/cm²'}, psi:{f:0.0689476, lbl:'psi'}, kpa:{f:0.01, lbl:'kPa'}};
+const RUIDO_OPTS = [
+  {value:'ninguno', label:'Ninguno',  level:0},
+  {value:'leve',    label:'Leve',     level:1},
+  {value:'fuerte',  label:'Fuerte',   level:3}
+];
+
+// Criterio cualitativo de sello/acople por tipo — no es un umbral numérico,
+// es una lista de estados observables con su nivel de severidad (0-3).
+const SEAL_OPTIONS = {
+  'Sello mecánico': [
+    {value:'seco',          label:'Sin fugas (seco)',                                   level:0},
+    {value:'leve',           label:'Goteo leve u ocasional',                             level:1},
+    {value:'abundante',      label:'Goteo abundante / continuo',                         level:2},
+    {value:'chorro',         label:'Fuga en chorro o pérdida de presión',                level:3}
+  ],
+  'Empaquetadura (prensaestopa)': [
+    {value:'normal',         label:'Goteo normal y controlado (esperado)',               level:0},
+    {value:'seco',           label:'Sin goteo (prensaestopa demasiado ajustado)',        level:1},
+    {value:'excesivo',       label:'Goteo excesivo',                                     level:2},
+    {value:'seco_caliente',  label:'Seca y caliente (riesgo de daño al eje/camisa)',     level:3}
+  ],
+  'Acople magnético (sin sello)': [
+    {value:'ok',             label:'Normal, sin señales de desacople',                   level:0},
+    {value:'temp',           label:'Camisa de contención más caliente de lo habitual',   level:1},
+    {value:'ruido',          label:'Ruido/vibración anormal en el acople (posible patinaje intermitente)', level:2},
+    {value:'desacople',      label:'Desacople magnético confirmado (el motor gira pero no bombea)', level:3}
+  ]
+};
+function sealOptionsFor(tipoAcople){ return SEAL_OPTIONS[tipoAcople] || SEAL_OPTIONS['Sello mecánico']; }
+
+
+const STATUS        = ['good','elevated','warning','critical'];
+const STATUS_LABELS = ['Normal','Elevado','Alerta','Crítico'];
+const STATUS_ICONS  = ['🟢','🟡','🟠','🔴'];
+const STATUS_COLORS = ['#10c98a','#f0b429','#f97316','#ef4444'];
+
+// Umbrales por defecto (editables desde la pestaña Umbrales)
+// desvCaudal / desvPresion (%): mayor = peor, se calculan contra el punto de
+// diseño cargado en la ficha de la bomba. margenNPSH (%): menor = peor (inverso).
+// caidaRef (%): caída de altura/ΔP contra la referencia propia de la bomba.
+const DEFAULT_THRESHOLDS = {
+  desvCaudal:  [10, 20, 35],
+  desvPresion: [10, 20, 35],
+  margenNPSH:  [30, 15, 5],   // inverso
+  caidaRef:    [10, 20, 35]
+};
+const THRESHOLD_META = {
+  desvCaudal:  {label:'Desviación de Caudal vs. nominal',                 unit:'%', inverse:false},
+  desvPresion: {label:'Desviación de ΔP (succión→descarga) vs. nominal',  unit:'%', inverse:false},
+  margenNPSH:  {label:'Margen de NPSH disponible sobre requerido',        unit:'%', inverse:true},
+  caidaRef:    {label:'Caída de altura/ΔP vs. referencia propia',         unit:'%', inverse:false}
+};
+const DEFAULT_OPCIONES = {unidadP:'bar', patm:1.013, tolValvula:10, tolCaudal:10, cadAB:30, cadC:90, cadDE:180};
+const OPCIONES_META = [
+  {k:'patm',       label:'Presión atmosférica local (bar abs)', step:0.001},
+  {k:'tolValvula', label:'Tolerancia de apertura de válvula (puntos %)', step:1},
+  {k:'tolCaudal',  label:'Tolerancia de caudal para comparar (%)', step:1},
+  {k:'cadAB',      label:'Ronda clase A/B (días hasta vencida)', step:1},
+  {k:'cadC',       label:'Ronda clase C (días hasta vencida)', step:1},
+  {k:'cadDE',      label:'Ronda clase D/E (días hasta vencida)', step:1}
+];
+
+// ═══════════════════════════════════════════════════════════
+//  2. STATE
+// ═══════════════════════════════════════════════════════════
+let bombsRegistry    = new Map();   // bombId -> ficha (ver fichaDefault)
+let readingsData     = new Map();   // bombId -> {dates:[], params:{...}, obs:[], ref:null|ISO}
+let equiposHub        = new Map();  // tag -> {nombre, tipo, ubicacion} — catálogo compartido del hub
+let _capturasPendientes = [];       // capturas crudas desde el Hub de Campo
+let _capturaActual   = null;        // captura en edición dentro del modal manual
+let thresholds       = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
+let opciones         = Object.assign({}, DEFAULT_OPCIONES);
+let statusFilter     = 'all';
+let critFilter       = 'todas';
+let currentKey       = null;
+let detailChart      = null;
+
+// ═══════════════════════════════════════════════════════════
+//  3. PERSISTENCE
+// ═══════════════════════════════════════════════════════════
+const SCHEMA_VERSION = 1;
+let thresholdsMigrated = false;
+
+// JSON convierte NaN en null; al recargar hay que volver a NaN (y '' en textos),
+// si no una lectura sin dato se evalúa como si fuera 0 (falsas alarmas críticas).
+const PARAMS_TEXTO = ['Sello','Ruido'];
+function normalizarParams(params){
+  const out = {};
+  for (const [k, arr] of Object.entries(params || {})){
+    const esTexto = PARAMS_TEXTO.includes(k);
+    out[k] = (arr || []).map(v => esTexto ? (typeof v === 'string' ? v : '') : (typeof v === 'number' && isFinite(v) ? v : NaN));
+  }
+  return out;
+}
+
+// Supabase es la ÚNICA fuente de verdad: fichas (equipos.ficha), historial (mediciones)
+// y umbrales/opciones (config_apps). localStorage es solo una caché para trabajar sin
+// conexión: guarda además los cambios que todavía no subieron y los reintenta.
+const MODULO = 'bomba_pro';
+const CACHE_KEY = 'bomba_pro_cfg';
+let _sucia = false, _cfgSucia = false, _pend = [], _migrar = false;   // cambios sin subir
+let _ver = 0, _subiendo = false, _tSubida = null, _ultimaBajada = 0;
+let _hashes = new Map();       // 'f:TAG' / 'm:TAG|fecha' -> JSON de lo último sincronizado
+let _equipoIds = new Map();    // TAG -> equipos.id
+
+function loadState() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    const storedVersion = c.schemaVersion || 1;
+    if (c.thresholds && storedVersion >= SCHEMA_VERSION) {
+      thresholds = {...DEFAULT_THRESHOLDS, ...c.thresholds};
+    } else if (c.thresholds) {
+      thresholdsMigrated = true;
+    }
+    if (c.opciones) opciones = {...DEFAULT_OPCIONES, ...c.opciones};
+    if (c.bombsRegistry) for (const [k,v] of Object.entries(c.bombsRegistry)) bombsRegistry.set(k,v);
+    if (c.readingsData) {
+      for (const [k,v] of Object.entries(c.readingsData)) {
+        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: normalizarParams(v.params), obs: v.obs || [], ref: v.ref || null });
+      }
+    }
+    if (c.nube){ _sucia = !!c.nube.sucia; _cfgSucia = !!c.nube.cfgSucia; _pend = c.nube.pend || []; }
+    else if (bombsRegistry.size || readingsData.size){ _sucia = true; _migrar = true; }   // datos locales previos: se suben una vez
+    if (thresholdsMigrated) saveState();
+  } catch(e){ console.warn('loadState error', e); }
+}
+function escribirCache() {
+  const rdSerial = {};
+  for (const [k,v] of readingsData.entries()) {
+    rdSerial[k] = { dates: v.dates.map(d=>d.toISOString()), params: v.params, obs: v.obs || [], ref: v.ref || null };
+  }
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      schemaVersion: SCHEMA_VERSION, thresholds, opciones,
+      bombsRegistry: Object.fromEntries(bombsRegistry), readingsData: rdSerial,
+      nube: {sucia:_sucia, cfgSucia:_cfgSucia, pend:_pend}
+    }));
+  } catch(e){ console.warn('[caché] no se pudo escribir en el navegador; los datos siguen yendo a la nube', e); }
+}
+function saveState() { _sucia = true; _ver++; escribirCache(); programarSubida(); }
+
+// ── Forma en que cada dato viaja a Supabase ──
+function fichaNube(id){
+  const b = bombsRegistry.get(id); if (!b) return null;
+  const e = readingsData.get(id);
+  return { tag:b.name, tipo:b.tipoBomba || null, ubicacion:b.ubicacion || null, criticidad:b.crit || null,
+    ficha: Object.assign({}, b, {refFecha: e ? e.ref : null}) };
+}
+function filaMedicion(id, i){
+  const e = readingsData.get(id), datos = {};
+  for (const [pk, arr] of Object.entries(e.params)){
+    const v = arr[i];
+    datos[pk] = PARAMS_TEXTO.includes(pk) ? ((typeof v === 'string' && v) ? v : null) : (isN(v) ? v : null);
+  }
+  return { fecha: keyOfDate(e.dates[i]) + 'Z', datos, obs: (e.obs && e.obs[i]) || '' };
+}
+function configNube(){
+  const {unidadP, ...resto} = opciones;      // la unidad de presión es preferencia de cada dispositivo
+  return { schemaVersion: SCHEMA_VERSION, thresholds, opciones: resto };
+}
+
+// ── Estado visible ──
+function nubeEstado(est, msg){
+  const el = document.getElementById('nubeEstado'); if (!el) return;
+  const T = {
+    ok:['☁️ Sincronizado','#10c98a'], subiendo:['☁️ Guardando…','#f0b429'], pendiente:['☁️ Cambios por guardar…','#f0b429'],
+    bajando:['☁️ Cargando…','#f0b429'], offline:['⚠️ Sin conexión: se guarda en este equipo y sube al reconectar','#f97316'],
+    error:['⚠️ No se pudo sincronizar','#ef4444']
+  }[est] || ['',''];
+  el.textContent = T[0] + (msg ? ' — ' + msg : ''); el.style.color = T[1]; el.title = msg || '';
+}
+const nubeLista = () => typeof SatSync !== 'undefined' && (SatSync.estaConfigurado() || SatSync.init());
+function programarSubida(){
+  nubeEstado('pendiente');
+  clearTimeout(_tSubida);
+  _tSubida = setTimeout(() => subirCambios(), 1500);
+}
+
+// ── Subida (solo lo que cambió respecto de lo último sincronizado) ──
+async function subirCambios(opts = {}){
+  if (_subiendo){ programarSubida(); return false; }
+  if (!nubeLista()){ nubeEstado('offline'); return false; }
+  _subiendo = true; nubeEstado('subiendo');
+  const ver0 = _ver;
+  try{
+    // 1) borrados y renombres pendientes, en el orden en que ocurrieron
+    while (_pend.length){
+      const p = _pend[0];
+      if (p.t === 'rename'){
+        const eq = await SatSync.renombrarEquipo(p.from, p.to);
+        if (eq) _equipoIds.set(p.to, eq.id);
+        _equipoIds.delete(p.from);
+      } else {
+        const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+        if (eq){
+          if (p.t === 'med') await SatSync.borrarMedicion(MODULO, eq.id, p.fecha);
+          else if (p.t === 'bomba') await SatSync.quitarModuloDeEquipo(MODULO, eq.id);
+        }
+      }
+      _pend.shift(); escribirCache();
+    }
+    // 2) fichas nuevas o modificadas
+    const fichas = [], hf = [];
+    for (const id of bombsRegistry.keys()){
+      const f = fichaNube(id), h = JSON.stringify(f);
+      if (_hashes.get('f:' + f.tag) !== h || !_equipoIds.has(f.tag)){ fichas.push(f); hf.push(['f:' + f.tag, h]); }
+    }
+    if (fichas.length){
+      const filas = await SatSync.guardarFichas(MODULO, fichas, {noPisar: !!opts.migracion});
+      filas.forEach(e => _equipoIds.set(e.tag, e.id));
+      hf.forEach(([k,h]) => _hashes.set(k, h));
+    }
+    // 3) mediciones nuevas o modificadas
+    const meds = [], hm = [];
+    for (const [id, e] of readingsData.entries()){
+      const tag = getBombName(id), eqId = _equipoIds.get(tag); if (!eqId) continue;
+      for (let i = 0; i < e.dates.length; i++){
+        const r = filaMedicion(id, i), h = JSON.stringify([r.datos, r.obs]), k = 'm:' + tag + '|' + r.fecha;
+        if (_hashes.get(k) !== h){ meds.push({equipo_id:eqId, ...r}); hm.push([k,h]); }
+      }
+    }
+    if (meds.length){ await SatSync.guardarMediciones(MODULO, meds); hm.forEach(([k,h]) => _hashes.set(k, h)); }
+    // 4) umbrales y opciones (solo si se editaron en este dispositivo)
+    if (_cfgSucia){ await SatSync.guardarConfigApp(MODULO, configNube()); _cfgSucia = false; }
+
+    if (_ver === ver0){ _sucia = false; nubeEstado('ok'); } else programarSubida();
+    escribirCache();
+    return true;
+  }catch(err){
+    console.error('[SatSync] error subiendo cambios', err);
+    nubeEstado('error', err.message || String(err));
+    clearTimeout(_tSubida); _tSubida = setTimeout(() => subirCambios(), 30000);
+    return false;
+  }finally{ _subiendo = false; }
+}
+
+// ── Descarga: reconstruye todo desde Supabase ──
+async function bajarTodo(){
+  nubeEstado('bajando');
+  const [equipos, meds, cfg] = await Promise.all([
+    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO)
+  ]);
+  const reg = new Map(), lect = new Map(), tagDe = new Map(), ids = new Map();
+  const esTipoBomba = t => BOMB_TIPOS.includes(t) || /bomba|centr[ií]fuga/i.test(t || '');
+  for (const e of equipos){
+    const f = e.ficha && e.ficha[MODULO];
+    if (f && f.eliminada) continue;
+    if (!f && !esTipoBomba(e.tipo)) continue;
+    const {refFecha, ...resto} = f || {};
+    reg.set(e.tag, fichaDefault(e.tag, Object.assign({}, resto, {
+      name: e.tag,
+      tipoBomba: BOMB_TIPOS.includes(e.tipo) ? e.tipo : (resto.tipoBomba || BOMB_TIPOS[0]),
+      ubicacion: e.ubicacion != null ? e.ubicacion : (resto.ubicacion || ''),
+      crit: e.criticidad || resto.crit || 'DE'
+    })));
+    tagDe.set(e.id, e.tag); ids.set(e.tag, e.id);
+    if (refFecha) lect.set(e.tag, {dates:[], params:{}, obs:[], ref:refFecha, _sinLecturas:true});
+  }
+  const porTag = new Map();
+  for (const m of meds){
+    const tag = tagDe.get(m.equipo_id); if (!tag) continue;
+    if (!porTag.has(tag)) porTag.set(tag, []);
+    porTag.get(tag).push(m);
+  }
+  for (const [tag, filas] of porTag.entries()){
+    const claves = new Set(); filas.forEach(m => Object.keys(m.datos || {}).forEach(k => claves.add(k)));
+    const params = {}; claves.forEach(k => params[k] = []);
+    const dates = [], obs = [];
+    for (const m of filas){
+      dates.push(new Date(m.fecha)); obs.push(m.obs || '');
+      claves.forEach(k => params[k].push((m.datos || {})[k] ?? null));
+    }
+    const ref = lect.get(tag)?.ref || null;
+    lect.set(tag, {dates, params: normalizarParams(params), obs, ref});
+  }
+  for (const [tag, e] of [...lect.entries()]) if (e._sinLecturas) lect.delete(tag);
+
+  bombsRegistry = reg; readingsData = lect; _equipoIds = ids; _hashes = new Map();
+  for (const id of reg.keys()) _hashes.set('f:' + id, JSON.stringify(fichaNube(id)));
+  for (const [id, e] of lect.entries()) for (let i = 0; i < e.dates.length; i++){
+    const r = filaMedicion(id, i); _hashes.set('m:' + id + '|' + r.fecha, JSON.stringify([r.datos, r.obs]));
+  }
+  if (cfg){
+    thresholds = {...DEFAULT_THRESHOLDS, ...(cfg.thresholds || {})};
+    const u = opciones.unidadP;
+    opciones = {...DEFAULT_OPCIONES, ...(cfg.opciones || {}), unidadP: u || DEFAULT_OPCIONES.unidadP};
+  }
+  _ultimaBajada = Date.now(); _sucia = false; _cfgSucia = false;
+  escribirCache(); nubeEstado('ok');
+}
+
+async function iniciarNube(){
+  if (!nubeLista()){ nubeEstado('offline'); return; }
+  try{
+    // Si hay cambios locales sin subir (trabajo offline o datos de antes de la nube), primero se suben.
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios({migracion: _migrar});
+      if (!ok) return;            // no se baja nada si no se pudo subir: no se pisa el trabajo local
+      _migrar = false;
+    }
+    await bajarTodo();
+    renderAll();
+  }catch(err){
+    console.error('[SatSync] error cargando desde la nube', err);
+    nubeEstado('error', err.message || String(err));
+  }
+}
+async function recargarDesdeNube(){
+  if (_sucia || _cfgSucia || _pend.length){
+    const ok = await subirCambios();
+    if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
+  }
+  try{ await bajarTodo(); renderAll(); }catch(err){ nubeEstado('error', err.message || String(err)); alert('No se pudo recargar: ' + (err.message || err)); }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden){ if (_sucia || _cfgSucia || _pend.length) subirCambios(); return; }
+  if (!_sucia && !_cfgSucia && !_pend.length && !_subiendo && Date.now() - _ultimaBajada > 60000 && !document.querySelector('[id$="Overlay"].open') && nubeLista()){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar', err); }
+  }
+});
+window.addEventListener('online', () => { if (_sucia || _cfgSucia || _pend.length) subirCambios(); });
+
+// ═══════════════════════════════════════════════════════════
+//  4. HELPERS Y CÁLCULO
+// ═══════════════════════════════════════════════════════════
+function genId(){ return 'B'+Date.now().toString(36).toUpperCase().slice(-5)+Math.random().toString(36).slice(-3).toUpperCase(); }
+function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escJs(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function fmt(v,d=1){ return (v===undefined||v===null||isNaN(v)) ? '—' : Number(v).toFixed(d); }
+function fmtDate(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function fmtDateTime(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function getBombName(id){ return bombsRegistry.get(id)?.name || id; }
+function levelOf(value, band, inverse){
+  if (value===undefined||value===null||isNaN(value)) return -1;
+  if (!inverse){
+    if (value <= band[0]) return 0;
+    if (value <= band[1]) return 1;
+    if (value <= band[2]) return 2;
+    return 3;
+  } else {
+    if (value >= band[0]) return 0;
+    if (value >= band[1]) return 1;
+    if (value >= band[2]) return 2;
+    return 3;
+  }
+}
+
+const isN = v => typeof v === 'number' && isFinite(v);
+const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
+const fmtBar = v => isN(v) ? v.toFixed(2) + ' bar' : null;
+const CRIT_CAD = {AB:'cadAB', C:'cadC', DE:'cadDE'};
+
+function fichaDefault(name, extra){
+  return Object.assign({name, tipoBomba:BOMB_TIPOS[0], tipoAcople:ACOPLE_TIPOS[0], ubicacion:'', crit:'DE',
+    fluido:'Agua', sg:1, pv:null, aspiracion:'tanque', nivelUnidad:'m', alturaTanque:null, cotaCero:null,
+    caudalNominal:0, deltaPNominal:0, npshRequerido:0, potencia:''}, extra || {});
+}
+
+// Densidad relativa de la ficha (agua = 1). NaN si el producto no la tiene cargada.
+function sgFicha(b){
+  if (!b) return NaN;
+  if (isN(b.sg) && b.sg > 0) return b.sg;
+  if (b.fluido === 'Agua') return 1;
+  return NaN;
+}
+// Presión de vapor del agua (Antoine, 1–100 °C) → bar absolutos
+function presionVaporAgua(tC){
+  if (!isN(tC) || tC < 1 || tC > 100) return NaN;
+  return Math.pow(10, 8.07131 - 1730.63 / (233.426 + tC)) * 0.00133322;
+}
+
+// Cálculo puntual de una lectura: succión (medida o estimada), ΔP, altura y NPSH disponible.
+// La presión estática en la succión depende de la ALTURA de líquido sobre el eje y de la
+// DENSIDAD del producto (ρ·g·h): no depende del volumen ni de la forma del tanque.
+function calcBasico(bomb, p, n){
+  const g = k => { const a = p[k]; const v = a ? a[n] : undefined; return isN(v) ? v : NaN; };
+  const c = {
+    caudal:g('Caudal'), presSucc:g('PresSucc'), presDesc:g('PresDesc'), npshdIn:g('NPSHd'),
+    nivel:g('Nivel'), dens:g('Densidad'), tFluido:g('TFluido'), valvula:g('Valvula'),
+    sg:NaN, pSuc:NaN, sucOrigen:'', sucMotivo:'', nivelM:NaN, deltaP:NaN, dpInvalido:false, H:NaN,
+    npshd:NaN, npshOrigen:'', pv:NaN
+  };
+  const sgF = sgFicha(bomb);
+  c.sg = (isN(c.dens) && c.dens > 0) ? c.dens : sgF;
+
+  if (isN(c.presSucc)){ c.pSuc = c.presSucc; c.sucOrigen = 'medida'; }
+  else if (!bomb || !bomb.aspiracion){
+    c.sucMotivo = 'Sin manómetro de succión. Definí en la ficha si la bomba aspira de un tanque abierto para poder estimarla con el nivel.';
+  } else if (bomb.aspiracion !== 'tanque'){
+    c.sucMotivo = 'Sin manómetro de succión, y la aspiración no es de tanque abierto: solo se puede medir con manómetro.';
+  } else if (!isN(c.nivel)){
+    c.sucMotivo = 'Sin manómetro de succión: cargá el nivel del tanque para estimarla.';
+  } else if (!isN(c.sg)){
+    c.sucMotivo = 'Falta la densidad del producto (ficha o esta medición).';
+  } else if (!isN(bomb.cotaCero)){
+    c.sucMotivo = 'Falta en la ficha la altura del cero del indicador de nivel sobre el eje de la bomba.';
+  } else {
+    if (bomb.nivelUnidad === '%'){
+      if (isN(bomb.alturaTanque) && bomb.alturaTanque > 0) c.nivelM = c.nivel / 100 * bomb.alturaTanque;
+      else c.sucMotivo = 'El nivel está en %: falta la altura total del tanque en la ficha para convertirlo a metros.';
+    } else c.nivelM = c.nivel;
+    if (isN(c.nivelM)){ c.pSuc = c.sg * (c.nivelM + bomb.cotaCero) / 10.197; c.sucOrigen = 'estimada'; }
+  }
+
+  if (isN(c.presDesc) && isN(c.pSuc)){
+    const d = c.presDesc - c.pSuc;
+    if (d > 0) c.deltaP = d; else c.dpInvalido = true;
+  }
+  if (isN(c.deltaP) && isN(c.sg)) c.H = c.deltaP * 10.197 / c.sg;
+
+  // NPSH disponible: el cargado a mano manda; si no, se calcula
+  if (isN(c.npshdIn)){ c.npshd = c.npshdIn; c.npshOrigen = 'cargado'; }
+  else if (isN(c.pSuc) && isN(c.sg)){
+    c.pv = (bomb && bomb.fluido === 'Agua') ? presionVaporAgua(c.tFluido) : (bomb && isN(bomb.pv) ? bomb.pv : NaN);
+    if (isN(c.pv)){ c.npshd = (c.pSuc + opciones.patm - c.pv) * 10.197 / c.sg; c.npshOrigen = 'calculado'; }
+  }
+  return c;
+}
+
+function baselineIdx(entry){
+  if (!entry || !entry.dates.length) return -1;
+  if (entry.ref){
+    const i = entry.dates.findIndex(d => keyOfDate(d) === entry.ref);
+    if (i >= 0) return i;
+  }
+  return 0;
+}
+// ¿Son comparables las condiciones de operación de dos lecturas?
+function comparable(a, b){
+  let dif = false, ver = false;
+  if (isN(a.valvula) && isN(b.valvula)){ ver = true; if (Math.abs(a.valvula - b.valvula) > opciones.tolValvula) dif = true; }
+  if (isN(a.caudal) && isN(b.caudal) && b.caudal > 0){ ver = true; if (Math.abs(a.caudal - b.caudal) / b.caudal * 100 > opciones.tolCaudal) dif = true; }
+  return dif ? {ok:false, verificada:true} : {ok:true, verificada:ver};
+}
+
+// Calcula sub-niveles y nivel global para una lectura puntual (índice n) de una bomba.
+// `entry` (opcional) es el historial completo: permite comparar contra la referencia propia.
+function evalReading(bomb, params, n, entry){
+  const c = calcBasico(bomb, params, n);
+  const m = {};
+  const selloVal = (params.Sello && typeof params.Sello[n] === 'string') ? params.Sello[n] : '';
+  const ruidoVal = (params.Ruido && typeof params.Ruido[n] === 'string') ? params.Ruido[n] : '';
+
+  const caudalNom = bomb?.caudalNominal;
+  const deltaPNom = bomb?.deltaPNominal;
+  const npshReq   = bomb?.npshRequerido;
+
+  const desvCaudal = (caudalNom && isN(c.caudal)) ? Math.abs(c.caudal - caudalNom)/caudalNom*100 : NaN;
+
+  // Desvío de presión vs. diseño: en altura (m de columna) si hay densidades; si no, en bar
+  let desvPresion = NaN, desvBase = '', presBajo = false;
+  if (deltaPNom > 0 && isN(c.deltaP)){
+    const sgF = sgFicha(bomb);
+    if (isN(c.H) && isN(sgF)){
+      const hNom = deltaPNom * 10.197 / sgF;
+      desvPresion = Math.abs(c.H - hNom) / hNom * 100; desvBase = 'altura'; presBajo = c.H < hNom;
+    } else {
+      desvPresion = Math.abs(c.deltaP - deltaPNom) / Math.abs(deltaPNom) * 100; desvBase = 'bar'; presBajo = c.deltaP < deltaPNom;
+    }
+  }
+  const margenNPSH = (npshReq > 0 && isN(c.npshd)) ? (c.npshd - npshReq)/npshReq*100 : NaN;
+
+  // Referencia propia (primera lectura o la que se haya fijado)
+  let caidaRef = NaN, refVar = '', refTope = 3, refFecha = null;
+  if (entry){
+    const bi = baselineIdx(entry);
+    if (bi >= 0 && bi !== n){
+      const cb = calcBasico(bomb, entry.params, bi);
+      const cmp = comparable(c, cb);
+      refFecha = entry.dates[bi];
+      let cur, ref;
+      if (isN(c.H) && isN(cb.H)){ cur = c.H; ref = cb.H; refVar = 'altura'; }
+      else if (isN(c.deltaP) && isN(cb.deltaP)){ cur = c.deltaP; ref = cb.deltaP; refVar = 'ΔP'; }
+      else if (isN(c.presDesc) && isN(cb.presDesc)){ cur = c.presDesc; ref = cb.presDesc; refVar = 'presión de descarga'; refTope = 1; }
+      if (!refVar) m.ref = 'Esta lectura y la referencia no tienen ΔP ni presión de descarga en común.';
+      else if (!cmp.ok) m.ref = 'Condición de operación distinta a la referencia (válvula o caudal): no comparable.';
+      else if (ref > 0){
+        caidaRef = (ref - cur) / ref * 100;
+        if (!cmp.verificada && refTope > 2) refTope = 2;
+        m.refNota = (cmp.verificada ? '' : 'Condición no verificada (cargá apertura de válvula o caudal en ambas lecturas): nivel limitado. ')
+          + (refVar === 'presión de descarga' ? 'Sin succión, la presión de descarga depende del nivel del tanque: comparación orientativa. ' : '');
+      }
+    } else if (bi === n) m.ref = 'Esta lectura es la referencia.';
+  }
+
+  const opts = sealOptionsFor(bomb?.tipoAcople);
+  const selloOpt = opts.find(o => o.value === selloVal);
+  const ruidoOpt = RUIDO_OPTS.find(o => o.value === ruidoVal);
+
+  const subs = {
+    desvCaudal:  levelOf(desvCaudal,  thresholds.desvCaudal,  false),
+    desvPresion: levelOf(desvPresion, thresholds.desvPresion, false),
+    margenNPSH:  levelOf(margenNPSH,  thresholds.margenNPSH,  true),
+    degradacion: isN(caidaRef) ? Math.min(refTope, levelOf(Math.max(0, caidaRef), thresholds.caidaRef, false)) : -1,
+    sello:       selloOpt ? selloOpt.level : -1,
+    ruido:       ruidoOpt ? ruidoOpt.level : -1
+  };
+  let overall = -1;   // -1 = sin datos evaluables
+  for (const k in subs) if (subs[k] > overall) overall = subs[k];
+
+  // Motivos por los que un indicador figura como "Sin datos"
+  m.succion = c.sucMotivo || '';
+  m.dp = c.dpInvalido ? 'ΔP ≤ 0: revisá las lecturas de presión.' : (!isN(c.presDesc) ? 'Falta la presión de descarga.' : 'Falta la presión de succión (medida o estimada).');
+  m.altura = !isN(c.deltaP) ? 'Requiere ΔP.' : 'Falta la densidad del producto (ficha o esta medición).';
+  m.desvPresion = !(deltaPNom > 0) ? 'Falta el ΔP nominal en la ficha.' : 'Requiere ΔP.';
+  m.caudal = !isN(c.caudal) ? 'Requiere caudalímetro.' : 'Falta el caudal nominal en la ficha.';
+  m.npsh = !isN(c.pSuc) ? 'Falta la presión de succión (medida o estimada).'
+    : !isN(c.sg) ? 'Falta la densidad del producto.'
+    : (bomb && bomb.fluido === 'Agua') ? 'Falta la temperatura del fluido (1–100 °C).' : 'Falta la presión de vapor del producto en la ficha.';
+
+  return { subs, overall, caudal:c.caudal, presSucc:c.presSucc, presDesc:c.presDesc, pSuc:c.pSuc, sucOrigen:c.sucOrigen,
+    deltaP:c.deltaP, H:c.H, sg:c.sg, npshd:c.npshd, npshOrigen:c.npshOrigen, valvula:c.valvula,
+    desvCaudal, desvPresion, desvBase, presBajo, margenNPSH, caidaRef, refVar, refFecha,
+    selloVal, selloLabel: selloOpt ? selloOpt.label : '', ruidoVal, ruidoLabel: ruidoOpt ? ruidoOpt.label : '', motivos:m };
+}
+
+function healthScoreFromLevel(overall, subs){
+  if (overall < 0) return null;
+  const base = [100, 78, 50, 20][overall];
+  const worseCount = Object.values(subs).filter(s=>s===overall).length;
+  return Math.max(3, base - (worseCount-1)*4);
+}
+
+function diagnoseBomb(id){
+  const d = readingsData.get(id);
+  const bomb = bombsRegistry.get(id);
+  if (!d || !d.dates.length) return null;
+  const n = d.dates.length - 1;
+  const ev = evalReading(bomb, d.params, n, d);
+  return { ...ev, date: d.dates[n], bomb };
+}
+
+// Filas legibles de indicadores (detalle y vista previa): valor o "Sin datos" + motivo
+function indicadoresDe(diag){
+  const m = diag.motivos, rows = [];
+  const R = (label, valor, nivel, nota, motivo) => rows.push({label, valor, nivel:(nivel == null || nivel < 0) ? null : nivel, nota:nota||'', motivo:motivo||''});
+  R('Presión de descarga', fmtBar(diag.presDesc), null, '', 'Falta leer el manómetro de descarga.');
+  R('Presión de succión', fmtBar(diag.pSuc), null,
+    diag.sucOrigen === 'estimada' ? 'Estimada con el nivel del tanque: presión estática, sin pérdidas de línea (la real puede ser algo menor).' : '', m.succion);
+  R('ΔP (descarga − succión)', fmtBar(diag.deltaP), null, '', m.dp);
+  R('Altura manométrica', isN(diag.H) ? diag.H.toFixed(1) + ' m' : null, null, isN(diag.sg) ? 'Densidad usada: ' + diag.sg : '', m.altura);
+  R('Desvío vs. diseño', isN(diag.desvPresion) ? diag.desvPresion.toFixed(1) + ' %' : null, diag.subs.desvPresion,
+    diag.desvBase === 'bar' ? 'Comparado en bar (sin densidad: asume la del diseño).' : diag.desvBase === 'altura' ? 'Comparado en altura de columna.' : '', m.desvPresion);
+  R('Caudal', isN(diag.caudal) ? diag.caudal.toFixed(1) + ' m³/h' : null, diag.subs.desvCaudal,
+    isN(diag.desvCaudal) ? 'Desvío vs. nominal: ' + diag.desvCaudal.toFixed(1) + ' %' : '', m.caudal);
+  R('NPSH disponible', isN(diag.npshd) ? diag.npshd.toFixed(1) + ' m' : null, diag.subs.margenNPSH,
+    isN(diag.npshd) ? (diag.npshOrigen === 'calculado' ? 'Calculado' + (diag.sucOrigen === 'estimada' ? ' con succión estimada' : '') + '. ' : 'Cargado a mano. ') + (isN(diag.margenNPSH) ? 'Margen: ' + diag.margenNPSH.toFixed(0) + ' %.' : 'Sin NPSH requerido en la ficha para evaluar el margen.') : '', m.npsh);
+  R('Vs. referencia propia', isN(diag.caidaRef) ? (diag.caidaRef >= 0 ? '−' : '+') + Math.abs(diag.caidaRef).toFixed(1) + ' %' : null, diag.subs.degradacion,
+    isN(diag.caidaRef) ? (diag.refVar + '. ' + (diag.motivos.refNota || '')).trim() : '', m.ref);
+  R('Sello / acople', diag.selloLabel || null, diag.subs.sello, '', 'No inspeccionado.');
+  R('Ruido de cavitación', diag.ruidoLabel || null, diag.subs.ruido, '', 'No inspeccionado.');
+  return rows;
+}
+function indicadoresHTML(diag){
+  const rows = indicadoresDe(diag);
+  const con = rows.filter(r => r.valor != null).length;
+  return `<div class="ind-cover">${con} de ${rows.length} indicadores con datos</div>` + rows.map(r => {
+    const cls = r.nivel == null ? (r.valor == null ? 'nd' : 'info') : STATUS[r.nivel];
+    return `<div class="ind-row"><div class="ind-main"><span class="ind-dot ${cls}"></span><span class="ind-lbl">${escHtml(r.label)}</span>
+      <span class="ind-val ${r.valor == null ? 'nd' : cls}">${r.valor == null ? 'Sin datos' : escHtml(r.valor)}</span></div>
+      ${(r.valor == null ? r.motivo : r.nota) ? `<div class="ind-nota">${escHtml(r.valor == null ? r.motivo : r.nota)}</div>` : ''}</div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  5. IMPORT (Excel / CSV)
+// ═══════════════════════════════════════════════════════════
+const TEMPLATE_HEADERS = ['Bomba','TipoBomba','TipoAcople','Ubicacion','Clase','Fluido','DensidadRelativa','PresionVapor_bar_abs','Aspiracion','UnidadNivel','AlturaTanque_m','CotaCeroNivel_m','CaudalNominal_m3h','DeltaPNominal_bar','NPSHrequerido_m','Fecha','Caudal_m3h','PresionSuccion_bar','PresionDescarga_bar','NivelTanque','DensidadMedicion','TempFluido_C','ValvulaApertura_pct','NPSHdisponible_m','EstadoSello','RuidoCavitacion','Observaciones'];
+
+function downloadTemplate(){
+  const sample = [
+    TEMPLATE_HEADERS,
+    ['BBA-ENFRIAMIENTO-01','Centrífuga convencional','Sello mecánico','Circuito refrigeración P2','A','Agua',1,'','tanque','m',3.5,0.8,45,2.8,4.5,'2026-09-01 08:30',43,'',3.5,2.1,'',25,80,'','seco','ninguno','Ejemplo — sin manómetro de succión: se estima con NivelTanque'],
+    ['BBA-SODA-02','Centrífuga convencional','Sello mecánico','Planta de soda','C','Soda cáustica',1.33,'','tanque','%',4.0,0.5,'','','','2026-09-01 09:10','',' ',2.4,65,'','','','','leve','','EstadoSello: usar el "value" de la pestaña Umbrales; RuidoCavitacion: ninguno / leve / fuerte; Aspiracion: tanque / otra; UnidadNivel: m / %'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(sample);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mediciones');
+  XLSX.writeFile(wb, 'plantilla_bomba_pro.xlsx');
+}
+
+function handleFileUpload(evt){
+  const file = evt.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('loadStatus');
+  status.className = 'load-status';
+  status.textContent = 'Procesando…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, defval:''});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      const result = importRows(rows);
+      status.className = 'load-status ok';
+      status.textContent = `✅ ${result.rows} lectura(s) · ${result.bombs} bomba(s)`;
+      saveState();
+      renderAll();
+    } catch(err){
+      console.error(err);
+      status.className = 'load-status err';
+      status.textContent = '❌ Error al procesar el archivo: ' + err.message;
+    }
+    evt.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+function findCol(row, names){
+  for (const n of names){
+    for (const key of Object.keys(row)){
+      if (key.trim().toLowerCase() === n.toLowerCase()) return row[key];
+    }
+  }
+  return '';
+}
+function numOrNaN(v){ if (v==='' || v===undefined || v===null) return NaN; const n = parseFloat(v); return isNaN(n) ? NaN : n; }
+
+function critDeTexto(t){
+  t = String(t || '').trim().toUpperCase().replace(/[^A-E]/g, '');
+  if (t === 'A' || t === 'B' || t === 'AB') return 'AB';
+  if (t === 'C') return 'C';
+  if (t === 'D' || t === 'E' || t === 'DE') return 'DE';
+  return null;
+}
+function findBombId(name){
+  const low = String(name || '').trim().toLowerCase();
+  if (!low) return null;
+  for (const [id, b] of bombsRegistry.entries()) if ((b.name || '').toLowerCase() === low) return id;
+  return null;
+}
+
+function importRows(rows){
+  let bombsCreated = 0, rowsImported = 0;
+  const touched = new Map();
+  const PK = ['Caudal','PresSucc','PresDesc','NPSHd','Sello','Nivel','Densidad','TFluido','Valvula','Ruido'];
+
+  for (const row of rows){
+    const bombName = String(findCol(row,['Bomba']) || '').trim();
+    if (!bombName) continue;
+    const tipoBomba  = String(findCol(row,['TipoBomba']) || BOMB_TIPOS[0]).trim();
+    const tipoAcopleRaw = String(findCol(row,['TipoAcople']) || '').trim();
+    const tipoAcople = ACOPLE_TIPOS.find(t=>t.toLowerCase()===tipoAcopleRaw.toLowerCase()) || ACOPLE_TIPOS[0];
+    const ubicacion  = String(findCol(row,['Ubicacion']) || '').trim();
+    const crit       = critDeTexto(findCol(row,['Clase']));
+    const fluidoRaw  = String(findCol(row,['Fluido']) || '').trim();
+    const fluido     = FLUIDOS.find(f => f.toLowerCase() === fluidoRaw.toLowerCase()) || (fluidoRaw ? 'Otro' : '');
+    const sgIn       = numOrNaN(findCol(row,['DensidadRelativa']));
+    const pvIn       = numOrNaN(findCol(row,['PresionVapor_bar_abs']));
+    const aspRaw     = String(findCol(row,['Aspiracion']) || '').trim().toLowerCase();
+    const asp        = aspRaw ? (aspRaw.startsWith('tanque') ? 'tanque' : 'otra') : '';
+    const uniNivel   = String(findCol(row,['UnidadNivel']) || '').trim() === '%' ? '%' : (String(findCol(row,['UnidadNivel']) || '').trim() ? 'm' : '');
+    const altTanque  = numOrNaN(findCol(row,['AlturaTanque_m']));
+    const cotaCero   = numOrNaN(findCol(row,['CotaCeroNivel_m']));
+    const caudalNom  = numOrNaN(findCol(row,['CaudalNominal_m3h']));
+    const deltaPNom  = numOrNaN(findCol(row,['DeltaPNominal_bar']));
+    const npshReq    = numOrNaN(findCol(row,['NPSHrequerido_m']));
+
+    let fechaRaw = findCol(row,['Fecha']);
+    let fecha;
+    if (fechaRaw instanceof Date) fecha = fechaRaw;
+    else if (typeof fechaRaw === 'number') { const p = XLSX.SSF.parse_date_code(fechaRaw); fecha = new Date(p.y,p.m-1,p.d,p.H||0,p.M||0,p.S||0); }
+    else fecha = new Date(String(fechaRaw).replace(' ', 'T'));
+    if (isNaN(fecha)) continue;
+
+    let bombId = findBombId(bombName);
+    if (!bombId){
+      bombId = genId();
+      bombsRegistry.set(bombId, fichaDefault(bombName, {
+        tipoBomba, tipoAcople, ubicacion, crit: crit || 'DE',
+        fluido: fluido || 'Agua', sg: isN(sgIn) ? sgIn : ((fluido || 'Agua') === 'Agua' ? 1 : null), pv: isN(pvIn) ? pvIn : null,
+        aspiracion: asp || 'tanque', nivelUnidad: uniNivel || 'm', alturaTanque: isN(altTanque) ? altTanque : null, cotaCero: isN(cotaCero) ? cotaCero : null,
+        caudalNominal: isN(caudalNom) ? caudalNom : 0, deltaPNominal: isN(deltaPNom) ? deltaPNom : 0, npshRequerido: isN(npshReq) ? npshReq : 0
+      }));
+      bombsCreated++;
+    } else {
+      // completar la ficha solo donde todavía no había datos (no pisa lo cargado)
+      const e = bombsRegistry.get(bombId);
+      if (!e.caudalNominal && isN(caudalNom)) e.caudalNominal = caudalNom;
+      if (!e.deltaPNominal && isN(deltaPNom)) e.deltaPNominal = deltaPNom;
+      if (!e.npshRequerido && isN(npshReq)) e.npshRequerido = npshReq;
+      if (!e.crit && crit) e.crit = crit;
+      if (!e.fluido && fluido){ e.fluido = fluido; if (isN(sgIn)) e.sg = sgIn; else if (fluido === 'Agua') e.sg = 1; }
+      if (!isN(e.sg) && isN(sgIn)) e.sg = sgIn;
+      if (!isN(e.pv) && isN(pvIn)) e.pv = pvIn;
+      if (!e.aspiracion && asp) e.aspiracion = asp;
+      if (!e.nivelUnidad && uniNivel) e.nivelUnidad = uniNivel;
+      if (!isN(e.alturaTanque) && isN(altTanque)) e.alturaTanque = altTanque;
+      if (!isN(e.cotaCero) && isN(cotaCero)) e.cotaCero = cotaCero;
+    }
+
+    if (!touched.has(bombId)){ const t0 = {dates:[], params:{}, obs:[], ref:null}; PK.forEach(k => t0.params[k] = []); touched.set(bombId, t0); }
+    const t = touched.get(bombId);
+    t.dates.push(fecha);
+    t.params.Caudal.push(numOrNaN(findCol(row,['Caudal_m3h'])));
+    t.params.PresSucc.push(numOrNaN(findCol(row,['PresionSuccion_bar'])));
+    t.params.PresDesc.push(numOrNaN(findCol(row,['PresionDescarga_bar'])));
+    t.params.NPSHd.push(numOrNaN(findCol(row,['NPSHdisponible_m'])));
+    t.params.Sello.push(String(findCol(row,['EstadoSello']) || '').trim());
+    t.params.Nivel.push(numOrNaN(findCol(row,['NivelTanque'])));
+    t.params.Densidad.push(numOrNaN(findCol(row,['DensidadMedicion'])));
+    t.params.TFluido.push(numOrNaN(findCol(row,['TempFluido_C'])));
+    t.params.Valvula.push(numOrNaN(findCol(row,['ValvulaApertura_pct'])));
+    t.params.Ruido.push(String(findCol(row,['RuidoCavitacion']) || '').trim().toLowerCase());
+    t.obs.push(String(findCol(row,['Observaciones']) || ''));
+    rowsImported++;
+  }
+
+  for (const [bombId, incoming] of touched.entries()){
+    const existing = readingsData.get(bombId);
+    if (!existing){ readingsData.set(bombId, mergeReadings({dates:[], params:{}, obs:[], ref:null}, incoming)); continue; }
+    readingsData.set(bombId, mergeReadings(existing, incoming));
+  }
+  return { rows: rowsImported, bombs: bombsCreated };
+}
+
+function mergeReadings(existing, incoming){
+  const existKeys = new Set(existing.dates.map(keyOfDate));
+  const allDates = [...existing.dates];
+  const allObs = [...(existing.obs||[])];
+  const allParams = {};
+  const paramKeys = new Set([...Object.keys(existing.params), ...Object.keys(incoming.params)]);
+  const blank = pk => PARAMS_TEXTO.includes(pk) ? '' : NaN;
+  for (const pk of paramKeys) allParams[pk] = [...(existing.params[pk]||new Array(existing.dates.length).fill(blank(pk)))];
+
+  for (let i=0;i<incoming.dates.length;i++){
+    if (!existKeys.has(keyOfDate(incoming.dates[i]))){
+      existKeys.add(keyOfDate(incoming.dates[i]));
+      allDates.push(incoming.dates[i]);
+      allObs.push(incoming.obs?.[i] || '');
+      for (const pk of paramKeys) allParams[pk].push(incoming.params[pk]?.[i] ?? blank(pk));
+    }
+  }
+  const idx = allDates.map((_,i)=>i).sort((a,b)=>allDates[a]-allDates[b]);
+  return {
+    dates: idx.map(i=>allDates[i]),
+    obs: idx.map(i=>allObs[i]),
+    ref: existing.ref || incoming.ref || null,
+    params: Object.fromEntries(Object.entries(allParams).map(([k,v])=>[k, idx.map(i=>v[i])]))
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  6. MANUAL ENTRY
+// ═══════════════════════════════════════════════════════════
+function fillSelectOnce(el, values){
+  if (!el.dataset.filled){ el.innerHTML = values.map(t=>`<option value="${escHtml(t)}">${escHtml(t)}</option>`).join(''); el.dataset.filled='1'; }
+}
+const $ = id => document.getElementById(id);
+function nowLocalInput(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+
+function openManualEntry(preId){
+  fillSelectOnce($('me_newBombTipo'), BOMB_TIPOS);
+  fillSelectOnce($('me_newBombAcople'), ACOPLE_TIPOS);
+  $('me_unidadP').innerHTML = Object.keys(P_UNITS).map(k => `<option value="${k}" ${k===opciones.unidadP?'selected':''}>${P_UNITS[k].lbl}</option>`).join('');
+  const names = new Set([...Array.from(bombsRegistry.values()).map(b => b.name), ...Array.from(equiposHub.keys())]);
+  $('meTagsDatalist').innerHTML = Array.from(names).sort((a,b)=>a.localeCompare(b,'es',{numeric:true})).map(n => `<option value="${escHtml(n)}"></option>`).join('');
+  ['me_bombTag','me_caudal','me_presSucc','me_presDesc','me_npshd','me_nivel','me_dens','me_tfluido','me_valvula','me_obs'].forEach(id => $(id).value = '');
+  $('me_ruido').value = '';
+  $('me_fecha').value = nowLocalInput();
+  if (preId && bombsRegistry.get(preId)) $('me_bombTag').value = bombsRegistry.get(preId).name;
+  onManualBombChange();
+  $('manualOverlay').classList.add('open');
+}
+function closeManualEntry(){ $('manualOverlay').classList.remove('open'); }
+
+function bombForManual(){
+  const name = $('me_bombTag').value.trim();
+  const id = findBombId(name);
+  if (id) return {id, name, bomb: bombsRegistry.get(id), isNew:false};
+  return {id:null, name, bomb: fichaDefault(name, {tipoBomba:$('me_newBombTipo').value || BOMB_TIPOS[0], tipoAcople:$('me_newBombAcople').value || ACOPLE_TIPOS[0]}), isNew: !!name};
+}
+function refreshManualSelloOptions(){
+  const {bomb} = bombForManual();
+  const cur = $('me_sello').value;
+  $('me_sello').innerHTML = `<option value="">No inspeccionado</option>` + sealOptionsFor(bomb.tipoAcople).map(o=>`<option value="${o.value}">${escHtml(o.label)}</option>`).join('');
+  if ([...$('me_sello').options].some(o => o.value === cur)) $('me_sello').value = cur;
+}
+function onManualBombChange(){
+  const {bomb, isNew, id} = bombForManual();
+  $('me_newBombWrap').classList.toggle('hidden', !isNew);
+  const info = $('me_bombInfo');
+  if (id){
+    info.textContent = `Clase ${CRIT_LBL[bomb.crit || 'DE']} · ${bomb.fluido || 'fluido sin definir'}${isN(sgFicha(bomb)) ? ' (dens. ' + sgFicha(bomb) + ')' : ''} · ` +
+      (bomb.aspiracion === 'tanque' ? 'aspira de tanque abierto' : bomb.aspiracion === 'otra' ? 'aspiración no es tanque abierto' : 'aspiración sin definir');
+  } else if (isNew) info.textContent = 'Bomba nueva: se crea con ficha básica (agua, tanque abierto). Completá la ficha luego en Bombas → Editar.';
+  else info.textContent = 'Escribí o elegí el TAG de la bomba.';
+  const nivPct = bomb.nivelUnidad === '%';
+  $('me_nivelLbl').textContent = `Nivel del tanque (${nivPct ? '%' : 'm'})`;
+  $('me_nivel').placeholder = nivPct ? 'Porcentaje del indicador (0–100)' : 'Metros de líquido';
+  refreshManualSelloOptions();
+  renderManualPreview();
+}
+
+function leerManual(){
+  const f = P_UNITS[$('me_unidadP').value].f;
+  const nv = id => { const v = $(id).value; if (v === '') return NaN; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? NaN : n; };
+  const bar = id => { const v = nv(id); return isNaN(v) ? NaN : v * f; };
+  return {
+    Caudal:nv('me_caudal'), PresSucc:bar('me_presSucc'), PresDesc:bar('me_presDesc'), NPSHd:nv('me_npshd'),
+    Nivel:nv('me_nivel'), Densidad:nv('me_dens'), TFluido:nv('me_tfluido'), Valvula:nv('me_valvula'),
+    Sello:$('me_sello').value || '', Ruido:$('me_ruido').value || ''
+  };
+}
+function manualTieneDatos(v){
+  return Object.entries(v).some(([k, x]) => PARAMS_TEXTO.includes(k) ? !!x : isN(x)) || !!$('me_obs').value.trim();
+}
+function renderManualPreview(){
+  const box = $('me_preview'); if (!box) return;
+  const v = leerManual();
+  const {id, bomb} = bombForManual();
+  if (!manualTieneDatos(v)){ box.innerHTML = '<div class="ind-cover">Cargá datos y aquí aparecen los cálculos. Lo que no se pueda calcular figura como “Sin datos”, con el motivo.</div>'; return; }
+  const fecha = new Date($('me_fecha').value || Date.now());
+  const incoming = {dates:[fecha], params:Object.fromEntries(Object.entries(v).map(([k,x]) => [k,[x]])), obs:[''], ref:null};
+  const existing = id ? readingsData.get(id) : null;
+  const merged = existing ? mergeReadings(existing, incoming) : incoming;
+  let n = merged.dates.findIndex(d => keyOfDate(d) === keyOfDate(fecha)); if (n < 0) n = merged.dates.length - 1;
+  const ev = evalReading(bomb, merged.params, n, merged);
+  const lvl = ev.overall;
+  box.innerHTML = `<div style="margin-bottom:6px;"><span class="mbadge ${lvl<0?'':'badge-'+STATUS[lvl]}">${lvl<0?'Sin datos evaluables':STATUS_LABELS[lvl]}</span></div>` +
+    (existing ? '' : '<div class="ind-cover">Primera lectura de esta bomba: quedará como referencia.</div>') + indicadoresHTML(ev);
+}
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#manualOverlay')) renderManualPreview(); });
+
+function saveManualReading(){
+  const fechaStr = $('me_fecha').value;
+  if (!fechaStr){ alert('Ingresá la fecha de la medición.'); return; }
+  const fecha = new Date(fechaStr);
+  if (isNaN(fecha)){ alert('Fecha inválida.'); return; }
+  const info = bombForManual();
+  if (!info.name){ alert('Ingresá el TAG de la bomba.'); return; }
+  const v = leerManual();
+  if (!manualTieneDatos(v)){ alert('Cargá al menos un dato o una observación.'); return; }
+  if (isN(v.Valvula) && (v.Valvula < 0 || v.Valvula > 100)){ alert('La apertura de válvula debe estar entre 0 y 100 %.'); return; }
+  if (isN(v.Densidad) && v.Densidad <= 0){ alert('La densidad debe ser mayor que 0.'); return; }
+
+  let bombId = info.id;
+  if (!bombId){
+    bombId = genId();
+    bombsRegistry.set(bombId, fichaDefault(info.name, {tipoBomba:$('me_newBombTipo').value, tipoAcople:$('me_newBombAcople').value, crit:$('me_newBombCrit').value}));
+    publicarEquipoEnHub(info.name, $('me_newBombTipo').value);
+  }
+  const existing = readingsData.get(bombId);
+  if (existing && existing.dates.some(d => keyOfDate(d) === keyOfDate(fecha))){
+    alert('Esta bomba ya tiene una medición con esa fecha y hora. Cambiá la hora para guardar otra.'); return;
+  }
+  const incoming = { dates:[fecha], params:Object.fromEntries(Object.entries(v).map(([k,x]) => [k,[x]])), obs:[$('me_obs').value.trim()], ref:null };
+  readingsData.set(bombId, existing ? mergeReadings(existing, incoming) : mergeReadings({dates:[], params:{}, obs:[], ref:null}, incoming));
+  opciones.unidadP = $('me_unidadP').value;
+
+  saveState();
+  closeManualEntry();
+  renderAll();
+  if (_capturaActual){
+    const capId = _capturaActual.id;
+    _capturaActual = null;
+    if (typeof SatSync !== 'undefined' && SatSync.estaConfigurado()){
+      SatSync.marcarCapturaProcesada(capId).catch(err=>console.warn('[SatSync] no se pudo marcar la captura como procesada', err));
+    }
+  }
+  const status = $('loadStatus');
+  status.className = 'load-status ok';
+  status.textContent = `✅ Medición guardada: ${getBombName(bombId)}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  6b. RENDER — DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function renderAll(){
+  renderHeaderStats();
+  renderSummaryBar();
+  renderGrid();
+  renderBombasList();
+  renderThresholdGrid();
+  renderOpciones();
+  renderSealCriteria();
+  populateBombTypeSelects();
+}
+
+function fleetHealth(){
+  let sum=0,count=0;
+  for (const id of readingsData.keys()){
+    const diag = diagnoseBomb(id);
+    if (!diag || diag.overall < 0) continue;
+    const hs = healthScoreFromLevel(diag.overall, diag.subs);
+    if (hs!==null){ sum+=hs; count++; }
+  }
+  return count ? Math.round(sum/count) : null;
+}
+function renderHeaderStats(){
+  document.getElementById('hsBombas').textContent = bombsRegistry.size;
+  let totalLecturas = 0; for (const d of readingsData.values()) totalLecturas += d.dates.length;
+  document.getElementById('hsLecturas').textContent = totalLecturas;
+  const fh = fleetHealth();
+  const el = document.getElementById('hsSalud');
+  el.textContent = fh===null ? '—' : fh+'%';
+  el.style.color = fh===null ? 'var(--muted)' : fh>=85?'var(--good)':fh>=60?'var(--elevated)':fh>=35?'var(--warning)':'var(--critical)';
+}
+function statusDistribution(){
+  const dist = {good:0, elevated:0, warning:0, critical:0};
+  for (const id of readingsData.keys()){
+    const diag = diagnoseBomb(id);
+    if (!diag || diag.overall < 0) continue;
+    dist[STATUS[diag.overall]]++;
+  }
+  return dist;
+}
+function renderSummaryBar(){
+  const dist = statusDistribution();
+  const bar = document.getElementById('summaryBar');
+  bar.innerHTML = `
+    <div class="sum-card good" onclick="setStatusFilter('good')"><div class="sum-icon">🟢</div><div><div class="sum-num">${dist.good}</div><div class="sum-lbl">Normal</div></div></div>
+    <div class="sum-card elevated" onclick="setStatusFilter('elevated')"><div class="sum-icon">🟡</div><div><div class="sum-num">${dist.elevated}</div><div class="sum-lbl">Elevado</div></div></div>
+    <div class="sum-card warning" onclick="setStatusFilter('warning')"><div class="sum-icon">🟠</div><div><div class="sum-num">${dist.warning}</div><div class="sum-lbl">Alerta</div></div></div>
+    <div class="sum-card critical" onclick="setStatusFilter('critical')"><div class="sum-icon">🔴</div><div><div class="sum-num">${dist.critical}</div><div class="sum-lbl">Crítico</div></div></div>
+  `;
+}
+function setStatusFilter(f){
+  statusFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active', b.dataset.f===f));
+  switchTab('dashboard');
+  renderGrid();
+}
+function healthRingSVG(health, level){
+  const color = level<0 ? 'var(--muted)' : STATUS_COLORS[level];
+  const r = 20, c = 2*Math.PI*r;
+  const pct = health===null ? 0 : health/100;
+  const dash = c*pct;
+  return `<div style="position:relative;width:52px;height:52px;">
+    <svg class="health-ring" width="52" height="52" viewBox="0 0 52 52">
+      <circle cx="26" cy="26" r="${r}" stroke="var(--border2)"></circle>
+      <circle cx="26" cy="26" r="${r}" stroke="${color}" stroke-dasharray="${dash} ${c}" stroke-linecap="round"></circle>
+    </svg>
+    <div class="health-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${color};">${health===null?'—':health+'%'}</div>
+  </div>`;
+}
+
+function setCritFilter(c){
+  critFilter = c;
+  document.querySelectorAll('[data-crit]').forEach(b => b.classList.toggle('active', b.dataset.crit === c));
+  renderGrid();
+}
+
+function estadoBomba(id){
+  const d = readingsData.get(id);
+  const bomb = bombsRegistry.get(id) || {};
+  if (!d || !d.dates.length) return {id, bomb, diag:null, level:-2, health:null, dias:null, vencida:true};
+  const diag = diagnoseBomb(id);
+  const dias = Math.floor((Date.now() - diag.date.getTime()) / 864e5);
+  const cad = opciones[CRIT_CAD[bomb.crit || 'DE']] || 90;
+  return {id, bomb, diag, level:diag.overall, health:healthScoreFromLevel(diag.overall, diag.subs), dias, vencida: dias > cad};
+}
+
+function renderGrid(){
+  const grid = $('cardGrid');
+  const search = ($('searchBox')?.value || '').toLowerCase();
+  const sortMode = $('sortSel')?.value || 'health_asc';
+  const soloVenc = $('soloVenc')?.checked;
+
+  let items = [];
+  for (const id of bombsRegistry.keys()){
+    const it = estadoBomba(id);
+    if (critFilter !== 'todas' && (it.bomb.crit || 'DE') !== critFilter) continue;
+    if (statusFilter !== 'all' && (it.level < 0 || STATUS[it.level] !== statusFilter)) continue;
+    if (search && !((it.bomb.name||'') + ' ' + (it.bomb.ubicacion||'')).toLowerCase().includes(search)) continue;
+    if (soloVenc && !it.vencida) continue;
+    items.push(it);
+  }
+  const pend = Array.from(bombsRegistry.keys()).map(estadoBomba).filter(x => (critFilter === 'todas' || (x.bomb.crit||'DE') === critFilter) && x.vencida).length;
+  if ($('cVenc')) $('cVenc').textContent = pend;
+
+  if (sortMode==='health_asc') items.sort((a,b)=>(a.health??999)-(b.health??999));
+  else if (sortMode==='name_asc') items.sort((a,b)=>getBombName(a.id).localeCompare(getBombName(b.id),'es',{numeric:true}));
+  else if (sortMode==='npsh_asc') items.sort((a,b)=>(a.diag && isN(a.diag.margenNPSH) ? a.diag.margenNPSH : 9999)-(b.diag && isN(b.diag.margenNPSH) ? b.diag.margenNPSH : 9999));
+  else if (sortMode==='date_desc') items.sort((a,b)=>(b.diag ? b.diag.date : 0)-(a.diag ? a.diag.date : 0));
+  else if (sortMode==='date_asc') items.sort((a,b)=>(a.diag ? a.diag.date : 0)-(b.diag ? b.diag.date : 0));
+
+  if (!items.length){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="ei">💧</div>${bombsRegistry.size?'Sin resultados para el filtro actual.':'Importá un Excel, pegá tu lista de bombas o cargá una medición manual para comenzar.'}</div>`;
+    return;
+  }
+
+  const mv = (lbl, txt, lvl) => `<div class="mm-item"><div class="mm-lbl">${lbl}</div><div class="mm-val ${txt==null?'nd':(lvl>=0?STATUS[lvl]:'')}">${txt==null?'Sin datos':escHtml(txt)}</div></div>`;
+  grid.innerHTML = items.map(({id, bomb, diag, level, health, dias, vencida})=>{
+    const badgeClass = level<0 ? '' : `badge-${STATUS[level]}`;
+    const badgeLabel = level===-2 ? 'Sin lecturas' : level<0 ? 'Sin datos' : STATUS_LABELS[level];
+    const cuerpo = diag ? `
+        <div class="health-ring-wrap">${healthRingSVG(health, level)}</div>
+        <div class="mmetrics">
+          ${mv('Desv. Caudal', isN(diag.desvCaudal)?fmt(diag.desvCaudal,1)+'%':null, diag.subs.desvCaudal)}
+          ${mv('Desv. ΔP', isN(diag.desvPresion)?fmt(diag.desvPresion,1)+'%':null, diag.subs.desvPresion)}
+          ${mv('Margen NPSH', isN(diag.margenNPSH)?fmt(diag.margenNPSH,0)+'%':null, diag.subs.margenNPSH)}
+          ${mv('Vs. referencia', isN(diag.caidaRef)?(diag.caidaRef>=0?'−':'+')+fmt(Math.abs(diag.caidaRef),1)+'%':null, diag.subs.degradacion)}
+          ${mv('Sello/Acople', diag.selloLabel?diag.selloLabel.split('(')[0].trim().slice(0,16):null, diag.subs.sello)}
+          ${mv('Cavitación', diag.ruidoLabel||null, diag.subs.ruido)}
+        </div>` : `<div class="empty-state small" style="width:100%;padding:14px;">Todavía sin mediciones</div>`;
+    return `
+    <div class="mcard" onclick="openDetail('${escJs(id)}')">
+      <div class="mcard-header">
+        <div>
+          <div class="mname">${escHtml(bomb.name||id)}</div>
+          <div class="mpoint">${escHtml(bomb.ubicacion||'')}</div>
+          <div class="mpoint-badge">Clase ${CRIT_LBL[bomb.crit||'DE']} · ${escHtml(bomb.fluido||'')}</div>
+        </div>
+        <span class="mbadge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="mcard-body">${cuerpo}</div>
+      <div class="mcard-footer"><span>${diag ? 'Última: '+fmtDate(diag.date)+' (hace '+dias+' d)' : 'Sin lecturas'}</span><span>${vencida ? '<span class="venc">'+(diag?'Vencida':'Pendiente')+'</span>' : readingsData.get(id).dates.length+' lectura(s)'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  7. DETAIL MODAL
+// ═══════════════════════════════════════════════════════════
+function sealAdviceFor(tipoAcople, value){
+  const advice = {
+    'Sello mecánico': {
+      leve: 'Goteo leve u ocasional. Puede ser normal en un sello nuevo en rodaje, pero debe ir disminuyendo con el tiempo, no aumentando. Monitorear en la próxima ronda.',
+      abundante: 'Goteo abundante o continuo. Revisar caras del sello (posible desgaste o mal montaje) y compatibilidad química/térmica con el fluido bombeado. Programar el cambio del sello.',
+      chorro: 'Fuga en chorro o pérdida de presión evidente. El sello mecánico probablemente está destruido. Detener la bomba y reemplazar el sello antes de continuar operando.'
+    },
+    'Empaquetadura (prensaestopa)': {
+      seco: 'Sin goteo — señal de que la prensa está demasiado ajustada. Riesgo de calentamiento y desgaste acelerado del eje/camisa. Aflojar levemente la prensaestopa para restablecer el goteo controlado.',
+      excesivo: 'Goteo excesivo. Reajustar o reempacar la prensaestopa según el procedimiento habitual.',
+      seco_caliente: 'Prensaestopa seca y caliente — riesgo inminente de daño al eje o camisa de desgaste. Detener y reajustar/reempacar de inmediato.'
+    },
+    'Acople magnético (sin sello)': {
+      temp: 'Camisa de contención más caliente de lo habitual. Vigilar de cerca: puede ser el primer indicio de patinaje intermitente o de corrientes inducidas excesivas en la camisa.',
+      ruido: 'Ruido o vibración anormal en el acople magnético — posible patinaje intermitente por sobrecarga del par magnético (obstrucción, viscosidad del fluido mayor a la de diseño, o desalineación). Revisar antes de que se produzca un desacople franco.',
+      desacople: 'Desacople magnético confirmado: el motor gira pero la bomba no transmite el par (caudal cero pese a que el motor consume corriente). Detener de inmediato — el funcionamiento desacoplado puede sobrecalentar el fluido bombeado y dañar la camisa de contención.'
+    }
+  };
+  return (advice[tipoAcople] && advice[tipoAcople][value]) || 'Revisar el estado del sello/acople en la próxima intervención.';
+}
+
+function diagnosisMessages(diag){
+  const msgs = [];
+  const push = (sev, title, action) => msgs.push({sev, title, action});
+  const bomb = diag.bomb || {};
+  const sevOf = l => l===3?'critical':l===2?'warning':'elevated';
+
+  if (diag.subs.desvCaudal >= 1 && isN(diag.desvCaudal)){
+    const sev = sevOf(diag.subs.desvCaudal);
+    if (diag.caudal < bomb.caudalNominal){
+      push(sev, '📉 Caudal por debajo del punto de diseño',
+        `Caudal medido ${fmt(diag.caudal,1)} m³/h, ${fmt(diag.desvCaudal,1)}% por debajo del nominal (${fmt(bomb.caudalNominal,1)} m³/h). Posibles causas: válvula de succión o descarga parcialmente cerrada, colador/filtro obstruido, desgaste del impulsor o anillos de desgaste, aire atrapado, o cavitación incipiente. Revisar línea de succión y estado interno del impulsor.`);
+    } else {
+      push(sev, '📈 Caudal por encima del punto de diseño',
+        `Caudal medido ${fmt(diag.caudal,1)} m³/h, ${fmt(diag.desvCaudal,1)}% por encima del nominal (${fmt(bomb.caudalNominal,1)} m³/h). El punto de operación pudo desplazarse por baja resistencia del sistema (válvula muy abierta). El NPSH requerido aumenta con el caudal: revisar margen de NPSH y riesgo de sobrecarga del motor.`);
+    }
+  }
+
+  if (diag.subs.desvPresion >= 1 && isN(diag.desvPresion)){
+    const sev = sevOf(diag.subs.desvPresion);
+    const base = diag.desvBase === 'altura' ? 'altura manométrica' : 'ΔP';
+    const est = diag.sucOrigen === 'estimada' ? ' La succión es estimada por nivel de tanque, así que el valor es orientativo.' : '';
+    if (diag.presBajo){
+      push(sev, `🔧 ${base==='ΔP'?'ΔP (succión→descarga)':'Altura'} por debajo del nominal`,
+        `ΔP medido ${fmt(diag.deltaP,2)} bar vs. ${fmt(bomb.deltaPNominal,2)} bar nominal (${fmt(diag.desvPresion,1)}% de desviación en ${base}). Sugiere pérdida de altura entregada por la bomba: desgaste de impulsor o anillos, recirculación interna, o cavitación. Programar inspección interna si la tendencia continúa.${est}`);
+    } else {
+      push(sev, `🔧 ${base==='ΔP'?'ΔP (succión→descarga)':'Altura'} por encima del nominal`,
+        `ΔP medido ${fmt(diag.deltaP,2)} bar vs. ${fmt(bomb.deltaPNominal,2)} bar nominal (${fmt(diag.desvPresion,1)}% de desviación en ${base}). Revisar posible obstrucción o válvula muy estrangulada en la descarga; la bomba está trabajando contra más resistencia de la prevista.${est}`);
+    }
+  }
+
+  if (diag.subs.degradacion >= 1 && isN(diag.caidaRef)){
+    const sev = sevOf(diag.subs.degradacion);
+    push(sev, '📉 Caída contra la referencia propia de la bomba',
+      `La ${diag.refVar} bajó ${fmt(diag.caidaRef,1)}% respecto de la lectura de referencia (${fmtDate(diag.refFecha)}), en condiciones de operación comparables. Sugiere desgaste progresivo del impulsor o anillos, recirculación interna o cavitación. ${diag.motivos.refNota || ''}Confirmar con una nueva medición en la misma condición y programar inspección interna si se repite.`);
+  }
+
+  if (diag.subs.margenNPSH >= 1 && isN(diag.margenNPSH)){
+    const sev = sevOf(diag.subs.margenNPSH);
+    push(sev, sev==='critical' ? '🌪️ Margen de NPSH crítico — cavitación probable' : '🌪️ Margen de NPSH reducido',
+      `Margen actual de ${fmt(diag.margenNPSH,0)}% sobre el NPSH requerido (NPSHd ${fmt(diag.npshd,1)} m${diag.npshOrigen==='calculado'?' calculado':''} vs. NPSHr ${fmt(bomb.npshRequerido,1)} m). Revisar altura y pérdidas por fricción en la línea de succión, obstrucciones en colador/válvula de pie, nivel del tanque de succión y temperatura del fluido (a mayor temperatura, mayor presión de vapor y menor NPSH disponible).${diag.sucOrigen==='estimada'?' Ojo: la succión es estática (sin pérdidas de línea), por lo que el NPSH real puede ser menor al calculado.':''}${sev==='critical'?' Cavitación activa puede picar el impulsor y dañar progresivamente la bomba — priorizar corrección.':''}`);
+  }
+
+  if (diag.subs.ruido >= 1){
+    push(sevOf(diag.subs.ruido), `🔊 Ruido de cavitación: ${escHtml(diag.ruidoLabel)}`,
+      diag.subs.ruido >= 3
+        ? 'Ruido fuerte (como grava en la bomba): cavitación activa. Verificar de inmediato nivel del tanque, válvula/colador de succión y punto de operación; reducir caudal si es posible hasta corregir la causa.'
+        : 'Ruido leve, posible cavitación incipiente. Revisar nivel del tanque, obstrucciones en la succión y apertura de la válvula de descarga; confirmar en la próxima ronda.');
+  }
+
+  if (diag.subs.sello >= 1){
+    const sev = sevOf(diag.subs.sello);
+    push(sev, `🧷 ${escHtml(bomb.tipoAcople||'Sello')}: ${escHtml(diag.selloLabel)}`, sealAdviceFor(bomb.tipoAcople, diag.selloVal));
+  }
+
+  if (!msgs.length){
+    if (diag.overall < 0) push('elevated', 'ℹ️ Sin datos suficientes para diagnosticar', 'Esta medición no tiene indicadores evaluables. Revisá en “Indicadores” qué datos faltan (por ejemplo, ΔP nominal en la ficha, succión o nivel del tanque).');
+    else push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros evaluados están dentro de rango normal. Continuar con el plan de monitoreo establecido.');
+  }
+  return msgs;
+}
+
+function openDetail(id){
+  currentKey = id;
+  const d = readingsData.get(id);
+  const bomb = bombsRegistry.get(id) || {};
+  const diag = d && d.dates.length ? diagnoseBomb(id) : null;
+  $('modalTitle').textContent = bomb.name || id;
+  $('modalSub').textContent = `Clase ${CRIT_LBL[bomb.crit||'DE']} · ${bomb.tipoBomba||''} · ${bomb.tipoAcople||''}${bomb.ubicacion?' · '+bomb.ubicacion:''}${diag?' · Última medición: '+fmtDateTime(diag.date):''}`;
+
+  const acciones = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="closeDetail();openManualEntry('${escJs(id)}')">＋ Nueva medición</button>
+    <button class="btn-small" onclick="closeDetail();editBomb('${escJs(id)}')">✏️ Editar ficha</button>${d && d.dates.length > 1 && baselineIdx(d) !== d.dates.length - 1 ? `<button class="btn-small" onclick="fijarReferencia('${escJs(id)}',${d.dates.length - 1})">★ Fijar última como referencia</button>` : ''}</div>`;
+  if (!diag){
+    $('modalBody').innerHTML = acciones + `<div class="empty-state small">Esta bomba todavía no tiene mediciones.</div>`;
+    $('detailOverlay').classList.add('open'); return;
+  }
+  const level = diag.overall;
+  const badgeClass = level<0?'':`badge-${STATUS[level]}`;
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const bi = baselineIdx(d);
+
+  let html = acciones + `
+  <div class="modal-section-title">Estado actual</div>
+  <div class="mgrid">
+    <div class="mstat"><div class="mstat-lbl">Estado</div><div class="mstat-val"><span class="mbadge ${badgeClass}">${level<0?'Sin datos':STATUS_LABELS[level]}</span></div></div>
+    <div class="mstat"><div class="mstat-lbl">Salud</div><div class="mstat-val">${health===null?'Sin datos':health+'%'}</div></div>
+    <div class="mstat"><div class="mstat-lbl">Referencia</div><div class="mstat-val" style="font-size:.9rem;">${fmtDate(d.dates[bi])}</div></div>
+  </div>
+
+  <div class="modal-section-title">Indicadores</div>
+  <div class="ind-list">${indicadoresHTML(diag)}</div>
+
+  <div class="modal-section-title">Diagnóstico</div>
+  <div id="modalDiagBox"></div>
+
+  <div class="modal-section-title">Tendencia</div>
+  <div class="sel-inline"><select id="serieSel" onchange="drawDetailChart('${escJs(id)}')"></select></div>
+  <div class="chart-wrap"><canvas id="modalChart"></canvas></div>
+
+  <div class="modal-section-title">Historial reciente</div>
+  <div style="overflow-x:auto;">
+    <table class="rtable">
+      <thead><tr><th>Fecha</th><th>Caudal (m³/h)</th><th>ΔP (bar)</th><th>Altura (m)</th><th>NPSHd (m)</th><th>Sello/Acople</th><th>Cavitación</th><th></th></tr></thead>
+      <tbody>${d.dates.map((dt,i)=>{
+        const ev = evalReading(bomb, d.params, i, d);
+        const nd = v => v==='—' ? '<span class="nd">Sin datos</span>' : v;
+        return `<tr>
+          <td data-label="Fecha">${fmtDate(dt)}${i===bi?' <span class="ref-tag">★ referencia</span>':''}</td>
+          <td data-label="Caudal (m³/h)">${nd(fmt(ev.caudal,1))}</td>
+          <td data-label="ΔP (bar)">${nd(fmt(ev.deltaP,2))}</td>
+          <td data-label="Altura (m)">${nd(fmt(ev.H,1))}</td>
+          <td data-label="NPSHd (m)">${nd(fmt(ev.npshd,1))}</td>
+          <td data-label="Sello/Acople">${escHtml(ev.selloLabel||'')||'<span class="nd">Sin datos</span>'}</td>
+          <td data-label="Cavitación">${escHtml(ev.ruidoLabel||'')||'<span class="nd">Sin datos</span>'}</td>
+          <td data-label=""><span class="row-actions">${i===bi?'':`<button class="btn-small" onclick="fijarReferencia('${escJs(id)}',${i})">Fijar referencia</button>`}<button class="btn-small danger" onclick="borrarLectura('${escJs(id)}',${i})">Eliminar</button></span></td>
+        </tr>`;
+      }).reverse().slice(0,15).join('')}</tbody>
+    </table>
+  </div>
+  <div class="hint-txt">La referencia es la primera lectura, salvo que fijes otra. Solo se compara contra ella cuando la apertura de válvula y el caudal son parecidos.</div>`;
+
+  $('modalBody').innerHTML = html;
+  $('modalDiagBox').innerHTML = diagnosisMessages(diag).map(m=>`
+    <div class="diag-box ${m.sev==='good'?'':m.sev}">
+      <div class="diag-title">${m.title}</div>
+      <div class="diag-action">${m.action}</div>
+    </div>`).join('');
+  $('detailOverlay').classList.add('open');
+  setTimeout(()=>drawDetailChart(id), 30);
+}
+function closeDetail(){ $('detailOverlay').classList.remove('open'); }
+
+function drawDetailChart(id){
+  const d = readingsData.get(id), bomb = bombsRegistry.get(id) || {};
+  const sel = $('serieSel'); if (!d || !sel) return;
+  const calcs = d.dates.map((_, i) => calcBasico(bomb, d.params, i));
+  const defs = [
+    {k:'H',      lbl:'Altura manométrica (m)',      v:c=>c.H},
+    {k:'dp',     lbl:'ΔP (bar)',                    v:c=>c.deltaP},
+    {k:'pdesc',  lbl:'Presión de descarga (bar)',   v:c=>c.presDesc},
+    {k:'caudal', lbl:'Caudal (m³/h)',               v:c=>c.caudal},
+    {k:'npsh',   lbl:'NPSH disponible (m)',         v:c=>c.npshd}
+  ].filter(x => calcs.filter(c => isN(x.v(c))).length >= 2);
+  if (!sel.dataset.filled || sel.dataset.for !== id){
+    const prev = sel.value;
+    sel.innerHTML = defs.length ? defs.map(x => `<option value="${x.k}">${escHtml(x.lbl)}</option>`).join('') : '<option>Se necesitan 2 lecturas con el mismo dato</option>';
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    sel.dataset.filled = '1'; sel.dataset.for = id;
+  }
+  if (detailChart){ detailChart.destroy(); detailChart = null; }
+  const ctx = $('modalChart');
+  if (!ctx || typeof Chart === 'undefined' || !defs.length) return;
+  const def = defs.find(x => x.k === sel.value) || defs[0];
+  const labels = d.dates.map(fmtDate);
+  const bi = baselineIdx(d);
+  const data = calcs.map(c => { const v = def.v(c); return isN(v) ? v : null; });
+  const datasets = [{label:def.lbl, data, borderColor:'#22d3ee', backgroundColor:'rgba(34,211,238,.1)', tension:.3, spanGaps:true, pointRadius:4}];
+  if (isN(data[bi])) datasets.push({label:'Referencia', data:data.map(()=>data[bi]), borderColor:'#f0b429', borderDash:[6,4], pointRadius:0});
+  detailChart = new Chart(ctx, {
+    type:'line', data:{labels, datasets},
+    options:{responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{labels:{color:'#cdd9f0'}}},
+      scales:{x:{ticks:{color:'#5e7a9a', maxTicksLimit:8}, grid:{color:'#1e2d45'}}, y:{ticks:{color:'#5e7a9a'}, grid:{color:'#1e2d45'}}}}
+  });
+}
+
+function fijarReferencia(id, i){
+  const d = readingsData.get(id); if (!d) return;
+  d.ref = keyOfDate(d.dates[i]); saveState(); renderAll(); openDetail(id);
+}
+function borrarLectura(id, i){
+  const d = readingsData.get(id); if (!d) return;
+  if (!confirm('¿Eliminar esta medición? Se borra también de la nube (para todos los dispositivos).')) return;
+  const k = keyOfDate(d.dates[i]);
+  const tagBorrado = getBombName(id);
+  _pend.push({t:'med', tag:tagBorrado, fecha:k + 'Z'}); _hashes.delete('m:' + tagBorrado + '|' + k + 'Z');
+  d.dates.splice(i,1); d.obs.splice(i,1);
+  for (const pk of Object.keys(d.params)) d.params[pk].splice(i,1);
+  if (d.ref === k) d.ref = null;
+  if (!d.dates.length) readingsData.delete(id);
+  saveState(); renderAll();
+  if (readingsData.has(id)) openDetail(id); else closeDetail();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  8. BOMBAS TAB (fichas)
+// ═══════════════════════════════════════════════════════════
+function populateBombTypeSelects(){
+  const box = $('newBombFicha');
+  if (box && !box.dataset.filled){ box.innerHTML = fichaCamposHTML('nb', fichaDefault('')); box.dataset.filled = '1'; }
+  fillSelectOnce($('me_newBombTipo'), BOMB_TIPOS);
+  fillSelectOnce($('me_newBombAcople'), ACOPLE_TIPOS);
+}
+
+function fichaCamposHTML(p, b){
+  const opt = (v, cur, l) => `<option value="${escHtml(v)}" ${v===cur?'selected':''}>${escHtml(l||v)}</option>`;
+  const val = v => isN(v) && v !== 0 ? v : '';
+  const nullv = v => isN(v) ? v : '';
+  return `
+  <div class="form-grid">
+    <div class="fld"><label>Tipo de bomba</label><select id="${p}_tipo">${BOMB_TIPOS.map(t=>opt(t,b.tipoBomba)).join('')}</select></div>
+    <div class="fld"><label>Tipo de acople / sello</label><select id="${p}_acople">${ACOPLE_TIPOS.map(t=>opt(t,b.tipoAcople)).join('')}</select></div>
+    <div class="fld"><label>Ubicación / sistema</label><input id="${p}_loc" value="${escHtml(b.ubicacion||'')}" placeholder="Ej: Circuito refrigeración P2"></div>
+    <div class="fld"><label>Clase de criticidad</label><select id="${p}_crit">${opt('AB',b.crit||'DE','A/B')}${opt('C',b.crit||'DE','C')}${opt('DE',b.crit||'DE','D/E')}</select></div>
+  </div>
+  <div class="modal-section-title" style="margin-top:6px;">Producto bombeado</div>
+  <div class="form-grid">
+    <div class="fld"><label>Producto</label><select id="${p}_fluido" onchange="onFluidoChange('${p}')">${FLUIDOS.map(t=>opt(t,b.fluido||'Agua')).join('')}</select></div>
+    <div class="fld"><label>Densidad relativa (agua = 1)</label><input type="number" step="0.001" id="${p}_sg" value="${nullv(b.sg)}" placeholder="Ej: 1.33"></div>
+    <div class="fld"><label>Presión de vapor (bar abs) — si no es agua</label><input type="number" step="0.001" id="${p}_pv" value="${nullv(b.pv)}"></div>
+  </div>
+  <div class="hint-txt">Densidades típicas (aprox., verificá con tu concentración y temperatura): hipoclorito de sodio 1.10–1.25 según % de cloro activo · soda cáustica 1.33 (30 %) a 1.52 (50 %) · ácido sulfúrico 1.84 (98 %). Si la concentración cambia entre lotes, podés cargar la densidad real en cada medición.</div>
+  <div class="modal-section-title">Aspiración y nivel (para estimar la presión de succión)</div>
+  <div class="form-grid">
+    <div class="fld"><label>Aspiración</label><select id="${p}_asp">${opt('tanque',b.aspiracion||'tanque','Tanque / pozo abierto (a atmósfera)')}${opt('otra',b.aspiracion,'Otra (línea presurizada, tanque cerrado…)')}</select></div>
+    <div class="fld"><label>El indicador de nivel muestra</label><select id="${p}_uni">${opt('m',b.nivelUnidad||'m','Metros (m)')}${opt('%',b.nivelUnidad,'Porcentaje (%)')}</select></div>
+    <div class="fld"><label>Altura total del tanque (m) — solo si el nivel es en %</label><input type="number" step="0.01" id="${p}_alt" value="${nullv(b.alturaTanque)}"></div>
+    <div class="fld"><label>Altura del cero del nivel sobre el eje de la bomba (m)</label><input type="number" step="0.01" id="${p}_cota" value="${nullv(b.cotaCero)}"></div>
+  </div>
+  <div class="hint-txt">La presión estática en la succión depende de la <b>altura del líquido sobre el eje</b> y de su <b>densidad</b>; no del volumen ni de la forma del tanque. La altura del cero es positiva si el fondo del tanque (o el cero del indicador) queda por encima del eje de la bomba y negativa si queda por debajo. Solo aplica a tanques abiertos a atmósfera.</div>
+  <div class="modal-section-title">Ficha técnica (punto de diseño — usado como referencia del diagnóstico)</div>
+  <div class="form-grid">
+    <div class="fld"><label>Caudal nominal (m³/h)</label><input type="number" step="0.1" id="${p}_q" value="${val(b.caudalNominal)}"></div>
+    <div class="fld"><label>ΔP nominal succión→descarga (bar) — para el producto de la ficha</label><input type="number" step="0.01" id="${p}_dp" value="${val(b.deltaPNominal)}"></div>
+    <div class="fld"><label>NPSH requerido (m) a caudal nominal</label><input type="number" step="0.1" id="${p}_npshr" value="${val(b.npshRequerido)}"></div>
+    <div class="fld"><label>Potencia del motor (kW/HP, informativo)</label><input id="${p}_pot" value="${escHtml(b.potencia||'')}" placeholder="Ej: 15 kW"></div>
+  </div>`;
+}
+function onFluidoChange(p){
+  const f = $(p+'_fluido').value, sg = $(p+'_sg');
+  if (f === 'Agua') sg.value = 1;
+  else if (sg.value === '1') sg.value = '';
+}
+function readFicha(p){
+  const num0 = id => { const v = parseFloat(String($(id).value).replace(',', '.')); return isNaN(v) ? null : v; };
+  return {
+    tipoBomba:$(p+'_tipo').value, tipoAcople:$(p+'_acople').value, ubicacion:$(p+'_loc').value.trim(), crit:$(p+'_crit').value,
+    fluido:$(p+'_fluido').value, sg:num0(p+'_sg'), pv:num0(p+'_pv'),
+    aspiracion:$(p+'_asp').value, nivelUnidad:$(p+'_uni').value, alturaTanque:num0(p+'_alt'), cotaCero:num0(p+'_cota'),
+    caudalNominal:num0(p+'_q') || 0, deltaPNominal:num0(p+'_dp') || 0, npshRequerido:num0(p+'_npshr') || 0, potencia:$(p+'_pot').value.trim()
+  };
+}
+
+function createBomb(){
+  const name = $('newBombName').value.trim();
+  if (!name){ alert('Ingresá un nombre/TAG de bomba.'); return; }
+  if (findBombId(name)){ alert('Ya existe una bomba con ese TAG.'); return; }
+  const id = genId();
+  const f = readFicha('nb');
+  if (f.fluido === 'Agua' && !isN(f.sg)) f.sg = 1;
+  bombsRegistry.set(id, fichaDefault(name, f));
+  publicarEquipoEnHub(name, f.tipoBomba);
+  $('newBombName').value = '';
+  $('newBombFicha').dataset.filled = ''; $('newBombFicha').innerHTML = '';
+  saveState();
+  renderAll();
+}
+function deleteBomb(id){
+  if (!confirm('¿Eliminar esta bomba y todas sus lecturas asociadas? Se borran también de la nube. El equipo sigue en el catálogo para los demás módulos.')) return;
+  const tagBorrado = getBombName(id);
+  _pend.push({t:'bomba', tag:tagBorrado});
+  for (const k of [..._hashes.keys()]) if (k === 'f:' + tagBorrado || k.startsWith('m:' + tagBorrado + '|')) _hashes.delete(k);
+  bombsRegistry.delete(id);
+  readingsData.delete(id);
+  saveState();
+  renderAll();
+}
+function openFichaModal(title, html){
+  $('fichaTitle').textContent = title;
+  $('fichaBody').innerHTML = html;
+  $('fichaOverlay').classList.add('open');
+}
+function closeFichaModal(){ $('fichaOverlay').classList.remove('open'); }
+function editBomb(id){
+  const b = bombsRegistry.get(id); if (!b) return;
+  openFichaModal('Ficha de ' + b.name, `
+    <div class="form-grid"><div class="fld"><label>Nombre / TAG</label><input id="eb_name" value="${escHtml(b.name)}"></div></div>
+    ${fichaCamposHTML('eb', b)}
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveEditBomb('${escJs(id)}')">💾 Guardar ficha</button>
+      <button class="btn-small" onclick="closeFichaModal()">Cancelar</button>
+    </div>`);
+}
+function saveEditBomb(id){
+  const b = bombsRegistry.get(id); if (!b) return;
+  const name = $('eb_name').value.trim();
+  if (!name){ alert('El TAG no puede estar vacío.'); return; }
+  const other = findBombId(name);
+  if (other && other !== id){ alert('Ya existe otra bomba con ese TAG.'); return; }
+  const f = readFicha('eb');
+  if (f.fluido === 'Agua' && !isN(f.sg)) f.sg = 1;
+  if (name !== b.name){
+    _pend.push({t:'rename', from:b.name, to:name});
+    for (const k of [..._hashes.keys()]) if (k === 'f:' + b.name || k.startsWith('m:' + b.name + '|')) _hashes.delete(k);
+    if (_equipoIds.has(b.name)){ _equipoIds.set(name, _equipoIds.get(b.name)); _equipoIds.delete(b.name); }
+  }
+  bombsRegistry.set(id, Object.assign({}, b, f, {name}));
+  saveState(); closeFichaModal(); renderAll();
+}
+
+function renderBombasList(){
+  const el = $('bombasRegistryList');
+  if (!el) return;
+  const q = ($('bombSearch')?.value || '').toLowerCase();
+  if (!bombsRegistry.size){
+    el.innerHTML = `<div class="empty-state"><div class="ei">💧</div>Sin bombas registradas. Creá una arriba, pegá tu lista o importá un Excel (se crean automáticamente).</div>`;
+    return;
+  }
+  const list = Array.from(bombsRegistry.entries()).filter(([id,b]) => !q || ((b.name||'')+' '+(b.ubicacion||'')).toLowerCase().includes(q))
+    .sort((a,b)=>a[1].name.localeCompare(b[1].name,'es',{numeric:true}));
+  el.innerHTML = list.map(([id, b])=>{
+    const n = readingsData.get(id)?.dates.length || 0;
+    const sg = sgFicha(b);
+    const sd = '<span style="color:var(--muted);font-style:italic;">Sin datos</span>';
+    return `<div class="panel-box">
+      <div class="panel-box-title"><span>💧 ${escHtml(b.name)} <span style="color:var(--muted);font-weight:400;font-size:.8rem;">— Clase ${CRIT_LBL[b.crit||'DE']} · ${escHtml(b.tipoBomba||'')} · ${escHtml(b.tipoAcople||'')}${b.ubicacion?' · '+escHtml(b.ubicacion):''}</span></span>
+        <span style="display:flex;gap:6px;"><button class="btn-small" onclick="editBomb('${escJs(id)}')">Editar</button><button class="btn-small danger" onclick="deleteBomb('${escJs(id)}')">Eliminar</button></span>
+      </div>
+      <div style="font-size:.82rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span>Producto: <strong style="color:var(--text);">${escHtml(b.fluido||'')||sd}${isN(sg)?' (dens. '+sg+')':''}</strong></span>
+        <span>Aspiración: <strong style="color:var(--text);">${b.aspiracion==='tanque'?'tanque abierto':b.aspiracion==='otra'?'otra':sd}</strong></span>
+        <span>Caudal nominal: <strong style="color:var(--text);">${b.caudalNominal?b.caudalNominal+' m³/h':sd}</strong></span>
+        <span>ΔP nominal: <strong style="color:var(--text);">${b.deltaPNominal?b.deltaPNominal+' bar':sd}</strong></span>
+        <span>NPSH requerido: <strong style="color:var(--text);">${b.npshRequerido?b.npshRequerido+' m':sd}</strong></span>
+        <span>${b.potencia?('Potencia: <strong style="color:var(--text);">'+escHtml(b.potencia)+'</strong>'):''}</span>
+        <span>${n} lectura(s)</span>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-state small">Ninguna bomba coincide con la búsqueda.</div>`;
+}
+
+// Importación de lista pegada: TAG, ubicación, clase, producto (opcionales salvo el TAG)
+function openImportLista(){
+  openFichaModal('Importar lista de bombas', `
+    <div class="hint-txt" style="margin-top:0;">Pegá una fila por bomba con las columnas <b>TAG, ubicación, clase, producto</b> (podés copiarlas directo desde Excel). La clase puede ser A, B, C, D, E o A/B, D/E; sin clase se asume D/E. El producto puede ser Agua, Hipoclorito de sodio, Soda cáustica, Ácido sulfúrico u otro. Los TAG que ya existen se actualizan solo en lo que pongas.</div>
+    <div class="fld"><textarea id="il_txt" rows="9" placeholder="BBA-101&#9;Planta 1&#9;A&#9;Agua"></textarea></div>
+    <div style="display:flex;gap:10px;margin-top:12px;">
+      <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="ejecutarImportLista()">Importar</button>
+      <button class="btn-small" onclick="closeFichaModal()">Cancelar</button>
+    </div>`);
+}
+function ejecutarImportLista(){
+  const lines = $('il_txt').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  let nuevos = 0, act = 0;
+  lines.forEach(line => {
+    const cols = line.split(/\t|;|,/).map(s => s.trim());
+    const tag = cols[0]; if (!tag || /^(tag|bomba)$/i.test(tag)) return;
+    const crit = critDeTexto(cols[2]);
+    const fl = cols[3] ? (FLUIDOS.find(f => f.toLowerCase() === cols[3].toLowerCase()) || 'Otro') : '';
+    const id = findBombId(tag);
+    if (id){
+      const e = bombsRegistry.get(id);
+      if (cols[1]) e.ubicacion = cols[1]; if (crit) e.crit = crit;
+      if (fl){ e.fluido = fl; if (fl === 'Agua') e.sg = 1; }
+      act++;
+    } else {
+      bombsRegistry.set(genId(), fichaDefault(tag, {ubicacion:cols[1] || '', crit:crit || 'DE', fluido:fl || 'Agua', sg: (fl || 'Agua') === 'Agua' ? 1 : null}));
+      nuevos++;
+    }
+  });
+  saveState(); closeFichaModal(); renderAll();
+  const st = $('loadStatus'); st.className = 'load-status ok'; st.textContent = `✅ ${nuevos} bomba(s) nuevas, ${act} actualizadas`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  9. THRESHOLDS TAB
+// ═══════════════════════════════════════════════════════════
+function renderThresholdGrid(){
+  const el = $('thresholdGrid');
+  if (!el) return;
+  el.innerHTML = Object.keys(THRESHOLD_META).map(key=>{
+    const meta = THRESHOLD_META[key];
+    const band = thresholds[key];
+    const labels = meta.inverse ? ['Normal (≥)','Elevado (≥)','Alerta (≥)'] : ['Normal (≤)','Elevado (≤)','Alerta (≤)'];
+    return `<div class="th-item">
+      <div class="th-item-lbl">${meta.label}${meta.unit?' ('+meta.unit+')':''}</div>
+      ${band.map((v,i)=>`<div class="th-row"><label>${labels[i]}</label><input type="number" step="0.01" id="th_${key}_${i}" value="${v}"></div>`).join('')}
+    </div>`;
+  }).join('');
+}
+function saveThresholdsFromUI(){
+  for (const key of Object.keys(THRESHOLD_META)){
+    for (let i=0;i<3;i++){
+      const input = $(`th_${key}_${i}`);
+      if (input){ const v = parseFloat(input.value); if (!isNaN(v)) thresholds[key][i] = v; }
+    }
+  }
+  _cfgSucia = true;
+  saveState();
+  renderAll();
+  alert('Umbrales guardados.');
+}
+function resetThresholds(){
+  if (!confirm('¿Restaurar los umbrales por defecto?')) return;
+  thresholds = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
+  _cfgSucia = true;
+  saveState();
+  renderAll();
+}
+function renderOpciones(){
+  const el = $('opcionesGrid'); if (!el) return;
+  el.innerHTML = `<div class="th-item"><div class="th-item-lbl">Unidad de presión por defecto</div>
+      <div class="th-row"><label>Al cargar mediciones</label><select id="op_unidadP">${Object.keys(P_UNITS).map(k=>`<option value="${k}" ${k===opciones.unidadP?'selected':''}>${P_UNITS[k].lbl}</option>`).join('')}</select></div></div>` +
+    OPCIONES_META.map(o => `<div class="th-item"><div class="th-item-lbl">${o.label}</div><div class="th-row"><label>Valor</label><input type="number" step="${o.step}" id="op_${o.k}" value="${opciones[o.k]}"></div></div>`).join('');
+}
+function saveOpcionesFromUI(){
+  opciones.unidadP = $('op_unidadP').value;
+  for (const o of OPCIONES_META){ const v = parseFloat($('op_'+o.k).value); if (!isNaN(v) && v >= 0) opciones[o.k] = v; }
+  _cfgSucia = true;
+  saveState(); renderAll(); alert('Opciones guardadas.');
+}
+function renderSealCriteria(){
+  const el = document.getElementById('sealCriteriaBox');
+  if (!el) return;
+  el.innerHTML = Object.keys(SEAL_OPTIONS).map(tipo=>{
+    return `<div class="th-item">
+      <div class="th-item-lbl">${escHtml(tipo)}</div>
+      ${SEAL_OPTIONS[tipo].map(o=>`<div class="th-row"><label>${escHtml(o.label)}</label><span class="mbadge badge-${STATUS[o.level]}" style="font-size:.6rem;">${STATUS_LABELS[o.level]}</span></div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  10. TABS
+// ═══════════════════════════════════════════════════════════
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+tab));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  11. OFFLINE REPORT
+// ═══════════════════════════════════════════════════════════
+function generateOfflineReport(){
+  if (!readingsData.size){ alert('Sin datos para generar el informe.'); return; }
+  const dist = statusDistribution();
+  const fh = fleetHealth();
+  const totalBombs = bombsRegistry.size;
+
+  let html = '';
+  html += `<div class="fleet-box">
+    <div class="fleet-box-title">🏭 Resumen de flota</div>
+    <div class="mgrid">
+      <div class="mstat"><div class="mstat-lbl">Bombas</div><div class="mstat-val">${totalBombs}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Salud de flota</div><div class="mstat-val">${fh===null?'—':fh+'%'}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Críticos</div><div class="mstat-val" style="color:var(--critical);">${dist.critical}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Alerta</div><div class="mstat-val" style="color:var(--warning);">${dist.warning}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Elevado</div><div class="mstat-val" style="color:var(--elevated);">${dist.elevated}</div></div>
+    </div>
+  </div>`;
+
+  const actionItems = [];
+  for (const id of readingsData.keys()){
+    const diag = diagnoseBomb(id);
+    if (!diag || diag.overall < 1) continue;
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag).filter(m=>m.sev!=='good');
+    const accion = msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Revisar parámetros fuera de rango';
+    const plazo = diag.overall===3?'Inmediato':diag.overall===2?'7 días':'30 días';
+    actionItems.push({
+      prio: diag.overall===3?'critical':diag.overall===2?'warning':'elevated',
+      bomba: getBombName(id),
+      accion, plazo, health, nivel: STATUS[diag.overall]
+    });
+  }
+  actionItems.sort((a,b)=> ({critical:0,warning:1,elevated:2}[a.prio]) - ({critical:0,warning:1,elevated:2}[b.prio]));
+
+  if (actionItems.length){
+    html += `<hr class="section-divider" data-label="Plan de Acción Priorizado">`;
+    html += `<div style="overflow-x:auto;"><table class="plan-table">
+      <thead><tr><th>Prioridad</th><th>Bomba</th><th>Hallazgo</th><th>Plazo</th><th>Salud</th></tr></thead>
+      <tbody>${actionItems.map(a=>`
+        <tr>
+          <td data-label="Prioridad"><span class="prio-badge prio-${a.prio}">${a.prio.toUpperCase()}</span></td>
+          <td data-label="Bomba" style="font-weight:700;">${escHtml(a.bomba)}</td>
+          <td data-label="Hallazgo" style="font-size:.82rem;">${escHtml(a.accion)}</td>
+          <td data-label="Plazo" style="font-weight:700;color:${STATUS_COLORS[STATUS.indexOf(a.nivel)]};">${a.plazo}</td>
+          <td data-label="Salud" style="font-family:'Share Tech Mono';">${a.health}%</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  html += `<hr class="section-divider" data-label="Conclusiones y Próximos Pasos">`;
+  let conc = `El análisis de <strong>${totalBombs} bomba(s)</strong> arroja una salud de flota de <strong>${fh===null?'—':fh+'%'}</strong>. `;
+  if (dist.critical > 0){
+    conc += `Se requieren <strong>intervenciones inmediatas</strong> en ${dist.critical} bomba(s) crítica(s), principalmente por cavitación, desviación severa del punto de operación o falla de sello/acople. `;
+  } else if (dist.warning > 0){
+    conc += `Se recomienda programar ${dist.warning} intervención(es) dentro de los próximos 7 días. `;
+  } else if (dist.elevated > 0){
+    conc += `Varias bombas muestran deficiencias incipientes; se recomienda mantener el intervalo de monitoreo actual. `;
+  } else {
+    conc += `La flota no presenta alarmas activas. Continuar con el plan de inspección hidráulica establecido. `;
+  }
+  const proxima = dist.critical>0?'dentro de 7 días':dist.warning>0?'dentro de 14 días':dist.elevated>0?'dentro de 30 días':'según plan habitual';
+  conc += `Próxima ronda de mediciones recomendada: <strong>${proxima}</strong>.`;
+
+  html += `<div class="fleet-box" style="margin-bottom:0;">
+    <div class="fleet-box-title">📝 Conclusiones</div>
+    <div class="fleet-text">${conc}</div>
+  </div>
+  <div class="note-box">
+    ⚠️ Informe generado por el motor de diagnóstico offline de <strong>MANTEC – Bomba Pro</strong>, comparando cada medición contra el punto de diseño cargado en la ficha de la bomba (caudal nominal, ΔP nominal y NPSH requerido), contra la referencia propia de cada bomba y contra el criterio cualitativo de sello/acople. La presión de succión estimada por nivel de tanque es estática (sin pérdidas de línea). Los umbrales son orientativos y ajustables en la pestaña Umbrales; validá contra la curva real del fabricante y tu política interna antes de usar el informe para decisiones críticas. Este módulo no incluye mediciones eléctricas ni de vibración: usá Motor Pro y Tablero Pro para lo eléctrico, y Vibra Pro y ThermoVision para vibración y termografía.
+  </div>`;
+
+  document.getElementById('reportSections').innerHTML = html;
+}
+function copyReport(){
+  const el = document.getElementById('reportSections');
+  const text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    alert('Informe copiado al portapapeles.');
+  }).catch(()=>alert('No se pudo copiar. Seleccioná el texto manualmente.'));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12. CSV EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportCSV(){
+  if (!readingsData.size){ alert('Sin datos.'); return; }
+  const q = s => `"${String(s == null ? '' : s).replace(/"/g,'""')}"`;
+  const nn = (v, d) => isN(v) ? v.toFixed(d) : '';
+  let rows = ['Bomba,Clase,Producto,TipoBomba,TipoAcople,Fecha,Estado,Caudal_m3h,DesvCaudal_%,PresDescarga_bar,PresSuccion_bar,OrigenSuccion,DeltaP_bar,Altura_m,DesvPresion_%,NPSHd_m,OrigenNPSHd,MargenNPSH_%,CaidaVsReferencia_%,EstadoSello,RuidoCavitacion,Observaciones'];
+  for (const [id, d] of readingsData.entries()){
+    const bomb = bombsRegistry.get(id) || {};
+    for (let n=0;n<d.dates.length;n++){
+      const ev = evalReading(bomb, d.params, n, d);
+      const estado = ev.overall>=0 ? STATUS_LABELS[ev.overall] : 'Sin datos';
+      const dt = d.dates[n];
+      const fecha = (dt instanceof Date && !isNaN(dt)) ? dt.toISOString().slice(0,16).replace('T',' ') : '';
+      rows.push([
+        q(bomb.name), CRIT_LBL[bomb.crit||'DE'], q(bomb.fluido), q(bomb.tipoBomba), q(bomb.tipoAcople), fecha, estado,
+        nn(ev.caudal,2), nn(ev.desvCaudal,2), nn(ev.presDesc,3), nn(ev.pSuc,3), ev.sucOrigen, nn(ev.deltaP,3), nn(ev.H,2), nn(ev.desvPresion,2),
+        nn(ev.npshd,2), ev.npshOrigen, nn(ev.margenNPSH,2), nn(ev.caidaRef,2), q(ev.selloLabel), q(ev.ruidoLabel), q(d.obs&&d.obs[n])
+      ].join(','));
+    }
+  }
+  const blob = new Blob(['\ufeff' + rows.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bomba_pro_historial_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+function clearAllData(){
+  if (!confirm('¿Descartar la copia de este dispositivo y volver a cargar todo desde la nube?')) return;
+  recargarDesdeNube();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Sincronización con el hub (SatSync)
+// ═══════════════════════════════════════════════════════════
+async function sincronizarEquiposHub(silencioso){
+  if(typeof SatSync === 'undefined' || !SatSync.init()){
+    if(!silencioso) alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return false;
+  }
+  try{
+    const rows = await SatSync.listarEquipos();
+    equiposHub = new Map(rows.map(e => [e.tag, e]));
+    const dl = document.getElementById('hubTagsDatalist');
+    if(dl) dl.innerHTML = rows.map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+    return true;
+  }catch(err){
+    console.error('[SatSync] error sincronizando equipos', err);
+    if(!silencioso) alert('No se pudo leer el catálogo de equipos del hub: ' + err.message);
+    return false;
+  }
+}
+// El equipo se crea en la nube junto con su ficha (subirCambios); acá solo se actualiza el catálogo local.
+async function publicarEquipoEnHub(name, tipo){
+  equiposHub.set(name, {tag:name, nombre:name, tipo});
+}
+function mapNivelASeveridad(nivel){
+  if(nivel === 'critical') return 'critico';
+  if(nivel === 'warning' || nivel === 'elevated') return 'atencion';
+  return 'ok';
+}
+
+async function guardarEnLaNube(){
+  if(!readingsData.size){ alert('Generá el informe primero.'); return; }
+  const statusEl = $('nubeStatus');
+  const btn = $('btnGuardarNube');
+
+  if(typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero — la config se comparte entre este módulo y el hub.';
+    statusEl.style.color = 'var(--warning, #f0b429)';
+    return;
+  }
+
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const id of readingsData.keys()){
+    const diag = diagnoseBomb(id);
+    if(!diag || diag.overall < 0) continue;
+    const tag = getBombName(id);
+    if(!tag){ fail++; continue; }
+    const nivel  = STATUS[diag.overall];
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs   = diagnosisMessages(diag).filter(m=>m.sev!=='good');
+    const resumen = `${tag}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Sin hallazgos relevantes');
+    try{
+      await SatSync.guardarAnalisis({
+        modulo: 'bomba_pro',
+        equipo_tag: tag,
+        severidad: mapNivelASeveridad(nivel),
+        resumen,
+        datos: {
+          bomba: tag, clase: diag.bomb.crit || 'DE', producto: diag.bomb.fluido || null, densidad: isN(diag.sg) ? diag.sg : null,
+          health, nivel,
+          caudal: diag.caudal, desvCaudal: diag.desvCaudal,
+          presDescarga: diag.presDesc, presSuccion: diag.pSuc, origenSuccion: diag.sucOrigen || null,
+          deltaP: diag.deltaP, altura: diag.H, desvPresion: diag.desvPresion,
+          npshd: diag.npshd, origenNpshd: diag.npshOrigen || null, margenNPSH: diag.margenNPSH,
+          caidaVsReferencia: diag.caidaRef, valvulaPct: diag.valvula,
+          selloEstado: diag.selloVal, selloLabel: diag.selloLabel, ruidoCavitacion: diag.ruidoVal || null,
+          fecha: diag.date, hallazgos: msgs
+        }
+      });
+      ok++;
+    }catch(err){
+      console.error('[SatSync] error guardando', tag, err);
+      fail++;
+    }
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
+  statusEl.textContent = fail
+    ? `☁️ Guardadas ${ok} bomba(s) (${fail} con error — ver consola).`
+    : `☁️ ${ok} bomba(s) guardadas en la nube correctamente.`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CAPTURAS DE CAMPO (Hub de Campo → copiar a formulario → analizar)
+// ═══════════════════════════════════════════════════════════
+async function abrirCapturasPendientes(){
+  const overlay = document.getElementById('capturasOverlay');
+  const lista = document.getElementById('capturasLista');
+  overlay.classList.add('open');
+  lista.innerHTML = `<div class="empty-state"><div class="ei">📡</div>Buscando capturas pendientes…</div>`;
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div>Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.</div>`;
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'bomba_pro' });
+  }catch(err){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div>No se pudo leer capturas_campo: ${escHtml(err.message)}</div>`;
+    return;
+  }
+  renderCapturasBadge();
+  if (!_capturasPendientes.length){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">✅</div>No hay capturas pendientes desde el Hub de Campo.</div>`;
+    return;
+  }
+  lista.innerHTML = _capturasPendientes.map((c,i)=>{
+    const d = c.datos || {};
+    const tag = c.equipos?.tag || '(sin tag)';
+    return `<div class="fld" style="border:1px solid var(--border,#26374f);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;">${escHtml(tag)}</div>
+        <div style="font-size:.75rem;color:var(--muted);">${escHtml(d.fecha||'')} · Caudal ${d.caudal??'—'} m³/h</div>
+      </div>
+      <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="copiarCapturaAFormulario(${i})">📋 Copiar a formulario</button>
+    </div>`;
+  }).join('');
+}
+function cerrarCapturasPendientes(){ document.getElementById('capturasOverlay').classList.remove('open'); }
+function renderCapturasBadge(){
+  const b = document.getElementById('capturasBadge');
+  b.textContent = _capturasPendientes.length;
+  b.classList.toggle('hidden', _capturasPendientes.length===0);
+}
+async function actualizarBadgeCapturas(){
+  const badge = document.getElementById('capturasBadge');
+  if(!badge) return;
+  if(typeof SatSync === 'undefined' || !SatSync.init() || typeof SatSync.listarCapturasPendientes !== 'function'){
+    badge.classList.add('hidden');
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'bomba_pro' });
+    renderCapturasBadge();
+  }catch(err){
+    console.warn('[SatSync] no se pudo chequear capturas pendientes', err);
+    badge.classList.add('hidden');
+  }
+}
+
+// Busca una bomba existente cuyo nombre coincida con el TAG plano que manda
+// el Hub de Campo; si no existe, crea una bomba nueva con ese TAG (ficha básica:
+// el técnico la completa luego desde la pestaña Bombas).
+function buscarOCrearBombaPorTag(tag, tipoAcople){
+  const ex = findBombId(tag);
+  if (ex) return ex;
+  const id = genId();
+  bombsRegistry.set(id, fichaDefault(tag, ACOPLE_TIPOS.includes(tipoAcople) ? {tipoAcople} : {}));
+  publicarEquipoEnHub(tag, BOMB_TIPOS[0]);
+  return id;
+}
+
+function copiarCapturaAFormulario(i){
+  const captura = _capturasPendientes[i];
+  if (!captura) return;
+  const d = captura.datos || {};
+  const tag = captura.equipos?.tag || '';
+  if (!tag) return;
+
+  cerrarCapturasPendientes();
+  const bombId = buscarOCrearBombaPorTag(tag, d.tipoAcople);
+  saveState();
+  openManualEntry(bombId);
+  const bomb = bombsRegistry.get(bombId) || {};
+  const avisos = [];
+  // las presiones vienen tal como las leyó el técnico, en la unidad que eligió en el hub
+  if (d.unidadP && P_UNITS[d.unidadP]) $('me_unidadP').value = d.unidadP;
+  // el hub no conoce la unidad del indicador de nivel de esa bomba: se convierte si difiere de la ficha
+  let nivel = d.nivel;
+  const uniFicha = bomb.nivelUnidad || 'm';
+  if (typeof nivel === 'number' && d.nivelUnidad && d.nivelUnidad !== uniFicha){
+    if (isN(bomb.alturaTanque) && bomb.alturaTanque > 0){
+      nivel = d.nivelUnidad === '%' ? +(nivel / 100 * bomb.alturaTanque).toFixed(3) : +(nivel / bomb.alturaTanque * 100).toFixed(2);
+      avisos.push(`nivel convertido de ${d.nivelUnidad} a ${uniFicha}`);
+    } else { nivel = null; avisos.push(`el nivel vino en ${d.nivelUnidad} pero la ficha usa ${uniFicha} y falta la altura del tanque: cargalo a mano`); }
+  }
+
+  if (d.fecha){ const f = new Date(String(d.fecha).length <= 10 ? d.fecha + 'T12:00:00' : d.fecha); if (!isNaN(f)){ f.setMinutes(f.getMinutes() - f.getTimezoneOffset()); $('me_fecha').value = f.toISOString().slice(0,16); } }
+  const set = (id, v) => { if (v != null && v !== '') $(id).value = v; };
+  set('me_caudal', d.caudal); set('me_presSucc', d.presSucc); set('me_presDesc', d.presDesc); set('me_npshd', d.npshd);
+  set('me_nivel', nivel); set('me_dens', d.densidad); set('me_tfluido', d.tFluido); set('me_valvula', d.valvula);
+  set('me_obs', d.obs);
+  if (d.ruido) $('me_ruido').value = d.ruido;
+  if (d.sello){
+    $('me_sello').value = d.sello;
+    if ($('me_sello').value !== d.sello) avisos.push('el estado de sello no corresponde al tipo de acople de la ficha: elegilo a mano');
+  }
+  renderManualPreview();
+
+  _capturaActual = captura;
+  const status = $('loadStatus');
+  status.className = 'load-status ok';
+  status.textContent = `📋 Datos de ${tag} copiados — revisá y confirmá con "Guardar medición".${avisos.length ? ' Ojo: ' + avisos.join('; ') + '.' : ''}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  13. INIT
+// ═══════════════════════════════════════════════════════════
+loadState();
+populateBombTypeSelects();
+renderAll();
+nubeEstado(navigator.onLine ? 'bajando' : 'offline');
+iniciarNube().then(() => { sincronizarEquiposHub(true); actualizarBadgeCapturas(); });
+
+</script>
+</body>
+</html>

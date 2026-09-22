@@ -66,13 +66,25 @@
     return !!client;
   }
 
+  // PostgREST devuelve máximo 1000 filas por consulta: se pagina hasta agotar.
+  async function _paginar(construir, tam = 1000) {
+    const out = [];
+    for (let desde = 0; ; desde += tam) {
+      const { data, error } = await construir().range(desde, desde + tam - 1);
+      if (error) throw error;
+      out.push(...data);
+      if (data.length < tam) break;
+    }
+    return out;
+  }
+
   async function listarEquipos({ incluirArchivados = false } = {}) {
     if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
-    let q = client.from('equipos').select('*').order('tag');
-    if (!incluirArchivados) q = q.eq('activo', true);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
+    return _paginar(() => {
+      let q = client.from('equipos').select('*').order('tag');
+      if (!incluirArchivados) q = q.eq('activo', true);
+      return q;
+    });
   }
 
   async function actualizarEquipo(id, { nombre, tipo, ubicacion } = {}) {
@@ -210,10 +222,143 @@
     return data;
   }
 
+  // ---- Fichas técnicas, mediciones y configuración por módulo ----
+  // equipos.ficha (jsonb) guarda un objeto por módulo: { bomba_pro: {...}, motor_pro: {...} }.
+  // Las columnas tipo/ubicacion/criticidad de equipos son compartidas entre módulos.
+  // mediciones: historial crudo (lo que se midió) por equipo + módulo + fecha.
+  // config_apps: umbrales/opciones de cada módulo (compartidos entre dispositivos).
+
+  async function buscarEquipoPorTag(tag) {
+    if (!client) throw new Error('[SatSync] no inicializado');
+    const { data, error } = await client.from('equipos').select('*').eq('tag', tag).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  // lista: [{tag, tipo, ubicacion, criticidad, ficha}] → crea o actualiza equipos.
+  // Devuelve las filas de equipos (con id) de todos los tags recibidos.
+  // opts.noPisar: no sobreescribe una ficha del módulo que ya exista en la nube.
+  async function guardarFichas(modulo, lista, { noPisar = false } = {}) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    if (!lista.length) return [];
+    const ahora = new Date().toISOString();
+    const existentes = [];
+    const tags = lista.map(x => x.tag);
+    for (let i = 0; i < tags.length; i += 100) {
+      const { data, error } = await client.from('equipos').select('*').in('tag', tags.slice(i, i + 100));
+      if (error) throw error;
+      existentes.push(...data);
+    }
+    const porTag = new Map(existentes.map(e => [e.tag, e]));
+    const resultado = [];
+    const nuevos = [];
+    const cambios = [];
+    for (const it of lista) {
+      const ex = porTag.get(it.tag);
+      if (!ex) {
+        nuevos.push({
+          tag: it.tag, nombre: it.nombre || it.tag, tipo: it.tipo || null, ubicacion: it.ubicacion || null,
+          criticidad: it.criticidad || null, ficha: { [modulo]: it.ficha }, ficha_actualizada: ahora
+        });
+        continue;
+      }
+      const previa = ex.ficha && ex.ficha[modulo];
+      if (noPisar && previa && !previa.eliminada) { resultado.push(ex); continue; }
+      // No pisar tipo/ubicacion/criticidad con null: otro módulo pudo haberlos cargado ya.
+      // Solo se actualizan si este módulo trae un valor propio.
+      cambios.push({ id: ex.id, valores: {
+        tipo: it.tipo || ex.tipo || null, ubicacion: it.ubicacion || ex.ubicacion || null,
+        criticidad: it.criticidad || ex.criticidad || null,
+        ficha: Object.assign({}, ex.ficha || {}, { [modulo]: it.ficha }), ficha_actualizada: ahora
+      }});
+    }
+    for (let i = 0; i < nuevos.length; i += 200) {
+      const { data, error } = await client.from('equipos').insert(nuevos.slice(i, i + 200)).select();
+      if (error) throw error;
+      resultado.push(...data);
+    }
+    for (let i = 0; i < cambios.length; i += 10) {
+      const lote = await Promise.all(cambios.slice(i, i + 10).map(async c => {
+        const { data, error } = await client.from('equipos').update(c.valores).eq('id', c.id).select().single();
+        if (error) throw error;
+        return data;
+      }));
+      resultado.push(...lote);
+    }
+    return resultado;
+  }
+
+  // El equipo sigue existiendo (lo usan otros módulos): solo se marca la ficha del módulo
+  // como eliminada y se borran sus mediciones.
+  async function quitarModuloDeEquipo(modulo, equipoId) {
+    if (!client) throw new Error('[SatSync] no inicializado');
+    const { data: eq, error: e1 } = await client.from('equipos').select('id, ficha').eq('id', equipoId).maybeSingle();
+    if (e1) throw e1;
+    if (!eq) return;
+    const ficha = Object.assign({}, eq.ficha || {}, { [modulo]: { eliminada: true } });
+    const { error: e2 } = await client.from('equipos').update({ ficha, ficha_actualizada: new Date().toISOString() }).eq('id', equipoId);
+    if (e2) throw e2;
+    const { error: e3 } = await client.from('mediciones').delete().eq('equipo_id', equipoId).eq('modulo', modulo);
+    if (e3) throw e3;
+  }
+
+  async function renombrarEquipo(tagViejo, tagNuevo) {
+    if (!client) throw new Error('[SatSync] no inicializado');
+    const eq = await buscarEquipoPorTag(tagViejo);
+    if (!eq) return null;   // nunca llegó a la nube: la ficha se crea con el tag nuevo
+    const cambios = { tag: tagNuevo };
+    if (!eq.nombre || eq.nombre === eq.tag) cambios.nombre = tagNuevo;
+    const { data, error } = await client.from('equipos').update(cambios).eq('id', eq.id).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function listarMediciones(modulo) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    return _paginar(() => client.from('mediciones')
+      .select('equipo_id, fecha, datos, obs')
+      .eq('modulo', modulo).order('fecha', { ascending: true }).order('id'));
+  }
+
+  // filas: [{equipo_id, fecha (ISO), datos, obs}] — upsert por (equipo_id, modulo, fecha)
+  async function guardarMediciones(modulo, filas, autor) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    for (let i = 0; i < filas.length; i += 500) {
+      const lote = filas.slice(i, i + 500).map(f => ({
+        equipo_id: f.equipo_id, modulo, fecha: f.fecha, datos: f.datos || {}, obs: f.obs || null, autor: autor || null
+      }));
+      const { error } = await client.from('mediciones').upsert(lote, { onConflict: 'equipo_id,modulo,fecha' });
+      if (error) throw error;
+    }
+  }
+
+  async function borrarMedicion(modulo, equipoId, fecha) {
+    if (!client) throw new Error('[SatSync] no inicializado');
+    const { error } = await client.from('mediciones').delete()
+      .eq('equipo_id', equipoId).eq('modulo', modulo).eq('fecha', fecha);
+    if (error) throw error;
+  }
+
+  async function cargarConfigApp(modulo) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const { data, error } = await client.from('config_apps').select('config').eq('modulo', modulo).maybeSingle();
+    if (error) throw error;
+    return data ? data.config : null;
+  }
+
+  async function guardarConfigApp(modulo, config) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const { error } = await client.from('config_apps')
+      .upsert({ modulo, config, updated_at: new Date().toISOString() }, { onConflict: 'modulo' });
+    if (error) throw error;
+  }
+
   global.SatSync = {
     init, estaConfigurado, guardarConfig, leerConfig,
     listarEquipos, buscarOCrearEquipo, actualizarEquipo, archivarEquipo,
     guardarAnalisis, listarAnalisis, subirImagen,
-    guardarCaptura, listarCapturasPendientes, marcarCapturaProcesada
+    guardarCaptura, listarCapturasPendientes, marcarCapturaProcesada,
+    buscarEquipoPorTag, guardarFichas, quitarModuloDeEquipo, renombrarEquipo,
+    listarMediciones, guardarMediciones, borrarMedicion, cargarConfigApp, guardarConfigApp
   };
 })(window);

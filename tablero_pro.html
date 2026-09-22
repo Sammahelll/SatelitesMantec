@@ -332,6 +332,8 @@ header{
     <div class="hstat"><div class="hstat-val" id="hsTableros">0</div><div class="hstat-lbl">Tableros</div></div>
     <div class="hstat"><div class="hstat-val" id="hsCircuitos">0</div><div class="hstat-lbl">Circuitos</div></div>
     <div class="hstat"><div class="hstat-val" id="hsSalud" style="color:var(--good);">—</div><div class="hstat-lbl">Salud Flota</div></div>
+    <span id="nubeEstado" style="font-size:.78rem;color:var(--muted);margin-left:10px;"></span>
+    <button class="btn-small" id="btnRecargarNube" onclick="recargarDesdeNube()" title="Sube lo pendiente y trae el último estado de Supabase" style="margin-left:6px;">🔄 Recargar</button>
   </div>
 </header>
 
@@ -590,9 +592,25 @@ let detailChart      = null;
 const SCHEMA_VERSION = 2;
 let thresholdsMigrated = false; // true si se descartaron umbrales de localStorage por ser de un esquema viejo
 
+// Supabase es la ÚNICA fuente de verdad: fichas de tablero (equipos.ficha),
+// historial de lecturas (mediciones) y umbrales (config_apps). localStorage
+// es solo una caché para trabajar sin conexión: guarda además los cambios
+// que todavía no subieron y los reintenta — mismo patrón que Motor Pro.
+const MODULO = 'tablero_pro';
+const CACHE_KEY = 'tablero_pro_cfg';
+let _sucia = false, _cfgSucia = false, _pend = [], _migrar = false;
+let _ver = 0, _subiendo = false, _tSubida = null, _ultimaBajada = 0;
+let _hashes = new Map();       // 'f:TAG' / 'm:TAG|fecha' -> JSON de lo último sincronizado
+let _equipoIds = new Map();    // TAG (nombre de tablero) -> equipos.id
+const isN = v => typeof v === 'number' && isFinite(v);
+const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
+// Parámetros numéricos de una lectura de circuito vs. el único campo de texto (fase con temp. máxima).
+const NUM_PARAM_KEYS = ['TempAmb','TempMax','I_R','I_S','I_T','V_R','V_S','V_T','DesbI','DesbV','FP','THD_V','R_Aisl'];
+const STR_PARAM_KEYS = ['FaseMax'];
+
 function loadState() {
   try {
-    const c = JSON.parse(localStorage.getItem('tablero_pro_cfg') || '{}');
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
     const storedVersion = c.schemaVersion || 1;
     // Umbrales de un esquema anterior (p. ej. rAisl:[100,10,1]) se descartan a
     // propósito en vez de mezclarse con los defaults nuevos: aplicar el spread
@@ -610,24 +628,273 @@ function loadState() {
         readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: v.params, obs: v.obs || [] });
       }
     }
+    if (c.nube){ _sucia = !!c.nube.sucia; _cfgSucia = !!c.nube.cfgSucia; _pend = c.nube.pend || []; }
+    else if (panelsRegistry.size || circuitsMeta.size || readingsData.size){ _sucia = true; _migrar = true; } // datos locales previos a la nube: se suben una vez
     // Los datos crudos no se tocan — lo único que cambia es la EVALUACIÓN: los
     // mismos valores se reevalúan solos con los umbrales nuevos en el próximo render.
-    if (thresholdsMigrated) saveState(); // persiste ya con el esquema vigente
+    if (thresholdsMigrated) { _cfgSucia = true; escribirCache(); } // persiste ya con el esquema vigente y sube el cambio
   } catch(e){ console.warn('loadState error', e); }
 }
-function saveState() {
+function escribirCache() {
   const rdSerial = {};
   for (const [k,v] of readingsData.entries()) {
     rdSerial[k] = { dates: v.dates.map(d=>d.toISOString()), params: v.params, obs: v.obs || [] };
   }
-  localStorage.setItem('tablero_pro_cfg', JSON.stringify({
-    schemaVersion: SCHEMA_VERSION,
-    thresholds,
-    panelsRegistry: Object.fromEntries(panelsRegistry),
-    circuitsMeta: Object.fromEntries(circuitsMeta),
-    readingsData: rdSerial
-  }));
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      schemaVersion: SCHEMA_VERSION,
+      thresholds,
+      panelsRegistry: Object.fromEntries(panelsRegistry),
+      circuitsMeta: Object.fromEntries(circuitsMeta),
+      readingsData: rdSerial,
+      nube: {sucia:_sucia, cfgSucia:_cfgSucia, pend:_pend}
+    }));
+  } catch(e){ console.warn('[caché] no se pudo escribir en el navegador; los datos siguen yendo a la nube', e); }
 }
+// cfgChanged=true cuando lo que cambió son los umbrales (config_apps), no las
+// fichas/lecturas de los tableros — así config_apps solo sube cuando hace falta.
+function saveState(cfgChanged) {
+  _sucia = true;
+  if (cfgChanged) _cfgSucia = true;
+  _ver++;
+  escribirCache();
+  programarSubida();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  3b. SINCRONIZACIÓN CON SUPABASE (SatSync)
+// ═══════════════════════════════════════════════════════════
+// Cada tablero es un equipo (tag = nombre del tablero). Los circuitos NO son
+// equipos propios — son sub-claves dentro de equipos.ficha.tablero_pro.circuitos,
+// y sus lecturas se agrupan por fecha en una sola fila de `mediciones` por
+// tablero (datos.circuits = { circuitId: {nombre, params, obs} }). Esto evita
+// crear un equipo "fantasma" por cada circuito y mantiene la tabla equipos con
+// una fila por tablero físico, igual que la ve el resto de los módulos.
+
+// equipos.tipo/ubicacion son columnas compartidas entre módulos (igual que en
+// Bomba/Motor Pro). El tipo de tablero SÍ tiene un default siempre truthy
+// (PANEL_TYPES[0]), así que nunca se escribe en equipos.tipo — vive solo en
+// ficha.tablero_pro.type. La ubicación en cambio arranca vacía (''), así que
+// escribirla es seguro: nunca pisa un dato cargado por otro módulo.
+function fichaNube(panelId){
+  const p = panelsRegistry.get(panelId); if (!p) return null;
+  const circuitos = {};
+  for (const [k,c] of circuitsMeta.entries()){
+    if (getPanelId(k) !== panelId) continue;
+    circuitos[getCircuitId(k)] = {name:c.name, type:c.type, sistema:c.sistema};
+  }
+  return { tag:p.name, tipo:null, ubicacion:p.location || null, criticidad:null,
+    ficha: {type:p.type, ampNominal:p.ampNominal||0, circuitos} };
+}
+// Arma la lectura para un (equipo_id, fecha) a partir de un valor por parámetro.
+function datosDeCircuito(params, i){
+  const d = {};
+  NUM_PARAM_KEYS.forEach(k => { const v = params[k]?.[i]; d[k] = isN(v) ? v : null; });
+  STR_PARAM_KEYS.forEach(k => { const v = params[k]?.[i]; d[k] = v ? String(v) : null; });
+  return d;
+}
+// Agrupa todas las lecturas de todos los circuitos de un tablero por fecha
+// exacta: { fecha -> { circuitId: {nombre, params, obs} } }. Dos circuitos
+// medidos en la misma visita (misma fecha exacta) comparten una sola fila de
+// `mediciones`; si difieren en fecha/hora quedan en filas separadas — ningún
+// dato se pierde en ningún caso.
+function medicionesDePanel(panelId){
+  const porFecha = new Map();
+  for (const [key, c] of circuitsMeta.entries()){
+    if (getPanelId(key) !== panelId) continue;
+    const e = readingsData.get(key); if (!e) continue;
+    const circuitId = getCircuitId(key);
+    for (let i = 0; i < e.dates.length; i++){
+      const fecha = keyOfDate(e.dates[i]) + 'Z';
+      if (!porFecha.has(fecha)) porFecha.set(fecha, {});
+      porFecha.get(fecha)[circuitId] = { nombre:c.name, params:datosDeCircuito(e.params, i), obs:(e.obs && e.obs[i]) || '' };
+    }
+  }
+  return porFecha;
+}
+function configNube(){ return { schemaVersion: SCHEMA_VERSION, thresholds }; }
+
+// ── Estado visible ──
+function nubeEstado(est, msg){
+  const el = document.getElementById('nubeEstado'); if (!el) return;
+  const T = {
+    ok:['☁️ Sincronizado','#10c98a'], subiendo:['☁️ Guardando…','#f0b429'], pendiente:['☁️ Cambios por guardar…','#f0b429'],
+    bajando:['☁️ Cargando…','#f0b429'], offline:['⚠️ Sin conexión: se guarda en este equipo y sube al reconectar','#f97316'],
+    error:['⚠️ No se pudo sincronizar','#ef4444']
+  }[est] || ['',''];
+  el.textContent = T[0] + (msg ? ' — ' + msg : ''); el.style.color = T[1]; el.title = msg || '';
+}
+const nubeLista = () => typeof SatSync !== 'undefined' && (SatSync.estaConfigurado() || SatSync.init());
+function programarSubida(){
+  nubeEstado('pendiente');
+  clearTimeout(_tSubida);
+  _tSubida = setTimeout(() => subirCambios(), 1500);
+}
+
+// ── Subida (solo lo que cambió respecto de lo último sincronizado) ──
+async function subirCambios(opts = {}){
+  if (_subiendo){ programarSubida(); return false; }
+  if (!nubeLista()){ nubeEstado('offline'); return false; }
+  _subiendo = true; nubeEstado('subiendo');
+  const ver0 = _ver;
+  try{
+    // 1) tableros eliminados, en el orden en que ocurrió
+    while (_pend.length){
+      const p = _pend[0];
+      if (p.t === 'panel'){
+        const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+        if (eq) await SatSync.quitarModuloDeEquipo(MODULO, eq.id);
+        _equipoIds.delete(p.tag);
+      }
+      _pend.shift(); escribirCache();
+    }
+    // 2) fichas de tablero nuevas o modificadas (incluye sus circuitos)
+    const fichas = [], hf = [];
+    for (const id of panelsRegistry.keys()){
+      const f = fichaNube(id), h = JSON.stringify(f);
+      if (_hashes.get('f:' + f.tag) !== h || !_equipoIds.has(f.tag)){ fichas.push(f); hf.push(['f:' + f.tag, h]); }
+    }
+    if (fichas.length){
+      const filas = await SatSync.guardarFichas(MODULO, fichas, {noPisar: !!opts.migracion});
+      filas.forEach(e => { _equipoIds.set(e.tag, e.id); equiposHub.set(e.tag, {tag:e.tag, nombre:e.nombre, tipo:e.tipo}); });
+      actualizarDatalistHub();
+      hf.forEach(([k,h]) => _hashes.set(k, h));
+    }
+    // 3) lecturas nuevas o modificadas (agrupadas por fecha, todos los circuitos del tablero)
+    const meds = [], hm = [];
+    for (const id of panelsRegistry.keys()){
+      const tag = getPanelName(id), eqId = _equipoIds.get(tag); if (!eqId) continue;
+      for (const [fecha, circuits] of medicionesDePanel(id).entries()){
+        const datos = {circuits}, h = JSON.stringify(datos), k = 'm:' + tag + '|' + fecha;
+        if (_hashes.get(k) !== h){ meds.push({equipo_id:eqId, fecha, datos, obs:null}); hm.push([k,h]); }
+      }
+    }
+    if (meds.length){ await SatSync.guardarMediciones(MODULO, meds); hm.forEach(([k,h]) => _hashes.set(k, h)); }
+    // 4) umbrales (solo si se editaron en este dispositivo)
+    if (_cfgSucia){ await SatSync.guardarConfigApp(MODULO, configNube()); _cfgSucia = false; }
+
+    if (_ver === ver0){ _sucia = false; nubeEstado('ok'); } else programarSubida();
+    escribirCache();
+    return true;
+  }catch(err){
+    console.error('[SatSync] error subiendo cambios', err);
+    nubeEstado('error', err.message || String(err));
+    clearTimeout(_tSubida); _tSubida = setTimeout(() => subirCambios(), 30000);
+    return false;
+  }finally{ _subiendo = false; }
+}
+
+// ── Descarga: reconstruye todo desde Supabase ──
+async function bajarTodo(){
+  nubeEstado('bajando');
+  const [equipos, meds, cfg] = await Promise.all([
+    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO)
+  ]);
+  const panels = new Map(), circuits = new Map(), tagDePanel = new Map(), ids = new Map(), panelIdDeTag = new Map();
+  for (const e of equipos){
+    const f = e.ficha && e.ficha[MODULO];
+    if (!f || f.eliminada) continue; // sin ficha de tablero_pro: es un equipo de otro módulo, no nos concierne
+    const panelId = genId();
+    panels.set(panelId, {
+      name: e.tag, type: f.type || PANEL_TYPES[0],
+      location: e.ubicacion != null ? e.ubicacion : (f.location || ''),
+      ampNominal: f.ampNominal || 0
+    });
+    for (const [circuitId, c] of Object.entries(f.circuitos || {})){
+      circuits.set(`${panelId}/${circuitId}`, {name:c.name, type:c.type, sistema:c.sistema});
+    }
+    tagDePanel.set(e.id, e.tag); ids.set(e.tag, e.id); panelIdDeTag.set(e.tag, panelId);
+  }
+  const lect = new Map(); // key(panelId/circuitId) -> {dates, params, obs}
+  const porTag = new Map();
+  for (const m of meds){
+    const tag = tagDePanel.get(m.equipo_id); if (!tag) continue;
+    if (!porTag.has(tag)) porTag.set(tag, []);
+    porTag.get(tag).push(m);
+  }
+  for (const [tag, filas] of porTag.entries()){
+    const panelId = panelIdDeTag.get(tag);
+    for (const m of filas){
+      const fecha = new Date(m.fecha);
+      for (const [circuitId, cd] of Object.entries((m.datos || {}).circuits || {})){
+        const key = `${panelId}/${circuitId}`;
+        if (!circuits.has(key)) continue; // circuito ya no está en la ficha actual (se quitó/renombró)
+        if (!lect.has(key)){
+          const params = {}; [...NUM_PARAM_KEYS, ...STR_PARAM_KEYS].forEach(k => params[k] = []);
+          lect.set(key, {dates:[], params, obs:[]});
+        }
+        const e = lect.get(key);
+        e.dates.push(fecha); e.obs.push(cd.obs || '');
+        NUM_PARAM_KEYS.forEach(k => { const v = cd.params?.[k]; e.params[k].push(isN(v) ? v : NaN); });
+        STR_PARAM_KEYS.forEach(k => e.params[k].push(cd.params?.[k] || ''));
+      }
+    }
+  }
+  // ordena cada circuito por fecha, por si las filas de Supabase llegaron desordenadas
+  for (const e of lect.values()){
+    const idx = e.dates.map((_,i)=>i).sort((a,b)=>e.dates[a]-e.dates[b]);
+    e.dates = idx.map(i=>e.dates[i]); e.obs = idx.map(i=>e.obs[i]);
+    e.params = Object.fromEntries(Object.entries(e.params).map(([k,v])=>[k, idx.map(i=>v[i])]));
+  }
+
+  panelsRegistry = panels; circuitsMeta = circuits; readingsData = lect; _equipoIds = ids; _hashes = new Map();
+  for (const id of panels.keys()) _hashes.set('f:' + getPanelName(id), JSON.stringify(fichaNube(id)));
+  for (const id of panels.keys()) for (const [fecha, circs] of medicionesDePanel(id).entries()){
+    _hashes.set('m:' + getPanelName(id) + '|' + fecha, JSON.stringify({circuits:circs}));
+  }
+  if (cfg) thresholds = {...DEFAULT_THRESHOLDS, ...(cfg.thresholds || {})};
+  _ultimaBajada = Date.now(); _sucia = false; _cfgSucia = false;
+  escribirCache(); nubeEstado('ok');
+}
+
+async function iniciarNube(){
+  if (!nubeLista()){ nubeEstado('offline'); return; }
+  try{
+    // Si hay cambios locales sin subir (trabajo offline o datos de antes de la nube), primero se suben.
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios({migracion: _migrar});
+      if (!ok) return;            // no se baja nada si no se pudo subir: no se pisa el trabajo local
+      _migrar = false;
+    }
+    await bajarTodo();
+    renderAll();
+  }catch(err){
+    console.error('[SatSync] error cargando desde la nube', err);
+    nubeEstado('error', err.message || String(err));
+  }
+}
+async function recargarDesdeNube(){
+  const btn = document.getElementById('btnRecargarNube');
+  if (btn && btn.disabled) return;   // evita dos recargas simultáneas por doble clic
+  if (btn) btn.disabled = true;
+  try{
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios();
+      if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
+    }
+    await bajarTodo();
+    renderAll();
+    nubeEstado('ok', 'recargado ' + new Date().toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}));
+  }catch(err){
+    nubeEstado('error', err.message || String(err));
+    alert('No se pudo recargar: ' + (err.message || err));
+  }finally{ if (btn) btn.disabled = false; }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden){ if (_sucia || _cfgSucia || _pend.length) subirCambios(); return; }
+  if (!_sucia && !_cfgSucia && !_pend.length && !_subiendo && Date.now() - _ultimaBajada > 60000 && !document.querySelector('[id$="Overlay"].open') && nubeLista()){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar', err); }
+  }
+});
+window.addEventListener('online', async () => {
+  if (_sucia || _cfgSucia || _pend.length){
+    const ok = await subirCambios();
+    if (!ok) return;   // no se bajó nada: si no subió, no hay que traer la nube todavía
+  }
+  if (!document.hidden && !document.querySelector('[id$="Overlay"].open')){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar al reconectar', err); }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 //  4. HELPERS
@@ -1295,10 +1562,12 @@ function createPanel(){
 }
 function deletePanel(id){
   if (!confirm('¿Eliminar este tablero y todos sus circuitos y lecturas asociadas?')) return;
+  const p = panelsRegistry.get(id);
   panelsRegistry.delete(id);
   for (const k of Array.from(readingsData.keys())){
     if (getPanelId(k)===id){ readingsData.delete(k); circuitsMeta.delete(k); }
   }
+  if (p) _pend.push({t:'panel', tag:p.name}); // se procesa en subirCambios: borra la ficha y las mediciones en Supabase
   saveState();
   renderAll();
 }
@@ -1345,14 +1614,14 @@ function saveThresholdsFromUI(){
       if (input){ const v = parseFloat(input.value); if (!isNaN(v)) thresholds[key][i] = v; }
     }
   }
-  saveState();
+  saveState(true);
   renderAll();
   alert('Umbrales guardados.');
 }
 function resetThresholds(){
   if (!confirm('¿Restaurar los umbrales por defecto?')) return;
   thresholds = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
-  saveState();
+  saveState(true);
   renderAll();
 }
 
@@ -1489,6 +1758,7 @@ function exportCSV(){
 
 function clearAllData(){
   if (!confirm('¿Borrar TODOS los tableros, circuitos y lecturas? Esta acción no se puede deshacer.')) return;
+  for (const p of panelsRegistry.values()) _pend.push({t:'panel', tag:p.name});
   panelsRegistry.clear(); circuitsMeta.clear(); readingsData.clear();
   _capturaActual = null; // si había una captura del hub en edición, queda descartada
   saveState();
@@ -1498,6 +1768,11 @@ function clearAllData(){
 // ═══════════════════════════════════════════════════════════
 //  Sincronización con el hub (SatSync)
 // ═══════════════════════════════════════════════════════════
+function actualizarDatalistHub(){
+  const dl = document.getElementById('hubTagsDatalist');
+  if (dl) dl.innerHTML = [...equiposHub.values()].map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+}
+
 async function sincronizarEquiposHub(silencioso){
   if(typeof SatSync === 'undefined' || !SatSync.init()){
     if(!silencioso) alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
@@ -1506,8 +1781,7 @@ async function sincronizarEquiposHub(silencioso){
   try{
     const rows = await SatSync.listarEquipos();
     equiposHub = new Map(rows.map(e => [e.tag, e]));
-    const dl = document.getElementById('hubTagsDatalist');
-    if(dl) dl.innerHTML = rows.map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+    actualizarDatalistHub();
     return true;
   }catch(err){
     console.error('[SatSync] error sincronizando equipos', err);
@@ -1521,6 +1795,7 @@ async function publicarEquipoEnHub(name, tipo){
   try{
     await SatSync.buscarOCrearEquipo(name, {tipo});
     equiposHub.set(name, {tag:name, nombre:name, tipo});
+    actualizarDatalistHub();
   }catch(err){
     console.warn('[SatSync] no se pudo publicar el equipo en el hub', err);
   }
@@ -1716,13 +1991,14 @@ function copiarCapturaAFormulario(i){
 // ═══════════════════════════════════════════════════════════
 loadState();
 populatePanelTypeSelect();
-renderAll();
+renderAll(); // primer pintado con lo que había en caché, mientras la nube resuelve
 if (thresholdsMigrated){
   const status = document.getElementById('loadStatus');
   status.className = 'load-status ok';
   status.textContent = '⚠️ Los umbrales de diagnóstico se actualizaron (aislación a IEEE 43-2013). Revisá la pestaña Umbrales.';
   setTimeout(()=>{ if (status.textContent.startsWith('⚠️ Los umbrales')) status.textContent = ''; }, 12000);
 }
+iniciarNube(); // sube lo pendiente (si lo hay) y baja el estado actual de Supabase
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
 actualizarBadgeCapturas(); // avisa si hay capturas del hub sin importar
 
