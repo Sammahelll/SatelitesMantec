@@ -673,7 +673,7 @@ function openNuevoEquipoModal(onCreated){
       tipoAcople: document.getElementById('mAcople').value,
       tempTrabajo: document.getElementById('mTemp').value
     });
-    publicarEquipoEnHub(tag, document.getElementById('mAcople').value);
+    publicarFichaEnHub(id);
     saveData();
     closeModal();
     if(onCreated) onCreated(id);
@@ -807,6 +807,7 @@ function wireEvents(){
 
     const registro = {
       id: genId(),
+      creadoEn: new Date().toISOString(), // clave de sync única — 'fecha' es la fecha elegida por el técnico, no un instante único (dos alineaciones el mismo día no deben pisarse en `mediciones`)
       fecha: document.getElementById('fFecha').value,
       tecnico: document.getElementById('fTecnico').value.trim(),
       motivo: document.getElementById('fMotivo').value,
@@ -834,7 +835,7 @@ function wireEvents(){
     if(!alineaciones.has(equipoId)) alineaciones.set(equipoId, []);
     alineaciones.get(equipoId).push(registro);
     saveData();
-    guardarEnLaNube(registro, equiposRegistry.get(equipoId)); // asíncrono, no bloquea el registro local
+    guardarMedicionEnLaNube(registro, equiposRegistry.get(equipoId)); // asíncrono, no bloquea el registro local
 
     if(_capturaActual){
       const capId = _capturaActual.id;
@@ -935,7 +936,7 @@ function copiarCapturaAFormulario(i){
     if(!equipoId){
       equipoId = genId();
       equiposRegistry.set(equipoId, { tag, planta: captura.equipos?.ubicacion || '', rpm:'', tipoAcople:'', tempTrabajo:'' });
-      publicarEquipoEnHub(tag, '');
+      publicarFichaEnHub(equipoId);
       saveData();
     }
   }
@@ -993,13 +994,23 @@ async function sincronizarEquiposHub(silencioso){
   }
 }
 
-async function publicarEquipoEnHub(name, tipo){
+// Publica la ficha propia de Alineación (tipoAcople, rpm, tempTrabajo) en
+// equipos.ficha.alineacion — nunca en equipos.tipo, que es un campo compartido
+// entre módulos (mismo bug que se corrigió en Bomba Pro y Motor Pro: acá lo
+// pisaba el tipo de acoplamiento en vez del tipo de equipo).
+async function publicarFichaEnHub(equipoId){
   if(typeof SatSync === 'undefined' || !SatSync.init()) return;
+  const eq = equiposRegistry.get(equipoId);
+  if(!eq) return;
   try{
-    await SatSync.buscarOCrearEquipo(name, {tipo});
-    equiposHub.set(name, {tag:name, nombre:name, tipo});
+    const rows = await SatSync.guardarFichas('alineacion', [{
+      tag: eq.tag,
+      ubicacion: eq.planta || undefined,
+      ficha: { tipoAcople: eq.tipoAcople, rpm: eq.rpm, tempTrabajo: eq.tempTrabajo }
+    }]);
+    if(rows[0]) equiposHub.set(eq.tag, rows[0]);
   }catch(err){
-    console.warn('[SatSync] no se pudo publicar el equipo en el hub', err);
+    console.warn('[SatSync] no se pudo publicar la ficha en el hub', err);
   }
 }
 
@@ -1036,24 +1047,24 @@ function exportCSV(){
   a.click(); URL.revokeObjectURL(a.href);
 }
 
-function mapSemaforoASeveridad(semaforo){
-  if(semaforo === 'rojo') return 'critico';
-  if(semaforo === 'amarillo') return 'atencion';
-  return 'ok';
-}
-
-async function guardarEnLaNube(registro, equipo){
+// Guarda la alineación como medición cruda (equipo + módulo + fecha), mismo
+// patrón que Bomba Pro y Motor Pro: 'analisis' queda para el diagnóstico
+// consolidado entre módulos; acá el diagnóstico (semáforo) ya lo calcula el
+// cliente y vive en `datos`, así que no hace falta duplicarlo en `analisis`.
+async function guardarMedicionEnLaNube(registro, equipo){
   if(typeof SatSync === 'undefined' || !SatSync.init()) return; // sin conexión configurada, sigue funcionando local
   const tag = equipo?.tag;
   if(!tag) return;
   try{
-    await SatSync.guardarAnalisis({
-      modulo: 'alineacion',
-      equipo_tag: tag,
-      severidad: mapSemaforoASeveridad(registro.semaforo),
-      resumen: `Alineación (${registro.motivo}) — resultado ${registro.semaforo}` + (registro.pataBlanda?.detectada==='si' ? ' · pata blanda detectada' : ''),
-      datos: registro
-    });
+    // ubicacion se manda solo para completar si faltaba — nunca pisa tipo,
+    // que Alineación no tiene por qué escribir (ver publicarFichaEnHub).
+    const eqCloud = await SatSync.buscarOCrearEquipo(tag, { ubicacion: equipo.planta || undefined });
+    await SatSync.guardarMediciones('alineacion', [{
+      equipo_id: eqCloud.id,
+      fecha: registro.creadoEn,
+      datos: registro,
+      obs: registro.observaciones || null
+    }]);
   }catch(err){
     console.warn('[SatSync] no se pudo guardar la alineación en la nube', err);
   }

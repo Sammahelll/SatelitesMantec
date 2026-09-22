@@ -366,7 +366,7 @@ header{
   <span class="load-status" id="loadStatus"></span>
   <span id="nubeEstado" style="font-size:.78rem;font-weight:600;margin-left:8px;"></span>
   <div class="sep"></div>
-  <button class="btn-small" onclick="clearAllData()">🔄 Recargar desde la nube</button>
+  <button class="btn-small" id="btnRecargarNube" onclick="clearAllData()">🔄 Recargar desde la nube</button>
 </div>
 
 <div class="tabs">
@@ -710,7 +710,14 @@ function saveState() { _sucia = true; _ver++; escribirCache(); programarSubida()
 function fichaNube(id){
   const b = bombsRegistry.get(id); if (!b) return null;
   const e = readingsData.get(id);
-  return { tag:b.name, tipo:b.tipoBomba || null, ubicacion:b.ubicacion || null, criticidad:b.crit || null,
+  return { tag:b.name,
+    // equipos.tipo es compartido entre módulos (motor_pro, vibra_pro, etc.): nunca lo pisamos.
+    // El subtipo de bomba (b.tipoBomba) ya vive dentro de ficha.bomba_pro, que es lo propio de este módulo.
+    tipo: null,
+    ubicacion: b.ubicacion || null,
+    // 'DE' es el valor por defecto de la ficha (el técnico nunca lo tocó): no lo mandamos para no
+    // pisar una criticidad más alta que haya puesto otro módulo. Solo se sincroniza cuando se eligió a propósito.
+    criticidad: (b.crit && b.crit !== 'DE') ? b.crit : null,
     ficha: Object.assign({}, b, {refFecha: e ? e.ref : null}) };
 }
 function filaMedicion(id, i){
@@ -774,7 +781,8 @@ async function subirCambios(opts = {}){
     }
     if (fichas.length){
       const filas = await SatSync.guardarFichas(MODULO, fichas, {noPisar: !!opts.migracion});
-      filas.forEach(e => _equipoIds.set(e.tag, e.id));
+      filas.forEach(e => { _equipoIds.set(e.tag, e.id); equiposHub.set(e.tag, {tag:e.tag, nombre:e.nombre, tipo:e.tipo}); });
+      actualizarDatalistHub();
       hf.forEach(([k,h]) => _hashes.set(k, h));
     }
     // 3) mediciones nuevas o modificadas
@@ -840,7 +848,12 @@ async function bajarTodo(){
     const ref = lect.get(tag)?.ref || null;
     lect.set(tag, {dates, params: normalizarParams(params), obs, ref});
   }
-  for (const [tag, e] of [...lect.entries()]) if (e._sinLecturas) lect.delete(tag);
+  // Ficha con referencia fijada pero sin lecturas (raro: se borraron todas después de fijarla).
+  // Se conserva el ref para no perderlo en la próxima subida; sin ref, no hay nada que guardar.
+  for (const [tag, e] of [...lect.entries()]){
+    if (!e._sinLecturas) continue;
+    if (e.ref) delete e._sinLecturas; else lect.delete(tag);
+  }
 
   bombsRegistry = reg; readingsData = lect; _equipoIds = ids; _hashes = new Map();
   for (const id of reg.keys()) _hashes.set('f:' + id, JSON.stringify(fichaNube(id)));
@@ -873,11 +886,21 @@ async function iniciarNube(){
   }
 }
 async function recargarDesdeNube(){
-  if (_sucia || _cfgSucia || _pend.length){
-    const ok = await subirCambios();
-    if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
-  }
-  try{ await bajarTodo(); renderAll(); }catch(err){ nubeEstado('error', err.message || String(err)); alert('No se pudo recargar: ' + (err.message || err)); }
+  const btn = document.getElementById('btnRecargarNube');
+  if (btn && btn.disabled) return;   // evita dos recargas simultáneas por doble clic
+  if (btn) btn.disabled = true;
+  try{
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios();
+      if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
+    }
+    await bajarTodo();
+    renderAll();
+    nubeEstado('ok', 'recargado ' + new Date().toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}));
+  }catch(err){
+    nubeEstado('error', err.message || String(err));
+    alert('No se pudo recargar: ' + (err.message || err));
+  }finally{ if (btn) btn.disabled = false; }
 }
 document.addEventListener('visibilitychange', async () => {
   if (document.hidden){ if (_sucia || _cfgSucia || _pend.length) subirCambios(); return; }
@@ -885,7 +908,16 @@ document.addEventListener('visibilitychange', async () => {
     try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar', err); }
   }
 });
-window.addEventListener('online', () => { if (_sucia || _cfgSucia || _pend.length) subirCambios(); });
+window.addEventListener('online', async () => {
+  if (_sucia || _cfgSucia || _pend.length){
+    const ok = await subirCambios();
+    if (!ok) return;   // no se bajó nada: si no subió, no hay que traer la nube todavía
+  }
+  // Volvió la conexión: puede haber cambios de otros técnicos mientras estuvo offline.
+  if (!document.hidden && !document.querySelector('[id$="Overlay"].open')){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar al reconectar', err); }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 //  4. HELPERS Y CÁLCULO
@@ -2168,9 +2200,15 @@ async function sincronizarEquiposHub(silencioso){
     return false;
   }
 }
-// El equipo se crea en la nube junto con su ficha (subirCambios); acá solo se actualiza el catálogo local.
+// El equipo se crea en la nube junto con su ficha (subirCambios); acá solo se actualiza el catálogo local
+// para que el autocompletado (<datalist>) lo muestre ya en esta misma sesión.
+function actualizarDatalistHub(){
+  const dl = document.getElementById('hubTagsDatalist');
+  if (dl) dl.innerHTML = [...equiposHub.values()].map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+}
 async function publicarEquipoEnHub(name, tipo){
   equiposHub.set(name, {tag:name, nombre:name, tipo});
+  actualizarDatalistHub();
 }
 function mapNivelASeveridad(nivel){
   if(nivel === 'critical') return 'critico';
