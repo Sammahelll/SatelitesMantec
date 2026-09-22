@@ -162,6 +162,17 @@
   .modal .row{display:flex; gap:10px; justify-content:flex-end; margin-top:20px;}
   .modal .note{font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.4;}
   .modal .danger-text{color:var(--crit);}
+
+  .modal-tabs{display:flex; gap:4px; margin:14px 0 6px; border-bottom:1px solid var(--line);}
+  .modal-tab{background:transparent; border:none; color:var(--muted); font-family:'Inter',sans-serif; font-size:12.5px; padding:8px 12px; cursor:pointer; border-bottom:2px solid transparent;}
+  .modal-tab.active{color:var(--accent); border-bottom-color:var(--accent);}
+  .modal-tab .dot-fill{display:none; width:6px; height:6px; border-radius:50%; background:var(--ok); margin-left:6px;}
+  .spec-pane{display:none;}
+  .spec-pane.show{display:block;}
+  .spec-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; margin-top:10px;}
+  .spec-grid label{margin:0 0 4px;}
+  .spec-aviso{font-size:11.5px; color:var(--warn); margin-top:14px; padding:9px 11px; border:1px dashed var(--warn); border-radius:6px; display:none;}
+  .spec-aviso.show{display:block;}
   pre.payload{background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:12px; font-family:'JetBrains Mono',monospace; font-size:11.5px; white-space:pre-wrap; word-break:break-word;}
 
   .timeline-item{border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--panel-2);}
@@ -347,17 +358,29 @@
 
 <!-- modal editar equipo -->
 <div class="modal-bg" id="equipoModal">
-  <div class="modal">
+  <div class="modal wide">
     <h3>Editar equipo</h3>
-    <label>TAG</label>
-    <input id="editTag" disabled>
-    <div class="note">El TAG no se puede modificar: los módulos lo usan para sincronizar sus lecturas. Si necesitás cambiarlo, archivá este equipo y creá uno nuevo.</div>
-    <label>Nombre</label>
-    <input id="editNombre">
-    <label>Tipo</label>
-    <input id="editTipo">
-    <label>Ubicación</label>
-    <input id="editUbic">
+    <div class="modal-tabs" id="modalTabs">
+      <button type="button" class="modal-tab active" id="tabBtnGeneral" onclick="cambiarTabEquipo('general')">General</button>
+      <!-- los tabs de Motor/Bomba/Ventilador/Compresor/Tablero/Refrigeración/Grúa se generan en JS a partir de TIPOS_ESPEC -->
+    </div>
+
+    <div class="spec-pane show" id="paneGeneral">
+      <label>TAG</label>
+      <input id="editTag" disabled>
+      <div class="note">El TAG no se puede modificar: los módulos lo usan para sincronizar sus lecturas. Si necesitás cambiarlo, archivá este equipo y creá uno nuevo.</div>
+      <label>Nombre</label>
+      <input id="editNombre">
+      <label>Tipo</label>
+      <input id="editTipo">
+      <label>Ubicación</label>
+      <input id="editUbic">
+    </div>
+
+    <div id="specPanesContainer"><!-- panes de Motor/Bomba/Ventilador/Compresor/Tablero/Refrigeración/Grúa, generados en JS --></div>
+
+    <div class="spec-aviso" id="specAviso">⚠️ La tabla <code>equipos_specs</code> todavía no existe en Supabase (falta correr la migración) — la ficha general se guarda igual, pero las fichas técnicas no.</div>
+
     <div class="row">
       <button class="ghost" id="btnEditCancel">Cancelar</button>
       <button class="primary" id="btnEditSave">Guardar cambios</button>
@@ -437,6 +460,196 @@ const MODULOS_INTERVENCION_LABELS = {
 // escrito evita que el próximo valor de severidad que se agregue rompa este
 // supuesto en silencio).
 const SEV_ORDEN = {critico:3, atencion:2, ok:1, intervencion:0};
+
+// ---------------- fichas técnicas (equipos_specs: motor / bomba) ----------------
+const MOTOR_FIELDS = [
+  {key:'rpm',               label:'RPM Nominal',            type:'number'},
+  {key:'n_polos',           label:'N° Polos',               type:'number'},
+  {key:'frecuencia',        label:'Frecuencia (Hz)',        type:'number'},
+  {key:'potencia_kw',       label:'Potencia (kW)',          type:'number'},
+  {key:'voltaje_v',         label:'Voltaje Nominal (V)',    type:'number'},
+  {key:'corriente_a',       label:'Corriente FLA (A)',      type:'number'},
+  {key:'factor_potencia',   label:'Factor de Potencia',     type:'number'},
+  {key:'eficiencia',        label:'Eficiencia (%)',         type:'number'},
+  {key:'frame',             label:'Frame',                  type:'text'},
+  {key:'ip',                label:'Grado IP',               type:'text'},
+  {key:'clase_aislamiento', label:'Clase Aislamiento',      type:'text'},
+  {key:'tipo_conexion',     label:'Tipo Conexión',          type:'text'},
+  {key:'tipo_montaje',      label:'Tipo Montaje',           type:'text'},
+  {key:'rodamiento_la',     label:'Rodamiento LA',          type:'text'},
+  {key:'rodamiento_lo',     label:'Rodamiento LO',          type:'text'},
+  {key:'lubricacion',       label:'Lubricación',            type:'text'},
+  {key:'peso',              label:'Peso (kg)',              type:'number'},
+];
+const BOMBA_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Bomba',           type:'text'},
+  {key:'rpm',                     label:'RPM Nominal',             type:'number'},
+  {key:'caudal_m3h',              label:'Caudal Nominal (m³/h)',   type:'number'},
+  {key:'altura_m',                label:'Altura Nominal (m)',      type:'number'},
+  {key:'npsh_m',                  label:'NPSH Requerido (m)',      type:'number'},
+  {key:'potencia_hidraulica_kw',  label:'Potencia Hidráulica (kW)',type:'number'},
+  {key:'diametro_impulsor_mm',    label:'Diámetro Impulsor (mm)',  type:'number'},
+  {key:'n_alabes',                label:'N° Álabes',               type:'number'},
+  {key:'tipo_sello',              label:'Tipo de Sello',           type:'text'},
+  {key:'succion_in',              label:'Succión (pulg)',          type:'number'},
+  {key:'descarga_in',             label:'Descarga (pulg)',         type:'number'},
+  {key:'fluido',                  label:'Fluido',                  type:'text'},
+  {key:'t_fluido_c',              label:'T° Fluido (°C)',          type:'number'},
+  {key:'material_carcasa',        label:'Material Carcasa',        type:'text'},
+];
+const VENTILADOR_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Ventilador',        type:'text'},
+  {key:'rpm',                     label:'RPM Nominal',               type:'number'},
+  {key:'caudal_m3h',              label:'Caudal (m³/h)',             type:'number'},
+  {key:'presion_estatica_pa',     label:'Presión Estática (Pa)',     type:'number'},
+  {key:'diametro_rodete_mm',      label:'Diámetro Rodete (mm)',      type:'number'},
+  {key:'n_alabes',                label:'N° Álabes',                 type:'number'},
+  {key:'tipo_transmision',        label:'Tipo de Transmisión',       type:'text'},
+  {key:'potencia_motor_kw',       label:'Potencia Motor (kW)',       type:'number'},
+];
+const COMPRESOR_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Compresor',         type:'text'},
+  {key:'rpm',                     label:'RPM Nominal',               type:'number'},
+  {key:'caudal_m3min',            label:'Caudal (m³/min)',           type:'number'},
+  {key:'presion_trabajo_bar',     label:'Presión Trabajo (bar)',     type:'number'},
+  {key:'presion_maxima_bar',      label:'Presión Máxima (bar)',      type:'number'},
+  {key:'potencia_kw',             label:'Potencia (kW)',             type:'number'},
+  {key:'tipo_refrigeracion',      label:'Refrigeración',             type:'text'},
+  {key:'tipo_aceite',             label:'Tipo de Aceite',            type:'text'},
+  {key:'capacidad_tanque_l',      label:'Capacidad Tanque (L)',      type:'number'},
+];
+const TABLERO_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Tablero',           type:'text'},
+  {key:'voltaje_barras',          label:'Voltaje de Barras (V)',     type:'number'},
+  {key:'corriente_nominal_a',     label:'Corriente Nominal (A)',     type:'number'},
+  {key:'n_barras',                label:'N° Barras',                 type:'number'},
+  {key:'configuracion',           label:'Configuración',             type:'text'},
+  {key:'frecuencia',              label:'Frecuencia (Hz)',           type:'number'},
+  {key:'ip',                      label:'Grado IP',                  type:'text'},
+  {key:'sistema_tierra',          label:'Sistema Puesta a Tierra',   type:'text'},
+  {key:'fabricante_gabinete',     label:'Fabricante Gabinete',       type:'text'},
+  {key:'icc_ka',                  label:'Corriente Cortocircuito (kA)',type:'number'},
+  {key:'tipo_proteccion',         label:'Tipo Protección Principal', type:'text'},
+];
+const REFRIGERACION_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Equipo',            type:'text'},
+  {key:'refrigerante',            label:'Refrigerante (R410A/R32)',  type:'text'},
+  {key:'capacidad_btu',           label:'Capacidad Frigorífica (BTU)',type:'number'},
+  {key:'potencia_kw',             label:'Potencia Eléctrica (kW)',   type:'number'},
+  {key:'voltaje_v',               label:'Voltaje (V)',               type:'number'},
+  {key:'tipo_compresor',          label:'Tipo Compresor',            type:'text'},
+  {key:'n_compresores',           label:'N° Compresores',            type:'number'},
+  {key:'carga_refrigerante_kg',   label:'Carga Refrigerante (kg)',   type:'number'},
+  {key:'seer_eer',                label:'SEER / EER',                type:'number'},
+  {key:'tipo_evaporador',         label:'Tipo Evaporador',           type:'text'},
+  {key:'tipo_condensador',        label:'Tipo Condensador',          type:'text'},
+];
+const GRUA_FIELDS = [
+  {key:'tipo',                    label:'Tipo de Grúa/Polipasto',    type:'text'},
+  {key:'capacidad_max_kg',        label:'Capacidad Máxima (kg)',     type:'number'},
+  {key:'altura_elevacion_m',      label:'Altura de Elevación (m)',   type:'number'},
+  {key:'velocidad_elevacion_mpm', label:'Velocidad Elevación (m/min)',type:'number'},
+  {key:'velocidad_traslacion_mpm',label:'Velocidad Traslación (m/min)',type:'number'},
+  {key:'ancho_luz_m',             label:'Ancho de Luz (m)',          type:'number'},
+  {key:'n_caidas_cable',          label:'N° Caídas de Cable',        type:'number'},
+  {key:'diametro_cable_mm',       label:'Diámetro Cable (mm)',       type:'number'},
+  {key:'tipo_freno',              label:'Tipo de Freno',             type:'text'},
+  {key:'potencia_kw',             label:'Potencia (kW)',             type:'number'},
+];
+
+const TIPOS_ESPEC = [
+  {key:'motor',         fields: MOTOR_FIELDS,         tabId:'tabBtnMotor',         paneId:'paneMotor',         gridId:'gridMotor',         dotId:'dotMotor',         label:'Motor'},
+  {key:'bomba',         fields: BOMBA_FIELDS,         tabId:'tabBtnBomba',         paneId:'paneBomba',         gridId:'gridBomba',         dotId:'dotBomba',         label:'Bomba'},
+  {key:'ventilador',    fields: VENTILADOR_FIELDS,    tabId:'tabBtnVentilador',    paneId:'paneVentilador',    gridId:'gridVentilador',    dotId:'dotVentilador',    label:'Ventilador'},
+  {key:'compresor',     fields: COMPRESOR_FIELDS,     tabId:'tabBtnCompresor',     paneId:'paneCompresor',     gridId:'gridCompresor',     dotId:'dotCompresor',     label:'Compresor'},
+  {key:'tablero',       fields: TABLERO_FIELDS,       tabId:'tabBtnTablero',       paneId:'paneTablero',       gridId:'gridTablero',       dotId:'dotTablero',       label:'Tablero'},
+  {key:'refrigeracion', fields: REFRIGERACION_FIELDS, tabId:'tabBtnRefrigeracion', paneId:'paneRefrigeracion', gridId:'gridRefrigeracion', dotId:'dotRefrigeracion', label:'Refrigeración'},
+  {key:'grua',          fields: GRUA_FIELDS,          tabId:'tabBtnGrua',          paneId:'paneGrua',          gridId:'gridGrua',          dotId:'dotGrua',          label:'Grúa'},
+];
+
+function inputSpecId(prefijo, key){ return `spec_${prefijo}_${key}`; }
+
+function buildSpecGrid(containerId, fields, prefijo){
+  document.getElementById(containerId).innerHTML = fields.map(f => `
+    <div>
+      <label style="margin-top:0;">${f.label}</label>
+      <input id="${inputSpecId(prefijo, f.key)}" type="text" inputmode="${f.type === 'number' ? 'decimal' : 'text'}">
+    </div>`).join('');
+}
+
+function limpiarSpecGrid(fields, prefijo){
+  fields.forEach(f => { const el = document.getElementById(inputSpecId(prefijo, f.key)); if (el) el.value = ''; });
+}
+
+function rellenarSpecGrid(data, fields, prefijo){
+  // equipos_specs es una fila por (equipo, tipo): si existe, se rellena;
+  // si no existe, la fila directamente no viene en la consulta. El patrón
+  // "eliminada" es de equipos.ficha (jsonb heredado de los módulos Pro) y
+  // no aplica acá — chequearlo solo inducía a confusión.
+  if (!data) return;
+  fields.forEach(f => {
+    const el = document.getElementById(inputSpecId(prefijo, f.key));
+    if (el && data[f.key] !== undefined && data[f.key] !== null) el.value = data[f.key];
+  });
+}
+
+// recolecta solo los campos que el usuario completó; los numéricos se
+// guardan como number cuando se puede parsear, si no como texto tal cual.
+function recolectarSpecData(fields, prefijo){
+  const data = {};
+  fields.forEach(f => {
+    const el = document.getElementById(inputSpecId(prefijo, f.key));
+    const v = el ? el.value.trim() : '';
+    if (!v) return;
+    if (f.type === 'number'){
+      const n = Number(v.replace(',', '.'));
+      data[f.key] = Number.isFinite(n) ? n : v;
+    } else {
+      data[f.key] = v;
+    }
+  });
+  return data;
+}
+
+function marcarTabConDatos(dotId, data){
+  const tieneDatos = !!(data && Object.keys(data).length);
+  document.getElementById(dotId).style.display = tieneDatos ? 'inline-block' : 'none';
+}
+
+function cambiarTabEquipo(tab){
+  const map = { general: ['tabBtnGeneral', 'paneGeneral'] };
+  TIPOS_ESPEC.forEach(t => { map[t.key] = [t.tabId, t.paneId]; });
+  Object.entries(map).forEach(([t, [btnId, paneId]]) => {
+    document.getElementById(btnId).classList.toggle('active', t === tab);
+    document.getElementById(paneId).classList.toggle('show', t === tab);
+  });
+}
+
+// Genera los tabs + panes del modal de edición a partir de TIPOS_ESPEC,
+// en vez de repetir el mismo bloque de HTML 7 veces a mano.
+(function initSpecTabsYPanes(){
+  const tabsWrap = document.getElementById('modalTabs');
+  const panesWrap = document.getElementById('specPanesContainer');
+  TIPOS_ESPEC.forEach(t => {
+    const tabBtn = document.createElement('button');
+    tabBtn.type = 'button';
+    tabBtn.className = 'modal-tab';
+    tabBtn.id = t.tabId;
+    tabBtn.onclick = () => cambiarTabEquipo(t.key);
+    tabBtn.innerHTML = `${t.label}<span class="dot-fill" id="${t.dotId}"></span>`;
+    tabsWrap.appendChild(tabBtn);
+
+    const pane = document.createElement('div');
+    pane.className = 'spec-pane';
+    pane.id = t.paneId;
+    pane.innerHTML = `
+      <div class="note">Ficha técnica de ${t.label.toLowerCase()} — opcional. Se guarda solo lo que completes acá; el resto queda sin cargar.</div>
+      <div class="spec-grid" id="${t.gridId}"></div>`;
+    panesWrap.appendChild(pane);
+  });
+})();
+
+TIPOS_ESPEC.forEach(t => buildSpecGrid(t.gridId, t.fields, t.key));
 
 let equiposCache = [];
 let analisisCache = [];      // resultado crudo de la última carga (bulk)
@@ -746,7 +959,7 @@ function renderInforme(){
     </div>`;
 }
 
-function abrirEditarEquipo(id){
+async function abrirEditarEquipo(id){
   const eq = equiposCache.find(e => e.id === id);
   if (!eq) return;
   editandoEquipoId = id;
@@ -754,7 +967,33 @@ function abrirEditarEquipo(id){
   document.getElementById('editNombre').value = eq.nombre || '';
   document.getElementById('editTipo').value = eq.tipo || '';
   document.getElementById('editUbic').value = eq.ubicacion || '';
+
+  cambiarTabEquipo('general');
+  document.getElementById('specAviso').classList.remove('show');
+  TIPOS_ESPEC.forEach(t => {
+    limpiarSpecGrid(t.fields, t.key);
+    document.getElementById(t.dotId).style.display = 'none';
+  });
   document.getElementById('equipoModal').classList.add('show');
+
+  // Las fichas técnicas viven en equipos_specs, separado del resto del
+  // equipo — si esa tabla no existe todavía (migración pendiente) o si
+  // falla la consulta, la edición general de arriba sigue funcionando
+  // igual; acá solo se avisa que las fichas técnicas no van a poder guardarse.
+  if (SatSync.estaConfigurado()){
+    try{
+      const specs = await SatSync.obtenerSpecsEquipo(id);
+      TIPOS_ESPEC.forEach(t => {
+        rellenarSpecGrid(specs[t.key], t.fields, t.key);
+        marcarTabConDatos(t.dotId, specs[t.key]);
+      });
+    }catch(err){
+      console.error('[MANTEC] error cargando fichas técnicas', err);
+      if (err.code === '42P01' || /equipos_specs/.test(err.message || '')){
+        document.getElementById('specAviso').classList.add('show');
+      }
+    }
+  }
 }
 
 let confirmCallback = null;
@@ -968,8 +1207,29 @@ document.getElementById('btnEditSave').onclick = async () => {
       tipo: document.getElementById('editTipo').value.trim(),
       ubicacion: document.getElementById('editUbic').value.trim(),
     });
+
+    // Las fichas son independientes del guardado general: si alguna falla
+    // (p. ej. equipos_specs no existe todavía), el equipo ya quedó guardado
+    // igual — se avisa el detalle en el toast en vez de perderlo todo.
+    // Si el usuario borró todos los campos de una ficha que antes tenía
+    // datos (dot visible), se borra la fila en vez de dejarla vieja.
+    let avisoSpecs = '';
+    for (const t of TIPOS_ESPEC){
+      const specData = recolectarSpecData(t.fields, t.key);
+      const teniaDatos = document.getElementById(t.dotId).style.display !== 'none';
+      try{
+        if (Object.keys(specData).length){
+          await SatSync.guardarSpec(editandoEquipoId, t.key, specData);
+        } else if (teniaDatos){
+          await SatSync.borrarSpec(editandoEquipoId, t.key);
+        }
+      }catch(e){
+        avisoSpecs += `Ficha de ${t.label.toLowerCase()} no se pudo guardar: ${e.message}. `;
+      }
+    }
+
     document.getElementById('equipoModal').classList.remove('show');
-    showToast('Equipo actualizado.', 'success');
+    showToast(avisoSpecs ? 'Equipo actualizado. ' + avisoSpecs : 'Equipo actualizado.', avisoSpecs ? 'error' : 'success');
     await cargarEquiposCache();
     renderEquiposTable();
   }catch(e){
@@ -1006,19 +1266,67 @@ document.getElementById('btnPlantillaEquipos').onclick = downloadTemplateEquipos
 document.getElementById('btnImportEquipos').onclick = () => document.getElementById('equiposFileInput').click();
 document.getElementById('equiposFileInput').onchange = handleEquiposFileUpload;
 
-const EQUIPOS_TEMPLATE_HEADERS = ['TAG','Nombre','Tipo','Ubicacion'];
+const EQUIPOS_TEMPLATE_HEADERS = ['TAG','Nombre','Tipo','Planta','Área / Ubicación','Marca','Modelo','N° Serie','Año Fabricación','Criticidad','Estado','Fecha Puesta Marcha','Proveedor','Notas'];
+
+// Deriva el header de columna de la plantilla a partir de la key canónica
+// de cada campo (rpm → "Rpm", potencia_kw → "Potencia Kw"). Es el inverso
+// exacto de SatSync.normalizarClave, así que lo que se descarga y se vuelve
+// a subir siempre mapea a la misma key — no hace falta mantener un alias
+// por cada columna nueva que se agregue a *_FIELDS.
+function keyToHeader(key){
+  return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// Nombres de hoja iguales a SatSync.HOJAS_SPECS_MAP (motor→MOTORES, etc.)
+const HOJA_POR_TIPO = {
+  motor: 'MOTORES', bomba: 'BOMBAS', ventilador: 'VENTILADORES', compresor: 'COMPRESORES',
+  tablero: 'TABLEROS', refrigeracion: 'REFRIGERACION', grua: 'GRUAS_ELEVACION'
+};
 
 function downloadTemplateEquipos(){
-  const sample = [
-    EQUIPOS_TEMPLATE_HEADERS,
-    ['MOT-BOMBA-01', 'Motor bomba de agua 01', 'Motor', 'Planta A · Sala de bombas'],
-    ['TAB-GENERAL-PLANTA', 'Tablero general', 'Tablero eléctrico', 'Planta A · Sala eléctrica'],
-    ['AC-OFICINA-02', 'Aire acondicionado oficina 2', 'Refrigeración', 'Edificio administrativo']
-  ];
-  const ws = XLSX.utils.aoa_to_sheet(sample);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Equipos');
-  XLSX.writeFile(wb, 'plantilla_equipos_hub.xlsx');
+
+  const instrucciones = [
+    ['Plantilla de importación masiva de equipos — MANTEC'],
+    [''],
+    ['1. Completá la hoja EQUIPOS con un TAG por fila (obligatorio) y los datos generales que tengas.'],
+    ['2. Para cada tipo de equipo, completá su hoja técnica (MOTORES, BOMBAS, etc.) usando el mismo TAG.'],
+    ['   Un motor-bomba, por ejemplo, va con el mismo TAG en la hoja EQUIPOS, en MOTORES y en BOMBAS.'],
+    ['3. Dejá vacías las celdas que no apliquen o no conozcas — no hace falta completar todo.'],
+    ['4. Subí el archivo con "Importar Excel" en el hub. Un TAG que no exista en EQUIPOS se ignora en las hojas técnicas.'],
+    ['5. Después de importar, revisá los avisos: te muestran, por ejemplo, motores sin RPM o tableros sin voltaje de barras.'],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(instrucciones), 'INSTRUCCIONES');
+
+  const sampleEq = [
+    EQUIPOS_TEMPLATE_HEADERS,
+    ['MOT-BOMBA-01', 'Motor bomba de agua 01', 'Motor', 'Planta A', 'Sala de bombas', 'WEG', 'W22', 'SN12345', 2021, 'B', 'operativo', '15/03/2021', 'Proveedor SA', ''],
+    ['TAB-GENERAL-PLANTA', 'Tablero general', 'Tablero', 'Planta A', 'Sala eléctrica', '', '', '', '', 'A', 'operativo', '', '', ''],
+    ['AC-OFICINA-02', 'Aire acondicionado oficina 2', 'Refrigeración', 'Edificio administrativo', 'Piso 2', '', '', '', '', 'C', 'operativo', '', '', ''],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sampleEq), 'EQUIPOS');
+
+  // Una fila de ejemplo por tipo. Los valores siguen el mismo orden que
+  // *_FIELDS, así que si agregás un campo a un tipo, agregá también su valor
+  // acá en la misma posición — o dejalo vacío ('') si es opcional.
+  const SAMPLE_POR_TIPO = {
+    motor:         ['MOT-BOMBA-01', 3600, 2, 60, 22, 380, 42, 0.86, 91.5, '160M', 'IP55', 'F', 'Estrella', 'B3', '6308-2Z', '6308-2Z', 'Grasa', 180],
+    bomba:         ['MOT-BOMBA-01', 'Centrífuga', 3600, 45, 32, 3.5, 4.2, 165, 6, 'Mecánico simple', 3, 2, 'Agua', 25, 'Hierro fundido'],
+    ventilador:    ['VEN-01', 'Centrífugo', 1750, 8000, 450, 500, 12, 'Correa', 7.5],
+    compresor:     ['COMP-01', 'Tornillo', 3000, 5.2, 8, 10, 30, 'Aire', 'ISO VG 46', 200],
+    tablero:       ['TAB-GENERAL-PLANTA', 'MCC', 380, 630, 4, 'Trifásico', 60, 'IP54', 'TT', 'Schneider', 25, 'Breaker'],
+    refrigeracion: ['AC-OFICINA-02', 'Split pared', 'R410A', 12000, 1.1, 220, 'Scroll', 1, 0.85, 18, 'Serpentín', 'Aire'],
+    grua:          ['GRUA-PUENTE-01', 'Puente', 5000, 8, 5, 20, 12, 4, 12, 'Electromecánico', 15],
+  };
+
+  TIPOS_ESPEC.forEach(t => {
+    const headers = ['TAG', ...t.fields.map(f => keyToHeader(f.key))];
+    const sample  = SAMPLE_POR_TIPO[t.key] || [];
+    const rows    = sample.length ? [headers, sample] : [headers];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), HOJA_POR_TIPO[t.key]);
+  });
+
+  XLSX.writeFile(wb, 'plantilla_equipos_mantec.xlsx');
 }
 
 function handleEquiposFileUpload(evt){
@@ -1031,9 +1339,7 @@ function handleEquiposFileUpload(evt){
   reader.onload = async (e) => {
     try{
       const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, defval:''});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-      await importEquiposRows(rows, status);
+      await importEquiposRows(wb, status);
     }catch(err){
       console.error(err);
       status.style.color = 'var(--crit)';
@@ -1044,81 +1350,55 @@ function handleEquiposFileUpload(evt){
   reader.readAsArrayBuffer(file);
 }
 
-function findColEquipos(row, names){
-  for (const n of names){
-    for (const key of Object.keys(row)){
-      if (key.trim().toLowerCase() === n.toLowerCase()) return row[key];
-    }
-  }
-  return '';
-}
-
-// Importa fila por fila (secuencial, no en paralelo) para no saturar Supabase
-// en una migración grande y para poder reportar exactamente qué fila falló.
-// Se resuelve "ya existe" contra el catálogo (equiposCache, recién refrescado)
-// y se llama a SatSync.actualizarEquipo() explícitamente cuando corresponde,
-// para dejar registro explícito de qué se creó vs. qué se actualizó en cada
-// fila. (Desde sat-sync.js v2, buscarOCrearEquipo() también rellena los campos
-// vacíos por su cuenta, pero mantener la lógica acá hace explícito el flujo
-// de la migración y el conteo creados/actualizados de abajo.)
-// Mismo criterio que en el Hub de Campo (index móvil), para que las dos
-// puertas de entrada de equipos se comporten igual.
-async function importEquiposRows(rows, status){
+// Delega en SatSync.importarPlantillaEquipos, que lee TODAS las hojas
+// (EQUIPOS + una por tipo de ficha técnica) en vez de solo la primera.
+// Después corre SatSync.validarEquipos() para avisar, por tipo de equipo,
+// qué campos clave quedaron sin cargar (RPM de un motor, voltaje de un
+// tablero, etc.) — no bloquea el import, solo informa.
+async function importEquiposRows(wb, status){
   if (!SatSync.estaConfigurado()){
     status.style.color = 'var(--crit)';
     status.textContent = '⚠️ Conectá Supabase primero (⚙️ arriba), antes de importar.';
     return;
   }
-  if(!rows.length){
-    status.style.color = 'var(--warn)';
-    status.textContent = 'El archivo no tiene filas.';
+  status.textContent = 'Importando…';
+  status.style.color = '';
+
+  let stats;
+  try{
+    stats = await SatSync.importarPlantillaEquipos(wb, (etapa, hecho, total) => {
+      status.textContent = `Importando ${etapa}… ${hecho}/${total}`;
+    });
+  }catch(err){
+    console.error('[MANTEC] error en import multi-hoja', err);
+    status.style.color = 'var(--crit)';
+    status.textContent = '❌ ' + err.message;
+    showToast('No se pudo importar: ' + err.message, 'error');
     return;
   }
-  status.textContent = 'Cargando catálogo actual…';
-  await cargarEquiposCache(); // catálogo fresco antes de decidir crear vs. actualizar
-  const existentesPorTag = new Map(equiposCache.map(e=>[e.tag, e]));
 
-  let creados = 0, actualizados = 0, fail = 0;
-  const errores = [];
-  for(let i=0; i<rows.length; i++){
-    const row = rows[i];
-    const tag = String(findColEquipos(row, ['TAG','Tag']) || '').trim();
-    if(!tag){ fail++; errores.push(`Fila ${i+2}: sin TAG`); continue; }
-    const nombre = String(findColEquipos(row, ['Nombre']) || '').trim();
-    const tipo = String(findColEquipos(row, ['Tipo']) || '').trim();
-    const ubicacion = String(findColEquipos(row, ['Ubicacion','Ubicación']) || '').trim();
-    try{
-      const existente = existentesPorTag.get(tag);
-      if(existente){
-        // Solo se pisan los campos que la fila realmente trae — una celda
-        // vacía en el Excel no borra un dato que ya estaba cargado.
-        const cambios = {};
-        if(nombre) cambios.nombre = nombre;
-        if(tipo) cambios.tipo = tipo;
-        if(ubicacion) cambios.ubicacion = ubicacion;
-        if(Object.keys(cambios).length) await SatSync.actualizarEquipo(existente.id, cambios);
-        actualizados++;
-      } else {
-        const nuevo = await SatSync.buscarOCrearEquipo(tag, { tipo, nombre, ubicacion });
-        existentesPorTag.set(tag, nuevo); // por si el mismo TAG se repite dentro del mismo archivo
-        creados++;
-      }
-    }catch(err){
-      console.error('[MANTEC] error importando equipo', tag, err);
-      errores.push(`Fila ${i+2} (${tag}): ${err.message}`);
-      fail++;
-    }
-    status.style.color = '';
-    status.textContent = `Importando… ${i+1}/${rows.length}`;
-  }
   await cargarEquiposCache();
   renderEquiposTable();
+
+  const fail = stats.errores.length;
   status.style.color = fail ? 'var(--warn)' : 'var(--ok)';
   status.textContent = fail
-    ? `✅ ${creados} creado(s) · ${actualizados} actualizado(s) · ⚠️ ${fail} con error (ver consola).`
-    : `✅ ${creados} creado(s) · ${actualizados} actualizado(s) correctamente.`;
-  if(errores.length) console.warn('[MANTEC] errores de importación de equipos:', errores);
-  showToast(fail ? `Importado con ${fail} error(es) — ver detalle abajo` : 'Importación de equipos completa', fail ? 'error' : 'success');
+    ? `✅ ${stats.equipos} equipo(s) · ${stats.specs} ficha(s) técnica(s) · ⚠️ ${fail} con error (ver consola).`
+    : `✅ ${stats.equipos} equipo(s) y ${stats.specs} ficha(s) técnica(s) importados correctamente.`;
+  if (fail) console.warn('[MANTEC] errores de importación:', stats.errores);
+  showToast(fail ? `Importado con ${fail} error(es) — ver detalle abajo` : 'Importación completa', fail ? 'error' : 'success');
+
+  // Aviso post-import: no bloquea nada, solo informa qué quedó incompleto.
+  try{
+    const avisos = await SatSync.validarEquipos();
+    if (avisos.length){
+      const criticos = avisos.filter(a => a.sev === 'crit').length;
+      console.warn('[MANTEC] avisos de validación post-import:', avisos);
+      showToast(`Validación: ${avisos.length} aviso(s)${criticos ? ` (${criticos} crítico(s))` : ''} — ver consola.`, criticos ? 'error' : 'success');
+    }
+  }catch(err){
+    console.error('[MANTEC] error validando equipos', err);
+  }
 }
 
 // ---- eventos: análisis (toolbar + paginación) ----

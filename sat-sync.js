@@ -87,12 +87,23 @@
     });
   }
 
-  async function actualizarEquipo(id, { nombre, tipo, ubicacion } = {}) {
+  async function actualizarEquipo(id, { nombre, tipo, ubicacion, marca, modelo, serie, estado, notas, criticidad } = {}) {
     if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
     const cambios = {};
     if (nombre !== undefined) cambios.nombre = nombre;
     if (tipo !== undefined) cambios.tipo = tipo;
     if (ubicacion !== undefined) cambios.ubicacion = ubicacion;
+    // Campos core agregados por la plantilla multi-hoja. Requieren haber
+    // corrido el ALTER TABLE equipos (ver schema-core.sql) — si esa
+    // migración no corrió todavía, Supabase devuelve error de columna
+    // inexistente y el llamador (importEquiposRows) lo reporta por fila
+    // en vez de romper todo el import.
+    if (marca !== undefined) cambios.marca = marca;
+    if (modelo !== undefined) cambios.modelo = modelo;
+    if (serie !== undefined) cambios.serie = serie;
+    if (estado !== undefined) cambios.estado = estado;
+    if (notas !== undefined) cambios.notas = notas;
+    if (criticidad !== undefined) cambios.criticidad = criticidad;
     const { data, error } = await client.from('equipos')
       .update(cambios)
       .eq('id', id)
@@ -137,7 +148,11 @@
       return existente;
     }
     const { data, error } = await client.from('equipos')
-      .insert({ tag, nombre: extra.nombre || tag, tipo: extra.tipo || null, ubicacion: extra.ubicacion || null })
+      .insert({
+        tag, nombre: extra.nombre || tag, tipo: extra.tipo || null, ubicacion: extra.ubicacion || null,
+        marca: extra.marca || null, modelo: extra.modelo || null, serie: extra.serie || null,
+        estado: extra.estado || null, notas: extra.notas || null, criticidad: extra.criticidad || null
+      })
       .select().single();
     if (error) throw error;
     return data;
@@ -339,6 +354,47 @@
     if (error) throw error;
   }
 
+  // ---- Especificaciones técnicas por tipo (equipos_specs) ----
+  // Tabla hermana de `equipos`: una fila por (equipo_id, tipo_espec).
+  // Un motor-bomba tiene 2 filas (tipo_espec='motor' y tipo_espec='bomba').
+  // Requiere haber corrido schema-specs.sql en Supabase — si la tabla
+  // todavía no existe, estas funciones tiran un error con código 42P01
+  // que el llamador puede distinguir del resto.
+
+  async function guardarSpec(equipoId, tipoEspec, specData) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    if (!specData || !Object.keys(specData).length) return null;
+    const { data, error } = await client.from('equipos_specs')
+      .upsert({ equipo_id: equipoId, tipo_espec: tipoEspec, spec_data: specData },
+              { onConflict: 'equipo_id,tipo_espec' })
+      .select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function obtenerSpecsEquipo(equipoId) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const { data, error } = await client.from('equipos_specs')
+      .select('tipo_espec, spec_data')
+      .eq('equipo_id', equipoId);
+    if (error) throw error;
+    const specs = {};
+    (data || []).forEach(s => { specs[s.tipo_espec] = s.spec_data; });
+    return specs; // { motor: {...}, bomba: {...} }
+  }
+
+  // Trae equipos + specs en una sola query (usa la vista equipos_full,
+  // security_invoker = true). No reemplaza listarEquipos(): esta es
+  // exclusivamente para las pantallas que necesitan mostrar RPM/potencia/etc.
+  async function listarEquiposConSpecs({ incluirArchivados = false } = {}) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    return _paginar(() => {
+      let q = client.from('equipos_full').select('*').order('tag');
+      if (!incluirArchivados) q = q.eq('activo', true);
+      return q;
+    });
+  }
+
   async function cargarConfigApp(modulo) {
     if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
     const { data, error } = await client.from('config_apps').select('config').eq('modulo', modulo).maybeSingle();
@@ -353,12 +409,247 @@
     if (error) throw error;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // HELPERS DE NORMALIZACIÓN
+  // ══════════════════════════════════════════════════════════════════════
+  function normalizarClave(k) {
+    return String(k)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[°º]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+  }
+
+  const ALIASES_SPECS = {
+    'rpm_nominal':              'rpm',
+    'potencia':                 'potencia_kw',
+    'voltaje_nominal':          'voltaje_v',
+    'corriente_fla':            'corriente_a',
+    'grado_ip':                 'ip',
+    'caudal_nominal':           'caudal_m3h',
+    'altura_nominal':           'altura_m',
+    'npsh_requerido':           'npsh_m',
+    'diametro_impulsor':        'diametro_impulsor_mm',
+    'presion_estatica':         'presion_estatica_pa',
+    'diametro_rodete':          'diametro_rodete_mm',
+    'potencia_motor':           'potencia_motor_kw',
+    'caudal':                   'caudal_m3min',
+    'presion_trabajo':          'presion_trabajo_bar',
+    'presion_maxima':           'presion_maxima_bar',
+    'voltaje_de_barras':        'voltaje_barras',
+    'corriente_nominal':        'corriente_nominal_a',
+    'sistema_puesta_a_tierra':  'sistema_tierra',
+    'corriente_cortocircuito':  'icc_ka',
+    'capacidad_frigorifica':    'capacidad_btu',
+    'potencia_electrica':       'potencia_kw',
+    'carga_refrigerante':       'carga_refrigerante_kg',
+    'capacidad_maxima':         'capacidad_max_kg',
+    'altura_de_elevacion':      'altura_elevacion_m',
+    'velocidad_elevacion':      'velocidad_elevacion_mpm',
+    'velocidad_traslacion':     'velocidad_traslacion_mpm',
+    'ancho_de_luz':             'ancho_luz_m',
+    'n_caidas_de_cable':        'n_caidas_cable',
+    'diametro_cable':           'diametro_cable_mm',
+  };
+
+  function claveCanonica(header) {
+    const n = normalizarClave(header);
+    return ALIASES_SPECS[n] || n;
+  }
+
+  function parsearValorSpec(v) {
+    if (v === '' || v === null || v === undefined) return null;
+    if (typeof v === 'number') return v;
+    const s = String(v).trim();
+    if (s === '' || s === '—' || s === '-') return null;
+    if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    return s;
+  }
+
+  // ⚠️ Los nombres de hoja acá deben coincidir EXACTAMENTE con HOJA_POR_TIPO
+  // del index.html. Si agregás un tipo nuevo, actualizá ambos lugares.
+  const HOJAS_SPECS_MAP = {
+    'MOTORES':         'motor',
+    'BOMBAS':          'bomba',
+    'VENTILADORES':    'ventilador',
+    'COMPRESORES':     'compresor',
+    'TABLEROS':        'tablero',
+    'REFRIGERACION':   'refrigeracion',
+    'GRUAS_ELEVACION': 'grua',
+  };
+
+  // ══════════════════════════════════════════════════════════════════════
+  // IMPORT MULTI-HOJA
+  // ══════════════════════════════════════════════════════════════════════
+  async function importarPlantillaEquipos(wb, onProgress) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    if (typeof global.XLSX === 'undefined' && typeof XLSX === 'undefined') {
+      throw new Error('SheetJS no disponible');
+    }
+    const XLSXL = global.XLSX || XLSX;
+
+    const hojaEq = wb.SheetNames.find(n => n.trim().toUpperCase() === 'EQUIPOS');
+    if (!hojaEq) throw new Error('Falta la hoja EQUIPOS en el archivo');
+
+    const rowsEq = XLSXL.utils.sheet_to_json(wb.Sheets[hojaEq], { defval: '' });
+    const tagToId = new Map();
+    const stats = { equipos: 0, specs: 0, errores: [] };
+
+    // ── 1. EQUIPOS ─────────────────────────────────────────────────────
+    for (let i = 0; i < rowsEq.length; i++) {
+      const row = rowsEq[i];
+      const tag = String(row['TAG'] || row['Tag'] || '').trim();
+      if (!tag) { stats.errores.push(`EQUIPOS fila ${i+2}: sin TAG`); continue; }
+
+      const core = {
+        tag,
+        nombre:    String(row['Nombre'] || '').trim() || null,
+        tipo:      String(row['Tipo']   || '').trim() || null,
+        planta:    String(row['Planta'] || '').trim() || null,
+        ubicacion: String(row['Área / Ubicación'] || row['Area / Ubicacion'] || row['Ubicacion'] || row['Ubicación'] || '').trim() || null,
+        marca:     String(row['Marca']  || '').trim() || null,
+        modelo:    String(row['Modelo'] || '').trim() || null,
+        serie:     String(row['N° Serie'] || row['N Serie'] || row['Serie'] || '').trim() || null,
+        anio:      parseInt(row['Año Fabricación'] || row['Anio Fabricacion']) || null,
+        criticidad: String(row['Criticidad'] || 'C').trim().toUpperCase() || 'C',
+        estado:    String(row['Estado'] || 'operativo').trim() || 'operativo',
+        proveedor: String(row['Proveedor'] || '').trim() || null,
+        notas:     String(row['Notas'] || '').trim() || null,
+      };
+
+      // Fecha: acepta Date, DD/MM/YYYY, YYYY-MM-DD
+      const fp = row['Fecha Puesta Marcha'];
+      if (fp instanceof Date) {
+        core.fecha_puesta_marcha = fp.toISOString().slice(0,10);
+      } else if (typeof fp === 'string' && fp.trim()) {
+        const m1 = fp.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        const m2 = fp.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m1) core.fecha_puesta_marcha = `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+        else if (m2) core.fecha_puesta_marcha = `${m2[1]}-${m2[2]}-${m2[3]}`;
+      }
+
+      try {
+        const { data, error } = await client
+          .from('equipos')
+          .upsert(core, { onConflict: 'tag' })
+          .select('id').single();
+        if (error) throw error;
+        tagToId.set(tag, data.id);
+        stats.equipos++;
+      } catch (err) {
+        stats.errores.push(`EQUIPOS "${tag}": ${err.message}`);
+      }
+      if (onProgress) onProgress('equipos', i + 1, rowsEq.length);
+    }
+
+    // ── 2. HOJAS TÉCNICAS ──────────────────────────────────────────────
+    for (const [nombreHoja, tipoEspec] of Object.entries(HOJAS_SPECS_MAP)) {
+      const sn = wb.SheetNames.find(n => n.trim().toUpperCase() === nombreHoja);
+      if (!sn) continue;
+
+      const rows = XLSXL.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const tag = String(row['TAG'] || row['Tag'] || '').trim();
+        if (!tag) continue;
+
+        const eqId = tagToId.get(tag);
+        if (!eqId) {
+          stats.errores.push(`${nombreHoja} fila ${i+2}: TAG "${tag}" no existe en EQUIPOS`);
+          continue;
+        }
+
+        const specData = {};
+        for (const [k, v] of Object.entries(row)) {
+          if (k === 'TAG' || k === 'Tag') continue;
+          const parsed = parsearValorSpec(v);
+          if (parsed === null) continue;
+          specData[claveCanonica(k)] = parsed;
+        }
+        if (Object.keys(specData).length === 0) continue;
+
+        try {
+          const { error } = await client
+            .from('equipos_specs')
+            .upsert({
+              equipo_id: eqId,
+              tipo_espec: tipoEspec,
+              spec_data: specData
+            }, { onConflict: 'equipo_id,tipo_espec' });
+          if (error) throw error;
+          stats.specs++;
+        } catch (err) {
+          stats.errores.push(`${nombreHoja} "${tag}": ${err.message}`);
+        }
+      }
+      if (onProgress) onProgress(tipoEspec, rows.length, rows.length);
+    }
+
+    return stats;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // BORRAR SPEC INDIVIDUAL
+  // ══════════════════════════════════════════════════════════════════════
+  async function borrarSpec(equipoId, tipoEspec) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const { error } = await client.from('equipos_specs')
+      .delete()
+      .eq('equipo_id', equipoId)
+      .eq('tipo_espec', tipoEspec);
+    if (error) throw error;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // VALIDACIÓN POST-IMPORT
+  // ══════════════════════════════════════════════════════════════════════
+  async function validarEquipos() {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const { data, error } = await client.from('equipos_full').select('*');
+    if (error) throw error;
+
+    const avisos = [];
+    (data || []).forEach(e => {
+      const specs = e.specs || {};
+      const tipo = (e.tipo || '').toLowerCase();
+
+      if (tipo.includes('motor') && !specs.motor?.rpm) {
+        avisos.push({ tag: e.tag, sev: 'warn', msg: 'Motor sin RPM — Vibra Pro no clasifica ISO 10816' });
+      }
+      if (tipo.includes('motor') && !specs.motor?.potencia_kw) {
+        avisos.push({ tag: e.tag, sev: 'warn', msg: 'Motor sin potencia — Motor Pro no calcula carga' });
+      }
+      if (tipo.includes('tablero') && !specs.tablero?.voltaje_barras) {
+        avisos.push({ tag: e.tag, sev: 'crit', msg: 'Tablero sin voltaje de barras' });
+      }
+      if (tipo.includes('refrig') && !specs.refrigeracion?.refrigerante) {
+        avisos.push({ tag: e.tag, sev: 'warn', msg: 'Refrigeración sin tipo de refrigerante' });
+      }
+      const tieneAlgunaSpec = Object.keys(specs).length > 0;
+      if (!tieneAlgunaSpec && !tipo.includes('otro')) {
+        avisos.push({ tag: e.tag, sev: 'warn', msg: `Tipo "${e.tipo}" sin hoja técnica cargada` });
+      }
+    });
+    return avisos;
+  }
+
   global.SatSync = {
     init, estaConfigurado, guardarConfig, leerConfig,
     listarEquipos, buscarOCrearEquipo, actualizarEquipo, archivarEquipo,
     guardarAnalisis, listarAnalisis, subirImagen,
     guardarCaptura, listarCapturasPendientes, marcarCapturaProcesada,
     buscarEquipoPorTag, guardarFichas, quitarModuloDeEquipo, renombrarEquipo,
-    listarMediciones, guardarMediciones, borrarMedicion, cargarConfigApp, guardarConfigApp
+    listarMediciones, guardarMediciones, borrarMedicion, cargarConfigApp, guardarConfigApp,
+    guardarSpec, obtenerSpecsEquipo, listarEquiposConSpecs,
+
+    // ── NUEVAS: import multi-hoja, borrado de specs y validación post-import ──
+    importarPlantillaEquipos,
+    borrarSpec,
+    validarEquipos,
+
+    // helpers expuestos por si los tests los necesitan
+    normalizarClave,
+    claveCanonica,
   };
 })(window);
