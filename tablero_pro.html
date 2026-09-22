@@ -1018,6 +1018,12 @@ function handleFileUpload(evt){
       status.textContent = `✅ ${result.rows} lectura(s) · ${result.panels} tablero(s) · ${result.circuits} circuito(s)`;
       saveState();
       renderAll();
+
+      // Publicar a la nube los análisis de todos los circuitos importados
+      // (fire-and-forget, secuencial para no saturar la conexión).
+      (async () => {
+        for (const k of readingsData.keys()) await publicarAnalisisTablero(k).catch(() => {});
+      })();
     } catch(err){
       console.error(err);
       status.className = 'load-status err';
@@ -1258,6 +1264,10 @@ function saveManualReading(){
   const status = document.getElementById('loadStatus');
   status.className = 'load-status ok';
   status.textContent = `✅ Medición guardada: ${getDisplayName(key)}`;
+
+  // Publicar el análisis actualizado del circuito a la nube (fire-and-forget:
+  // no bloquea ni afecta la UI si falla, ej. sin conexión).
+  publicarAnalisisTablero(key).catch(() => {});
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1807,6 +1817,50 @@ function mapNivelASeveridad(nivel){
   return 'ok';
 }
 
+// Publica el análisis del circuito `k` a la tabla `analisis`. Fire-and-forget:
+// pensada para llamarse sin bloquear desde saveManualReading/handleFileUpload,
+// de forma que la medición quede guardada en la UI igual aunque la subida a
+// la nube falle (offline, sin conexión, etc.).
+// Devuelve true (publicado), false (falló) o null (no aplica — sin
+// diagnóstico válido o sin tag de panel, no cuenta como error en guardarEnLaNube).
+async function publicarAnalisisTablero(k){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
+  const diag = diagnoseCircuit(k);
+  if (!diag || diag.overall < 0) return null;
+  const tag = getPanelName(getPanelId(k));
+  if (!tag) return null;
+  // Tag plano (solo el panel), NO compuesto con el circuito. El hub de campo
+  // solo conoce el TAG del tablero (el técnico no elige circuito al capturar),
+  // así que un tag compuesto acá creaba un segundo "equipo" fantasma en el
+  // catálogo compartido — el hub de escritorio mostraba "TAB-GENERAL-PLANTA"
+  // (vacío, creado por el hub de campo) y "TAB-GENERAL-PLANTA / General" (con
+  // datos, creado por Tablero Pro) como si fueran dos equipos
+  // distintos. El circuito sigue yendo en `datos.circuito` — si el hub de
+  // escritorio necesita distinguir severidad por circuito, filtra por ahí.
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const nivel  = STATUS[diag.overall];
+  const msgs   = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+  const resumen = `${getCircuitName(k)}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/, '') : 'Sin hallazgos relevantes');
+  try {
+    await SatSync.guardarAnalisis({
+      modulo: 'tablero_pro',
+      equipo_tag: tag,
+      severidad: mapNivelASeveridad(nivel),
+      resumen,
+      datos: {
+        tablero: tag, circuito: getCircuitName(k), health, nivel,
+        deltaT: diag.deltaT, desbV: diag.desbV, desbI: diag.desbI,
+        fp: diag.fp, thdV: diag.thdV, rAisl: diag.rAisl,
+        fecha: diag.date, hallazgos: msgs
+      }
+    });
+    return true;
+  } catch (err) {
+    console.warn('[SatSync] no se pudo publicar análisis de', tag, err);
+    return false;
+  }
+}
+
 async function guardarEnLaNube(){
   if(!readingsData.size){ alert('Generá el informe primero.'); return; }
   const statusEl = document.getElementById('nubeStatus');
@@ -1821,40 +1875,8 @@ async function guardarEnLaNube(){
   btn.disabled = true;
   let ok = 0, fail = 0;
   for (const k of readingsData.keys()){
-    const diag = diagnoseCircuit(k);
-    if(!diag || diag.overall < 0) continue;
-    const tag = getPanelName(getPanelId(k));
-    if(!tag){ fail++; continue; }
-    // Tag plano (solo el panel), NO compuesto con el circuito. El hub de campo
-    // solo conoce el TAG del tablero (el técnico no elige circuito al capturar),
-    // así que un tag compuesto acá creaba un segundo "equipo" fantasma en el
-    // catálogo compartido — el hub de escritorio mostraba "TAB-GENERAL-PLANTA"
-    // (vacío, creado por el hub de campo) y "TAB-GENERAL-PLANTA / General" (con
-    // datos, creado por Tablero Pro) como si fueran dos equipos
-    // distintos. El circuito sigue yendo en `datos.circuito` — si el hub de
-    // escritorio necesita distinguir severidad por circuito, filtra por ahí.
-    const health = healthScoreFromLevel(diag.overall, diag.subs);
-    const nivel  = STATUS[diag.overall];
-    const msgs   = diagnosisMessages(diag).filter(m=>m.sev!=='good');
-    const resumen = `${getCircuitName(k)}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Sin hallazgos relevantes');
-    try{
-      await SatSync.guardarAnalisis({
-        modulo: 'tablero_pro',
-        equipo_tag: tag,
-        severidad: mapNivelASeveridad(nivel),
-        resumen,
-        datos: {
-          tablero: tag, circuito: getCircuitName(k), health, nivel,
-          deltaT: diag.deltaT, desbV: diag.desbV, desbI: diag.desbI,
-          fp: diag.fp, thdV: diag.thdV, rAisl: diag.rAisl,
-          fecha: diag.date, hallazgos: msgs
-        }
-      });
-      ok++;
-    }catch(err){
-      console.error('[SatSync] error guardando', tag, err);
-      fail++;
-    }
+    const r = await publicarAnalisisTablero(k);
+    if (r === true) ok++; else if (r === false) fail++;
   }
   btn.disabled = false;
   statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
