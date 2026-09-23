@@ -901,6 +901,10 @@ header{
     <!-- LEFT: equipment picker -->
     <div class="equip-picker">
       <h4>Equipos cargados</h4>
+      <input type="text" id="eaSearchBox" class="search-box"
+             style="width:100%;border-radius:8px;margin-bottom:10px;font-size:.85rem;padding:6px 12px;"
+             placeholder="🔎 Buscar equipo…"
+             oninput="renderEaEquipList()">
       <div id="eaEquipList"><div class="ea-no-data" style="padding:20px;font-size:.82rem;">Sin datos</div></div>
     </div>
 
@@ -994,6 +998,7 @@ header{
               <option value="II">Clase II (15-300kW)</option>
               <option value="III">Clase III (&gt;300kW)</option>
             </select>
+            <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">Override solo para esta vista — no altera el diagnóstico guardado.</div>
           </div>
           <div style="align-self:flex-end;display:flex;gap:8px;">
             <button class="btn-accent" id="btnUpdateChart">Actualizar</button>
@@ -1105,6 +1110,27 @@ header{
     </div>
   </div>
 
+  <!-- MANUAL PROMPT (sin API key) -->
+  <div class="ai-scope-section">
+    <div class="ai-scope-title">💬 O generalo manualmente, sin API key</div>
+    <p style="font-size:.8rem;color:var(--muted);margin:0 0 10px;">
+      Copiá el prompt con los datos ya armados (mismo alcance e idioma elegidos arriba), pegalo en tu
+      IA web de confianza (ChatGPT, Claude.ai, Gemini, etc.), y después pegá la respuesta acá abajo
+      para verla como informe — con las mismas tarjetas y el mismo botón de guardar en la nube.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-small" onclick="copiarPromptManual()">📋 Copiar prompt para pegar en IA web</button>
+      <span id="manualPromptStatus" style="font-size:.8rem;color:var(--muted);"></span>
+    </div>
+    <textarea id="aiManualPromptBox" readonly style="display:none;width:100%;min-height:160px;font-family:'Share Tech Mono',monospace;font-size:.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;"></textarea>
+
+    <div style="margin-top:14px;">
+      <label style="font-size:.82rem;color:var(--muted);display:block;margin-bottom:6px;">Pegá acá la respuesta de la IA (el JSON):</label>
+      <textarea id="aiManualResponse" placeholder="Pegá acá la respuesta completa de la IA…" style="width:100%;min-height:120px;font-family:'Share Tech Mono',monospace;font-size:.78rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;"></textarea>
+      <button class="btn-ai-generate" style="margin-top:10px;" onclick="procesarRespuestaManual()">✅ Procesar respuesta</button>
+    </div>
+  </div>
+
   <!-- REPORT OUTPUT -->
   <div id="aiReportOutput" style="display:none;">
     <div id="aiSummaryCards" class="ai-summary-cards"></div>
@@ -1186,11 +1212,9 @@ header{
       <button class="btn-accent" onclick="offPrint()">🖨️ Imprimir / PDF</button>
       <button class="btn-small" onclick="offExportCSV()">⬇ Exportar CSV</button>
       <button class="btn-small" onclick="offCopyReport()">📋 Copiar texto</button>
-      <button class="btn-small" id="btnGuardarNubeOff" onclick="guardarEnLaNubeOffline()">☁️ Guardar en la nube</button>
       <span style="flex:1;"></span>
       <span id="offReportMeta" style="font-size:.78rem;color:var(--muted);"></span>
     </div>
-    <div id="nubeStatusOff" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
 
     <!-- Report header -->
     <div class="off-report-header">
@@ -1300,7 +1324,7 @@ header{
   <div class="config-section">
     <h3>Registro de equipos</h3>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-      <button class="btn-small" onclick="sincronizarEquiposHub().then(()=>{renderEquipmentRegistry();alert('Catálogo del hub actualizado ('+equiposHub.size+' equipos).');})">🔄 Sincronizar equipos del hub</button>
+      <button class="btn-small" onclick="importarEquiposDelHub().then(r=>{if(r.importados){alert('Importados '+r.importados+' equipo(s) del hub.\n\n⚠️ Quedaron marcados como PENDIENTES DE CONFIGURACIÓN: completales kW, RPM base, tipo y soporte antes de cargar mediciones, o los umbrales ISO 10816 no van a ser los correctos.');}else if(r.yaExistian){alert('Los '+r.yaExistian+' equipo(s) del hub ya estaban registrados localmente.');}else{alert('No se pudo leer el catálogo o está vacío.');}})">🔄 Importar equipos del hub</button>
       <span style="font-size:.78rem;color:var(--muted);">trae el catálogo compartido para poder asignarle mediciones sin crearlo de nuevo acá</span>
     </div>
     <div id="equipmentRegistryUI"></div>
@@ -1358,6 +1382,54 @@ header{
   <div class="config-section">
     <h3>Datos de puntos de medición (kW / RPM)</h3>
     <div id="machinesConfig"><p style="color:var(--muted)">Cargue un archivo para ver los puntos.</p></div>
+  </div>
+  <div class="config-section">
+    <h3>☁️ Sincronización con el hub</h3>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">
+      Sincroniza con el hub compartido en dos planos: <strong>mediciones
+      crudas</strong> (los valores medidos) y <strong>configuración
+      compartida</strong> (umbrales de alarma, mapeo de códigos de punto y
+      datos del instrumento).
+    </p>
+
+    <div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Mediciones crudas</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-accent" id="btnSubirMediciones" onclick="onSubirMedicionesClick()">
+        ⬆ Subir mediciones al hub
+      </button>
+      <span id="subirMedicionesStatus" style="font-size:.82rem;color:var(--muted);"></span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+      <button class="btn-accent" id="btnBajarMediciones" onclick="onBajarMedicionesClick()"
+              style="background:transparent;border:1px solid var(--accent);color:var(--accent2);">
+        ⬇ Bajar mediciones del hub
+      </button>
+      <span id="bajarMedicionesStatus" style="font-size:.82rem;color:var(--muted);"></span>
+    </div>
+
+    <div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin:14px 0 10px;">Configuración compartida</div>
+    <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px;">
+      Los umbrales globales, el mapeo de puntos y los datos del instrumento se
+      sincronizan automáticamente: se bajan al abrir la app y se suben cuando
+      guardás cambios. Si dos dispositivos editan al mismo tiempo, gana el
+      último guardado.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small" id="btnBajarConfig" onclick="onBajarConfigClick()">
+        ⬇ Forzar bajada de configuración
+      </button>
+      <button class="btn-small" id="btnSubirConfig" onclick="onSubirConfigClick()">
+        ⬆ Forzar subida de configuración
+      </button>
+      <span id="configSyncStatus" style="font-size:.82rem;color:var(--muted);"></span>
+    </div>
+
+    <div style="font-size:.75rem;color:var(--muted);margin-top:10px;">
+      💡 El merge por fecha nunca duplica: si una medición ya existe localmente
+      con la misma fecha, no se toca. Los equipos que llegan del hub sin
+      historial local quedan marcados como PENDIENTES DE CONFIGURACIÓN.
+      Las API keys de IA nunca se sincronizan — quedan en cada navegador.
+    </div>
   </div>
   <div class="config-section">
     <h3>💾 Backup y restauración</h3>
@@ -1586,14 +1658,18 @@ const STATUS_COLORS = ['#10c98a','#f0b429','#f97316','#ef4444'];
 //   'Motorreductor / Caja de Engranajes'→ ISO 10816-3 + 25% HF tolerance
 //   'Agitador / Máquina Lenta (<600 RPM)' → Displacement-only fixed thresholds
 // ─────────────────────────────────────────────────────────────
-function getISO10816Thresholds(powerKW, mountType, rpmAvg, machineTypeISO) {
+function getISO10816Thresholds(powerKW, mountType, rpmAvg, machineTypeISO, isoGroupOverride) {
   const kw  = powerKW || 0;
   const rpm = rpmAvg  || 0;
   const mti = machineTypeISO || 'Rotativa General / Bomba';
 
   // ── ISO 10816-3 velocity table ────────────────────────────
   // Group 1: P ≤ 15kW | Group 2: 15 < P ≤ 300kW | Group 3: P > 300kW
-  const isoGroup = kw > 300 ? 3 : kw > 15 ? 2 : 1;
+  // isoGroupOverride: 1|2|3 fuerza el grupo (herramienta de análisis);
+  // null/undefined → clasificación auto por kW (comportamiento normal).
+  const isoGroup = (isoGroupOverride === 1 || isoGroupOverride === 2 || isoGroupOverride === 3)
+                 ? isoGroupOverride
+                 : (kw > 300 ? 3 : kw > 15 ? 2 : 1);
 
   const VEL_LIMITS = {
     1: { rigid:    { alert: 4.5,  critical: 11.2 },
@@ -1702,7 +1778,7 @@ function getMachineTypeISO(k) {
 }
 
 // Get dynamic ISO thresholds for a machine key
-function getISOThresholdsForKey(k) {
+function getISOThresholdsForKey(k, isoGroupOverride) {
   const equipId   = getEquipId(k);
   const eq        = equipmentRegistry.get(equipId) || {};
   const meta      = machineMetadata.get(k) || {};
@@ -1715,7 +1791,16 @@ function getISOThresholdsForKey(k) {
     const validRpms = d.rpms.filter(r => r && !isNaN(r));
     if (validRpms.length > 0) rpmAvg = validRpms.reduce((a,b)=>a+b,0)/validRpms.length;
   }
-  return getISO10816Thresholds(powerKW, mountType, rpmAvg, mti);
+  return getISO10816Thresholds(powerKW, mountType, rpmAvg, mti, isoGroupOverride);
+}
+
+// Lee el select "Clase ISO" de la pestaña Análisis. Devuelve 1|2|3 si el
+// usuario forzó un grupo, o null para clasificación auto por kW.
+function getISOClassOverride(){
+  const sel = document.getElementById('isoClass');
+  if (!sel) return null;
+  const v = sel.value;
+  return v === 'I' ? 1 : v === 'II' ? 2 : v === 'III' ? 3 : null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2152,7 +2237,7 @@ function mergeData(existing, incoming) {
     if (!existKeys.has(keyOf(incoming.dates[i]))) {
       allDates.push(incoming.dates[i]);
       for (const k of allParamKeys) allParams[k].push(incoming.params?.[k]?.[i] ?? NaN);
-      allRPMs.push(NaN);  // NUEVO DeepSeek
+      allRPMs.push(incoming.rpms?.[i] ?? NaN);
     }
   }
   const indices = allDates.map((_,i) => i).sort((a,b) => allDates[a] - allDates[b]);
@@ -2475,6 +2560,64 @@ async function sincronizarEquiposHub(silencioso){
   }
 }
 
+// ── Importar equipos del catálogo del hub ──
+// Crea un registro local por cada equipo del hub que todavía no exista acá.
+// A diferencia de tablero_pro, acá los equipos NO se pueden importar "vacíos"
+// y dejarlos pasar: equipmentRegistry alimenta getISOThresholdsForKey(), que
+// con kW=0/RPM=0 cae en el Grupo 1 rígido — el más estricto del lado de los
+// umbrales (4.5 mm/s de alerta). Un motor de 200 kW importado así quedaría
+// marcado crítico con la primera medición que en realidad es normal para su
+// tamaño. Por eso se marcan needsConfig:true y la UI los resalta hasta que
+// el usuario complete kW / RPM / tipo / soporte.
+async function importarEquiposDelHub(silencioso){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    if (!silencioso) alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return {importados: 0, yaExistian: 0};
+  }
+  try{
+    const rows = await SatSync.listarEquipos();
+    equiposHub = new Map(rows.map(e => [e.tag, e]));
+    const dl = document.getElementById('hubTagsDatalist');
+    if(dl) dl.innerHTML = rows.map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+  }catch(err){
+    if(!silencioso) alert('No se pudo leer el catálogo del hub: ' + err.message);
+    return {importados: 0, yaExistian: 0};
+  }
+
+  // Índice de nombres ya registrados localmente para no duplicar por tag
+  const existentes = new Map();
+  for (const [id, eq] of equipmentRegistry.entries()){
+    existentes.set(normalizeEquipStr(eq.name), id);
+  }
+
+  let importados = 0, yaExistian = 0;
+  for (const e of equiposHub.values()){
+    if (!e || !e.tag) continue;
+    if (existentes.has(normalizeEquipStr(e.tag))){ yaExistian++; continue; }
+
+    const id = genEquipId();
+    // El tipo viene del hub (string suelto); si no matchea ningún EQUIP_TYPES,
+    // cae en 'Otro' y el usuario lo corrige — no inventamos un default silencioso
+    // que dispare reglas de diagnóstico equivocadas.
+    const tipoHub = e.tipo || '';
+    const tipo = EQUIP_TYPES.find(t => normalizeEquipStr(t) === normalizeEquipStr(tipoHub)) || 'Otro';
+
+    equipmentRegistry.set(id, {
+      name: e.tag,
+      type: tipo,
+      powerKW: 0,
+      rpmBase: 0,
+      mountType: 'rigid',
+      machineTypeISO: 'Rotativa General / Bomba',
+      needsConfig: true   // ← la UI lo resalta hasta que se complete
+    });
+    importados++;
+  }
+
+  if (importados) { saveConfig(); renderEquipmentRegistry(); }
+  return {importados, yaExistian};
+}
+
 // Empuja un equipo recién creado localmente al catálogo compartido, para
 // que aparezca de inmediato en el hub y en los otros módulos.
 async function publicarEquipoEnHub(name, tipo){
@@ -2662,8 +2805,9 @@ function renderEquipmentRegistry() {
     const ptList = ptKeys.map(k => `<span class="mpoint-badge">${k.split('/')[1]}</span>`).join(' ');
     const sid = id.replace(/[^a-zA-Z0-9]/g,'_');
     const rpmVal = eq.rpmBase || eq.rpm || 0;
-    return `<div class="equip-item">
-      <div class="equip-item-id">${id}</div>
+    const pendiente = eq.needsConfig === true;
+    return `<div class="equip-item"${pendiente?' style="border-color:#f0b429;background:rgba(240,180,41,.05);"':''}>
+      <div class="equip-item-id">${id}${pendiente?' <span style="color:#f0b429;font-size:.7rem;">⚠ config.</span>':''}</div>
       <input type="text" id="en_${sid}" value="${escHtml(eq.name)}" placeholder="Nombre">
       <select id="et_${sid}">
         ${EQUIP_TYPES.map(t=>`<option value="${t}" ${eq.type===t?'selected':''}>${t}</option>`).join('')}
@@ -2697,7 +2841,15 @@ function saveEquipment(id) {
   const mountType      = document.getElementById(`emnt_${sid}`)?.value || 'rigid';
   // ▼ NUEVO v14: perfil de tecnología para diagnóstico cruzado ISO
   const machineTypeISO = document.getElementById(`emti_${sid}`)?.value || 'Rotativa General / Bomba';
-  equipmentRegistry.set(id, {name, type, powerKW, rpmBase, mountType, machineTypeISO});
+  // Si el usuario ya cargó kW y RPM reales, el flag needsConfig se cae solo —
+  // los defaults (0 / 0 / rigid / Rotativa) que trajo importarEquiposDelHub()
+  // ya no aplican.
+  const prev = equipmentRegistry.get(id) || {};
+  const complete = powerKW > 0 && rpmBase > 0;
+  equipmentRegistry.set(id, {
+    name, type, powerKW, rpmBase, mountType, machineTypeISO,
+    needsConfig: complete ? undefined : (prev.needsConfig || false)
+  });
   syncEquipmentToPoints(id);  // NUEVO DeepSeek
   saveConfig();
   renderDashboard();
@@ -2775,11 +2927,13 @@ function savePointMap() {
     if (el) prefixMap[raw] = el.value;
   }
   saveConfig();
+  publicarConfigEnHub().catch(()=>{});
 }
 
 function resetPointMap() {
   prefixMap = {...DEFAULT_PREFIX_MAP};
   saveConfig();
+  publicarConfigEnHub().catch(()=>{});
   renderPointMap();
 }
 
@@ -2788,6 +2942,7 @@ function saveInstrumentConfig() {
   instrumentConfig.name  = document.getElementById('instrName')?.value?.trim() || '';
   instrumentConfig.model = document.getElementById('instrModel')?.value?.trim() || '';
   saveConfig();
+  publicarConfigEnHub().catch(()=>{});
   const st = document.getElementById('instrSaveStatus');
   if (st) { st.textContent = '✅ Guardado'; setTimeout(()=>st.textContent='', 2000); }
 }
@@ -3364,15 +3519,49 @@ function renderSummaryBar(){
   `;
 }
 
+// Filtros compartidos entre el grid de tarjetas y el ranking (estado,
+// equipo, búsqueda). El "orden" NO se incluye acá: el grid ordena por
+// sortSel, el ranking ordena siempre por peor salud primero.
+function applyGridFilters(keys){
+  const sf = statusFilter;
+  const sv = document.getElementById('searchBox').value.toLowerCase();
+  const ef = document.getElementById('equipFilter').value;
+  return keys.filter(k=>{
+    const {level} = diagnoseMachine(k);
+    if (sf !== 'all' && level !== sf) return false;
+    if (ef !== 'all' && getEquipId(k) !== ef) return false;
+    const displayStr = (getEquipNameOnly(k)+' '+getPointCode(k)+' '+(POINT_LABELS[getPointCode(k)]||'')).toLowerCase();
+    if (sv && !displayStr.includes(sv) && !k.toLowerCase().includes(sv)) return false;
+    return true;
+  });
+}
+
 function renderRanking(){
+  const totalFlota = machinesData.size;
+  const filteredKeys = applyGridFilters([...machinesData.keys()]);
+
+  // Título con conteo — así queda claro que el ranking comparte filtros con
+  // el grid, y no que "desaparecieron" puntos por un bug.
+  const titleEl = document.querySelector('.ranking-wrap .section-title');
+  if (titleEl){
+    const suffix = filteredKeys.length === totalFlota
+      ? ''
+      : ` — <span style="color:var(--muted);font-weight:400;font-size:.78rem;">${filteredKeys.length} de ${totalFlota} (filtrado)</span>`;
+    titleEl.innerHTML = `🏆 Ranking de Criticidad${suffix}`;
+  }
+
   let items=[];
-  for(let [k] of machinesData){
+  for(const k of filteredKeys){
     const{diagnosis,health,level}=diagnoseMachine(k);
     const d=machinesData.get(k);
     items.push({k,equipName:getEquipNameOnly(k),ptCode:getPointCode(k),health,level,diagnosis,lastDate:d.dates[d.dates.length-1]});
   }
   items.sort((a,b)=>a.health-b.health);
   const tbody=document.getElementById('rankBody');
+  if(!items.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted);">Sin resultados para el filtro actual.</td></tr>';
+    return;
+  }
   tbody.innerHTML=items.map((it,idx)=>{
     const rc=it.level==='critical'?'rank-critical':it.level==='warning'?'rank-warning':'';
     const action=it.level==='critical'?'🔴 Acción inmediata':it.level==='warning'?'🟡 Programar revisión':it.level==='elevated'?'🟡 Monitorear':'✅ Normal';
@@ -3405,19 +3594,8 @@ function renderGlobalRecs(){
 
 // NUEVO DeepSeek: renderGrid con filtro por equipo integrado
 function renderGrid(){
-  const sf = statusFilter;
-  const sv = document.getElementById('searchBox').value.toLowerCase();
   const so = document.getElementById('sortSel').value;
-  const ef = document.getElementById('equipFilter').value;  // NUEVO DeepSeek
-  let keys=[...machinesData.keys()];
-  keys=keys.filter(k=>{
-    const{level}=diagnoseMachine(k);
-    if(sf!=='all'&&level!==sf)return false;
-    if(ef!=='all'&&getEquipId(k)!==ef)return false;  // NUEVO DeepSeek
-    const displayStr=(getEquipNameOnly(k)+' '+getPointCode(k)+' '+(POINT_LABELS[getPointCode(k)]||'')).toLowerCase();
-    if(sv&&!displayStr.includes(sv)&&!k.toLowerCase().includes(sv))return false;
-    return true;
-  });
+  let keys = applyGridFilters([...machinesData.keys()]);
   if(so==='health')keys.sort((a,b)=>diagnoseMachine(a).health-diagnoseMachine(b).health);
   else if(so==='name')keys.sort((a,b)=>getEquipNameOnly(a).localeCompare(getEquipNameOnly(b)));
   else if(so==='date')keys.sort((a,b)=>{
@@ -3435,6 +3613,7 @@ function setStatusFilter(s) {
     b.classList.toggle('active', b.getAttribute('data-sf')===s);
   });
   renderGrid();
+  renderRanking();
 }
 
 function buildCard(k){
@@ -3535,7 +3714,7 @@ function openModal(k){
   const r=getLastRecord(k);
   const lvl=STATUS.indexOf(level);
   document.getElementById('modalBody').innerHTML=
-    buildMetricsSection(r)+buildPredictionSection(k)+
+    buildMetricsSection(r, k)+buildPredictionSection(k)+
     (d.dates.length>1?buildTrendSection():'')+
     buildDiagnosticsSection(k,lvl,r)+buildRecommendationsSection(k,lvl,r)+
     buildHistoryTable(k);  // NUEVO DeepSeek: historial con RPM editable
@@ -3544,18 +3723,32 @@ function openModal(k){
   setTimeout(()=>attachRpmEditors(),100);  // NUEVO DeepSeek
 }
 
-function buildMetricsSection(r){
+function buildMetricsSection(r, k){
+  // Umbrales ISO dinámicos (v15) para este equipo. Si no se pasa `k` cae a
+  // los globales T.* — comportamiento previo. Los callers openModal y
+  // loadAnalysis ya tienen `k` en scope y lo propagan.
+  const isoTh = k ? getISOThresholdsForKey(k) : null;
+
+  // Bandas [elevado, alerta, crítico]. Vel y HF siguen el grupo ISO +
+  // tecnología; Temp y CF+ siguen con los globales porque ISO 10816 no los
+  // cubre. Disp_RMS usa el umbral ISO; Disp_Peak mantiene la proporción
+  // 0.5× del default original (ISO Annex B es RMS, no Peak).
+  const velTh      = isoTh ? [isoTh.alertaVel*0.63,   isoTh.alertaVel,   isoTh.criticoVel]   : T.vel_rms;
+  const hfTh       = isoTh ? [isoTh.alertaHF*0.5,     isoTh.alertaHF,    isoTh.criticoHF]    : T.hf_peak;
+  const dispThRMS  = isoTh ? [isoTh.alertaDisp*0.5,   isoTh.alertaDisp,  isoTh.criticoDisp]  : T.disp_rms;
+  const dispThPeak = dispThRMS.map(v => v * 0.5);
+
   const metrics=[
-    {lbl:'Vel. RMS',val:r.ov_vel_rms_mms,unit:'mm/s',d:4,th:T.vel_rms},
-    {lbl:'Vel. Peak',val:r.ov_vel_peak_mms,unit:'mm/s',d:4,th:T.vel_rms},
-    {lbl:'Acc. Peak',val:r.ov_acc_peak_g,unit:'g',d:4,th:T.acc_peak},
-    {lbl:'Acc. RMS',val:r.ov_acc_rms_g,unit:'g',d:4,th:T.acc_peak},
-    {lbl:'HF Acc. Peak',val:r.hf_acc_peak_g,unit:'g',d:2,th:T.hf_peak},
-    {lbl:'HF Acc. RMS',val:r.hf_acc_rms_g,unit:'g',d:3,th:T.hf_peak},
-    {lbl:'Disp. Peak',val:r.ov_disp_peak_um,unit:'µm',d:2,th:[25,100,200]},
-    {lbl:'Disp. RMS',val:r.ov_disp_rms_um,unit:'µm',d:2,th:T.disp_rms},
-    {lbl:'Temperatura',val:r.temp_c,unit:'°C',d:1,th:T.temp},
-    {lbl:'CF+',val:r.cfplus,unit:'',d:2,th:T.cfplus},
+    {lbl:'Vel. RMS',    val:r.ov_vel_rms_mms,  unit:'mm/s', d:4, th:velTh},
+    {lbl:'Vel. Peak',   val:r.ov_vel_peak_mms, unit:'mm/s', d:4, th:velTh},
+    {lbl:'Acc. Peak',   val:r.ov_acc_peak_g,   unit:'g',    d:4, th:T.acc_peak},
+    {lbl:'Acc. RMS',    val:r.ov_acc_rms_g,    unit:'g',    d:4, th:T.acc_peak},
+    {lbl:'HF Acc. Peak',val:r.hf_acc_peak_g,   unit:'g',    d:2, th:hfTh},
+    {lbl:'HF Acc. RMS', val:r.hf_acc_rms_g,    unit:'g',    d:3, th:hfTh},
+    {lbl:'Disp. Peak',  val:r.ov_disp_peak_um, unit:'µm',   d:2, th:dispThPeak},
+    {lbl:'Disp. RMS',   val:r.ov_disp_rms_um,  unit:'µm',   d:2, th:dispThRMS},
+    {lbl:'Temperatura', val:r.temp_c,          unit:'°C',   d:1, th:T.temp},
+    {lbl:'CF+',         val:r.cfplus,          unit:'',     d:2, th:T.cfplus},
   ];
   return`<div class="msection"><div class="msection-title">📊 Métricas – Última Lectura</div>
     <div class="metrics-grid">${metrics.map(m=>{
@@ -3845,13 +4038,13 @@ function buildRecommendationsSection(k,lvl,r){
 }
 
 // NUEVO DeepSeek: historial con columna RPM editable para sopladores
-function buildHistoryTable(k){
+function buildHistoryTable(k, isoGroupOverride){
   const d = machinesData.get(k);
   const equipType = getEquipType(getEquipId(k));
   const isBlower  = (equipType === 'Soplador');
   const tableId   = 'histTbl_' + k.replace(/[^a-zA-Z0-9]/g,'_');
   // ── ISO 10816-3 dynamic thresholds for table coloring ────────────────────
-  const isoTh = getISOThresholdsForKey(k);
+  const isoTh = getISOThresholdsForKey(k, isoGroupOverride);
   const velT_iso  = isoTh.useDisp ? T.vel_rms
                   : [isoTh.alertaVel*0.63, isoTh.alertaVel, isoTh.criticoVel];
   const dispT_iso = [isoTh.alertaDisp*0.5, isoTh.alertaDisp, isoTh.criticoDisp];
@@ -4011,10 +4204,10 @@ function loadAnalysis(k){
   updateAnalysisChart();
   const r=getLastRecord(k);
   const{level}=diagnoseMachine(k);const lvl=STATUS.indexOf(level);
-  document.getElementById('analysisMetrics').innerHTML=buildMetricsSection(r);
+  document.getElementById('analysisMetrics').innerHTML=buildMetricsSection(r, k);
   document.getElementById('analysisDiagnostics').innerHTML=buildDiagnosticsSection(k,lvl,r);
   document.getElementById('analysisRecommendations').innerHTML=buildRecommendationsSection(k,lvl,r);
-  document.getElementById('analysisHistory').innerHTML=buildHistoryTable(k);
+  document.getElementById('analysisHistory').innerHTML=buildHistoryTable(k, getISOClassOverride());
   setTimeout(()=>attachRpmEditors(),100);  // NUEVO DeepSeek
 }
 
@@ -4023,7 +4216,7 @@ function updateAnalysisChart(){
   const d=machinesData.get(currentKey);if(!d)return;
 
   // ── v15 FIX 2a: calcular umbrales ANTES de leer el parámetro del dropdown ──
-  const isoTh = getISOThresholdsForKey(currentKey);
+  const isoTh = getISOThresholdsForKey(currentKey, getISOClassOverride());
 
   // ── v15 FIX 2b: auto-conmutar Vel_RMS → Disp_RMS para Agitadores ──────────
   // Si la tecnología requiere evaluación por desplazamiento Y el usuario tiene
@@ -4311,16 +4504,15 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 document.querySelectorAll('[data-sf]').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    statusFilter=btn.getAttribute('data-sf');
-    document.querySelectorAll('[data-sf]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    renderGrid();
+    setStatusFilter(btn.getAttribute('data-sf'));
   });
 });
 
-document.getElementById('searchBox').addEventListener('input',()=>renderGrid());
-document.getElementById('sortSel').addEventListener('change',()=>renderGrid());
-document.getElementById('equipFilter').addEventListener('change',()=>renderGrid());  // NUEVO DeepSeek
+function renderGridAndRanking(){ renderGrid(); renderRanking(); }
+document.getElementById('searchBox').addEventListener('input',renderGridAndRanking);
+document.getElementById('sortSel').addEventListener('change',renderGrid);
+// sortSel NO re-renderiza ranking: el ranking tiene su propio orden fijo por salud.
+document.getElementById('equipFilter').addEventListener('change',renderGridAndRanking);  // NUEVO DeepSeek
 document.getElementById('btnUpdateChart').addEventListener('click',updateAnalysisChart);
 document.getElementById('btnExportCSV').addEventListener('click',exportCSV);
 document.getElementById('paramSelect').addEventListener('change',updateAnalysisChart);
@@ -4332,10 +4524,14 @@ document.getElementById('btnSaveTh').addEventListener('click',()=>{
     const el=document.getElementById(`th_${k}`);
     if(el)thresholds[k]=parseFloat(el.value)||thresholds[k];
   }
-  saveConfig();renderDashboard();if(currentKey)loadAnalysis(currentKey);
+  saveConfig();
+  publicarConfigEnHub().catch(()=>{});
+  renderDashboard();if(currentKey)loadAnalysis(currentKey);
 });
 document.getElementById('btnResetTh').addEventListener('click',()=>{
-  thresholds={...DEFAULT_TH};saveConfig();renderConfig();renderDashboard();
+  thresholds={...DEFAULT_TH};saveConfig();
+  publicarConfigEnHub().catch(()=>{});
+  renderConfig();renderDashboard();
   if(currentKey)loadAnalysis(currentKey);
 });
 
@@ -4706,6 +4902,58 @@ Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta (sin
   return { prompt, lang, equipos };
 }
 
+// ── Flujo manual (sin API key) ─────────────────────────────
+// Copia el mismo prompt que usaría el flujo automático — datos + instrucciones
+// + formato JSON esperado — para pegarlo a mano en una IA web (ChatGPT,
+// Claude.ai, Gemini, etc.). La respuesta que el usuario pegue después en
+// "Procesar respuesta" se interpreta igual que la respuesta de una API, así
+// que el informe se ve y se puede guardar en la nube exactamente igual.
+function copiarPromptManual(){
+  const payload = buildAIPayload();
+  const st = document.getElementById('manualPromptStatus');
+  if(!payload){
+    st.style.color = 'var(--critical, #ef4444)';
+    st.textContent = '⚠️ No hay datos en el rango/alcance seleccionado.';
+    return;
+  }
+  const box = document.getElementById('aiManualPromptBox');
+  box.value = payload.prompt;
+  box.style.display = 'block';
+
+  const finish = (ok) => {
+    st.style.color = ok ? 'var(--good, #10c98a)' : 'var(--warning, #f0b429)';
+    st.textContent = ok
+      ? `✅ Prompt copiado al portapapeles (${payload.equipos.length} punto(s)). Pegalo en tu IA web.`
+      : '⚠️ No se pudo copiar automáticamente — seleccioná el texto de abajo y copiá con Ctrl+C.';
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload.prompt).then(()=>finish(true)).catch(()=>{ box.select(); finish(false); });
+  } else {
+    box.select();
+    finish(false);
+  }
+}
+
+// Toma lo que el usuario pegó desde la IA web y lo procesa igual que
+// generateAIReport() procesa la respuesta de la API: limpia backticks,
+// extrae el bloque JSON y lo parsea, y renderiza con renderAIReport().
+function procesarRespuestaManual(){
+  const raw = document.getElementById('aiManualResponse').value.trim();
+  if(!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
+  try{
+    let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if(jsonMatch) cleaned = jsonMatch[0];
+    const report = JSON.parse(cleaned);
+    lastAIReport = report;
+    document.getElementById('aiEmptyState').style.display = 'none';
+    renderAIReport(report);
+  }catch(err){
+    alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
+      '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
+  }
+}
+
 // ── Per-provider API call helpers ──────────────────────────
 
 async function callGemini(apiKey, model, prompt){
@@ -5045,67 +5293,405 @@ async function guardarEnLaNube(){
     : `☁️ ${ok} equipo(s) guardados en la nube correctamente.`;
 }
 
-// ── Guardar el informe OFFLINE (el que realmente se usa) en la nube ──
-function mapNivelASeveridad(nivel){
-  if(nivel === 'critical') return 'critico';
-  if(nivel === 'warning' || nivel === 'elevated') return 'atencion';
-  return 'ok';
-}
-
-async function guardarEnLaNubeOffline(){
-  if(!lastOfflineReport){ alert('Generá el informe offline primero.'); return; }
-  const statusEl = document.getElementById('nubeStatusOff');
-  const btn = document.getElementById('btnGuardarNubeOff');
-
+// Sube TODAS las mediciones crudas de VibraPro al hub (tabla mediciones).
+// A diferencia de guardarEnLaNube() — que solo sube el resumen del informe
+// IA a `analisis` — esto publica los parámetros medidos uno por uno, para
+// que el hub y los otros módulos puedan ver la señal cruda.
+//
+// Cada (equipId/ptCode) → N filas, una por fecha. El equipo se resuelve por
+// tag contra el catálogo compartido (buscarOCrearEquipo); si no existe, se
+// crea. El punto va dentro de datos.punto — la tabla mediciones no tiene
+// columna propia para eso.
+//
+// Upsert por (equipo_id, modulo, fecha): llamar varias veces NO duplica.
+async function guardarMedicionesEnNube(){
   if(typeof SatSync === 'undefined' || !SatSync.init()){
-    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero — la config se comparte entre este módulo y el hub.';
-    statusEl.style.color = 'var(--warning, #f0b429)';
-    return;
+    return { error: 'Sin conexión configurada. Conectá Supabase primero desde el hub (index.html).' };
   }
+  if(!machinesData.size) return { error: 'No hay mediciones para guardar.' };
 
-  const equipos = lastOfflineReport.equipList || [];
-  if(!equipos.length){
-    statusEl.textContent = '⚠️ El informe no trae equipos para guardar.';
-    return;
-  }
+  // 1) Resolver equipos en el hub: tag local → equipos.id
+  const tagsUnicos = new Set();
+  for(const k of machinesData.keys()) tagsUnicos.add(getEquipName(getEquipId(k)));
 
-  btn.disabled = true;
-  let ok = 0, fail = 0;
-  for(const eq of equipos){
-    const tag = eq.name || eq.eid;
-    if(!tag) { fail++; continue; }
-    const peorPunto = eq.points && eq.points[0];
-    const resumen = (peorPunto && peorPunto.diagnosis)
-      ? peorPunto.diagnosis
-      : `Estado ${eq.worstLevel} — salud ${eq.worstHealth}%`;
+  const tagToId = new Map();
+  let equiposOk = 0, equiposFail = 0;
+  for(const tag of tagsUnicos){
     try{
-      await SatSync.guardarAnalisis({
-        modulo: 'vibra_pro',
-        equipo_tag: tag,
-        severidad: mapNivelASeveridad(eq.worstLevel),
-        resumen,
-        datos: {
-          eid: eq.eid, name: eq.name, type: eq.type,
-          powerKW: eq.powerKW, rpmBase: eq.rpmBase,
-          worstLevel: eq.worstLevel, worstHealth: eq.worstHealth,
-          puntos: (eq.points||[]).map(p => ({
-            pt: p.pt, desc: p.desc, health: p.health, level: p.level,
-            diagnosis: p.diagnosis, faults: p.faults, lastReading: p.lastReading,
-            nRecords: p.nRecords
-          }))
-        }
-      });
-      ok++;
+      // Pasar el tipo local como `extra`: buscarOCrearEquipo solo rellena
+      // campos vacíos (nunca pisa un tipo ya cargado en la nube), así que es
+      // seguro — y evita que el equipo quede con tipo:null en Supabase si
+      // esta es la primera vez que se publica desde acá.
+      const eqLocal = [...equipmentRegistry.values()].find(e => normalizeEquipStr(e.name) === normalizeEquipStr(tag));
+      const extra = eqLocal ? { tipo: eqLocal.type } : {};
+      const eq = await SatSync.buscarOCrearEquipo(tag, extra);
+      if(eq && eq.id) tagToId.set(tag, eq.id);
+      equiposOk++;
     }catch(err){
-      console.error('[SatSync] error guardando', tag, err);
-      fail++;
+      console.warn('[SatSync] no se pudo resolver equipo', tag, err);
+      equiposFail++;
     }
   }
-  btn.disabled = false;
-  statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
-  statusEl.textContent = fail
-    ? `☁️ Guardados ${ok} de ${equipos.length} equipos (${fail} con error — ver consola).`
-    : `☁️ ${ok} equipo(s) guardados en la nube correctamente.`;
+  if(!tagToId.size){
+    return { error: 'No se pudo resolver ningún equipo en el hub.', equiposOk, equiposFail };
+  }
+
+  // 2) Armar filas de mediciones (una por fecha por punto)
+  const rows = [];
+  for(const [k, d] of machinesData.entries()){
+    const tag = getEquipName(getEquipId(k));
+    const equipoId = tagToId.get(tag);
+    if(!equipoId) continue;
+    const ptCode = getPointCode(k);
+    for(let i=0;i<d.dates.length;i++){
+      const nz = v => (typeof v === 'number' && !isNaN(v)) ? v : null;
+      const datos = {
+        punto:     ptCode,
+        vel_rms:   nz(d.params.Vel_RMS?.[i]),
+        vel_peak:  nz(d.params.Vel_Peak?.[i]),
+        acc_peak:  nz(d.params.Acc_Peak?.[i]),
+        acc_rms:   nz(d.params.Acc_RMS?.[i]),
+        hf_peak:   nz(d.params.HF_Peak?.[i]),
+        hf_rms:    nz(d.params.HF_RMS?.[i]),
+        disp_peak: nz(d.params.Disp_Peak?.[i]),
+        disp_rms:  nz(d.params.Disp_RMS?.[i]),
+        temp:      nz(d.params.Temp?.[i]),
+        cfplus:    nz(d.params.CFPlus?.[i]),
+        rpm:       (d.rpms && !isNaN(d.rpms[i])) ? d.rpms[i] : null,
+      };
+      rows.push({
+        equipo_id: equipoId,
+        fecha:     d.dates[i].toISOString(),
+        datos,
+        obs:       null,
+      });
+    }
+  }
+  if(!rows.length) return { error: 'No se pudieron armar mediciones (revisar equipos).' };
+
+  // 3) Subir en lotes — SatSync.guardarMediciones ya re-lotea a 500 internamente,
+  //    pero hacemos un lote de 200 acá para reportar progreso granular.
+  const LOTE = 200;
+  let ok = 0, fail = 0;
+  for(let i=0;i<rows.length;i+=LOTE){
+    const lote = rows.slice(i, i+LOTE);
+    try{
+      await SatSync.guardarMediciones('vibra_pro', lote);
+      ok += lote.length;
+    }catch(err){
+      console.warn('[SatSync] lote de mediciones falló', err);
+      fail += lote.length;
+    }
+  }
+  return { ok, fail, equiposOk, equiposFail };
+}
+
+async function onSubirMedicionesClick(){
+  const btn = document.getElementById('btnSubirMediciones');
+  const st  = document.getElementById('subirMedicionesStatus');
+  if(btn.disabled) return;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Subiendo…';
+  st.style.color = 'var(--muted)';
+  st.textContent = '';
+
+  try{
+    const r = await guardarMedicionesEnNube();
+    if(r.error){
+      st.style.color = 'var(--critical)';
+      st.textContent = '⚠️ ' + r.error;
+      return;
+    }
+    if(r.fail){
+      st.style.color = 'var(--warning)';
+      st.textContent = `☁️ Subidas ${r.ok} mediciones (${r.fail} con error — ver consola). Equipos: ${r.equiposOk} OK, ${r.equiposFail} fallaron.`;
+    } else {
+      st.style.color = 'var(--good)';
+      st.textContent = `☁️ ${r.ok} mediciones subidas correctamente (${r.equiposOk} equipo(s)).`;
+    }
+  }catch(err){
+    console.error('[SatSync] error subiendo mediciones', err);
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ Error: ' + (err.message || err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// Baja del hub las mediciones ya subidas por otras máquinas/instalaciones y
+// las mergea en machinesData. El merge es por (equipo, punto, fecha): si una
+// fecha ya existe localmente, no se toca. Equipos del hub que no existan
+// acá se crean con needsConfig:true — no conocemos kW/RPM locales y no
+// queremos adivinar y romper los umbrales ISO.
+async function bajarMedicionesDelHub(){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    return { error: 'Sin conexión configurada. Conectá Supabase primero desde el hub (index.html).' };
+  }
+
+  let equiposNube, medicionesNube;
+  try{
+    equiposNube    = await SatSync.listarEquipos();
+    medicionesNube = await SatSync.listarMediciones('vibra_pro');
+  }catch(err){
+    return { error: 'Error leyendo del hub: ' + (err.message || err) };
+  }
+
+  if (!medicionesNube.length){
+    return { ok: true, total: 0, nuevosEquipos: 0, nuevasLecturas: 0, puntosNuevos: 0, puntosTocados: 0 };
+  }
+
+  const idToTag = new Map(equiposNube.map(e => [e.id, e.tag]));
+  const nz = v => (typeof v === 'number' && isFinite(v)) ? v : NaN;
+
+  let nuevosEquipos = 0, nuevasLecturas = 0, puntosNuevos = 0;
+  const puntosTocados = new Set();
+
+  for (const m of medicionesNube){
+    const tag = idToTag.get(m.equipo_id);
+    if (!tag) continue;
+
+    // Localizar o crear el equipo local por tag
+    let equipId = null;
+    for (const [id, eq] of equipmentRegistry.entries()){
+      if (normalizeEquipStr(eq.name) === normalizeEquipStr(tag)){ equipId = id; break; }
+    }
+    if (!equipId){
+      equipId = genEquipId();
+      equipmentRegistry.set(equipId, {
+        name: tag, type: 'Otro', powerKW: 0, rpmBase: 0,
+        mountType: 'rigid', machineTypeISO: 'Rotativa General / Bomba',
+        needsConfig: true
+      });
+      nuevosEquipos++;
+    }
+
+    const punto = m.datos && m.datos.punto;
+    if (!punto) continue;
+
+    const key   = `${equipId}/${punto}`;
+    const fecha = new Date(m.fecha);
+    if (isNaN(fecha)) continue;
+
+    // Un único punto temporal por fila del hub
+    const dd = m.datos || {};
+    const incoming = {
+      dates: [fecha],
+      params: {
+        Acc_Peak:  [nz(dd.acc_peak)],
+        Acc_RMS:   [nz(dd.acc_rms)],
+        Acc_PkPk:  [NaN],            // no viaja en el upload
+        Vel_Peak:  [nz(dd.vel_peak)],
+        Vel_RMS:   [nz(dd.vel_rms)],
+        Vel_PkPk:  [NaN],
+        Disp_Peak: [nz(dd.disp_peak)],
+        Disp_RMS:  [nz(dd.disp_rms)],
+        Disp_PkPk: [NaN],
+        HF_Peak:   [nz(dd.hf_peak)],
+        HF_RMS:    [nz(dd.hf_rms)],
+        HF_PkPk:   [NaN],
+        Temp:      [nz(dd.temp)],
+        CFPlus:    [nz(dd.cfplus)],
+        FaseMax:   [''],
+      },
+      rpms: [nz(dd.rpm)]
+    };
+
+    const existing = machinesData.get(key);
+    if (existing){
+      const before = existing.dates.length;
+      const merged = mergeData(existing, incoming);
+      if (merged.dates.length > before){
+        nuevasLecturas++;
+        machinesData.set(key, merged);
+      }
+      // Si no creció, la fecha ya existía — nada que hacer
+    } else {
+      machinesData.set(key, incoming);
+      puntosNuevos++;
+      nuevasLecturas++;
+    }
+    puntosTocados.add(key);
+  }
+
+  if (nuevosEquipos || nuevasLecturas){
+    saveConfig();
+    renderDashboard();
+    renderMachineList();
+    renderEaEquipList();
+    renderConfig();
+  }
+
+  return {
+    ok: true,
+    total: medicionesNube.length,
+    nuevosEquipos, nuevasLecturas, puntosNuevos,
+    puntosTocados: puntosTocados.size
+  };
+}
+
+async function onBajarMedicionesClick(){
+  const btn = document.getElementById('btnBajarMediciones');
+  const st  = document.getElementById('bajarMedicionesStatus');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Bajando…';
+  st.style.color = 'var(--muted)';
+  st.textContent = '';
+
+  try{
+    const r = await bajarMedicionesDelHub();
+    if (r.error){
+      st.style.color = 'var(--critical)';
+      st.textContent = '⚠️ ' + r.error;
+      return;
+    }
+    if (!r.total){
+      st.style.color = 'var(--muted)';
+      st.textContent = 'No hay mediciones en el hub todavía.';
+      return;
+    }
+    const partes = [];
+    if (r.nuevosEquipos)  partes.push(`${r.nuevosEquipos} equipo(s) nuevo(s)`);
+    if (r.nuevasLecturas) partes.push(`${r.nuevasLecturas} lectura(s) nueva(s) en ${r.puntosTocados} punto(s)`);
+    st.style.color = 'var(--good)';
+    st.textContent = partes.length
+      ? `☁️ ${r.total} filas leídas — ${partes.join(', ')}.`
+      : `☁️ ${r.total} filas leídas — todo estaba ya sincronizado.`;
+    if (r.nuevosEquipos){
+      st.textContent += ' ⚠️ Los equipos nuevos quedaron marcados como PENDIENTES DE CONFIGURACIÓN.';
+    }
+  }catch(err){
+    console.error('[SatSync] error bajando mediciones', err);
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ Error: ' + (err.message || err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONFIG SYNC — thresholds / prefixMap / instrumentConfig
+// ═══════════════════════════════════════════════════════════
+// Sincroniza la configuración "compartida" entre dispositivos:
+//   - thresholds       (umbrales globales de alarma)
+//   - prefixMap        (mapeo de códigos de punto)
+//   - instrumentConfig (nombre/modelo del instrumento)
+// NO sincroniza: equipmentRegistry, machineMetadata, machinesData (ya
+// viajan por buscarOCrearEquipo / guardarMediciones), ni las API keys
+// (locales por seguridad).
+//
+// Política: la nube es la fuente de verdad cuando hay conflicto. En startup
+// bajamos (si hay algo nuevo) y pisamos lo local. Cuando el usuario guarda
+// cambios (umbrales, mapeo, instrumento), publicamos. Si dos dispositivos
+// editan al mismo tiempo, el último guardado gana — mismo criterio que
+// cualquier config compartida en la nube.
+
+let _cfgSyncEnProgreso = false;
+
+async function sincronizarConfigConHub(silencioso = true){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    if (!silencioso) throw new Error('Sin conexión configurada. Conectá Supabase primero desde el hub (index.html).');
+    return false;
+  }
+  if (_cfgSyncEnProgreso) return false;
+  _cfgSyncEnProgreso = true;
+  try{
+    const cfg = await SatSync.cargarConfigApp('vibra_pro');
+    if (!cfg || typeof cfg !== 'object') return false;
+
+    let adopto = false;
+    if (cfg.thresholds && typeof cfg.thresholds === 'object'){
+      thresholds = {...DEFAULT_TH, ...cfg.thresholds};
+      adopto = true;
+    }
+    if (cfg.prefixMap && typeof cfg.prefixMap === 'object'){
+      prefixMap = {...DEFAULT_PREFIX_MAP, ...cfg.prefixMap};
+      adopto = true;
+    }
+    if (cfg.instrumentConfig && typeof cfg.instrumentConfig === 'object'){
+      instrumentConfig = {...instrumentConfig, ...cfg.instrumentConfig};
+      adopto = true;
+    }
+    if (!adopto) return false;
+
+    saveConfig();
+    // Repintar todo lo que depende de thresholds / prefixMap / instrumentConfig
+    renderConfig();
+    renderInstrumentConfig();
+    renderDashboard();
+    if (currentKey) loadAnalysis(currentKey);
+    return true;
+  }catch(err){
+    if (silencioso){ console.warn('[SatSync] no se pudo bajar config', err); return false; }
+    throw err;
+  } finally {
+    _cfgSyncEnProgreso = false;
+  }
+}
+
+async function publicarConfigEnHub(){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) throw new Error('Sin conexión configurada.');
+  await SatSync.guardarConfigApp('vibra_pro', {
+    version: 1,
+    thresholds,
+    prefixMap,
+    instrumentConfig,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+// Handlers de los dos botones manuales (los automaticos van silenciosos).
+async function onBajarConfigClick(){
+  const btn = document.getElementById('btnBajarConfig');
+  const st  = document.getElementById('configSyncStatus');
+  if(btn.disabled) return;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Bajando…';
+  st.style.color = 'var(--muted)';
+  st.textContent = '';
+  try{
+    const ok = await sincronizarConfigConHub(false);
+    if (ok){
+      st.style.color = 'var(--good)';
+      st.textContent = '✅ Configuración adoptada desde el hub.';
+    } else {
+      st.style.color = 'var(--muted)';
+      st.textContent = 'El hub no tiene configuración para Vibra Pro todavía.';
+    }
+  }catch(err){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ ' + (err.message || err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function onSubirConfigClick(){
+  const btn = document.getElementById('btnSubirConfig');
+  const st  = document.getElementById('configSyncStatus');
+  if(btn.disabled) return;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Subiendo…';
+  st.style.color = 'var(--muted)';
+  st.textContent = '';
+  try{
+    await publicarConfigEnHub();
+    st.style.color = 'var(--good)';
+    st.textContent = '✅ Configuración publicada en el hub.';
+  }catch(err){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ ' + (err.message || err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5306,10 +5892,21 @@ function renderEaEquipList(){
     cont.innerHTML = '<div style="padding:12px;font-size:.8rem;color:var(--muted);">Sin datos cargados.</div>';
     return;
   }
+  // Filtro por texto — opcional. Si el input no existiera (versión vieja en
+  // caché, o render llamado desde un contexto sin UI), simplemente no filtra.
+  const searchEl = document.getElementById('eaSearchBox');
+  const q = searchEl ? normalizeEquipStr(searchEl.value.trim()) : '';
+
   let html = '';
   for(const [id, eq] of equipmentRegistry.entries()){
     const hasData = [...machinesData.keys()].some(k => k.startsWith(id + '/'));
     if(!hasData) continue;
+
+    if (q){
+      const blob = normalizeEquipStr(`${eq.name || ''} ${eq.type || ''}`);
+      if (!blob.includes(q)) continue;
+    }
+
     const res = diagnoseEquipment(id);
     if(!res) continue;
     const col = LEVEL_COLOR[res.equipLevel];
@@ -5324,7 +5921,12 @@ function renderEaEquipList(){
       <span class="equip-pick-badge mbadge ${badgeCls}">${statusLabel}</span>
     </button>`;
   }
-  if(!html) html = '<div style="padding:12px;font-size:.8rem;color:var(--muted);">Sin equipos con datos.</div>';
+  if(!html){
+    const term = searchEl ? searchEl.value : '';
+    html = q
+      ? `<div style="padding:12px;font-size:.8rem;color:var(--muted);">Sin coincidencias para "${escHtml(term)}".</div>`
+      : '<div style="padding:12px;font-size:.8rem;color:var(--muted);">Sin equipos con datos.</div>';
+  }
   cont.innerHTML = html;
 }
 
@@ -6348,7 +6950,6 @@ function offBuildReportData(keys){
 }
 
 // ── Main generate function ───────────────────────────────────
-let lastOfflineReport = null;
 function generateOfflineReport(){
   if(!machinesData.size){ alert('Primero cargá datos de equipos.'); return; }
 
@@ -6369,7 +6970,6 @@ function generateOfflineReport(){
   if(!keys.length){ alert('No hay datos en el rango seleccionado.'); return; }
 
   const data = offBuildReportData(keys);
-  lastOfflineReport = data;
   offRenderReport(data, repType, scope);
 }
 
@@ -6796,6 +7396,7 @@ function offCopyReport(){
 loadConfig();
 renderConfig();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
+sincronizarConfigConHub(true).catch(()=>{});  // silencioso, best-effort
 if(machinesData.size>0){
   renderDashboard();
   renderMachineList();
