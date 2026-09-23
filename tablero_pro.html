@@ -316,6 +316,56 @@ header{
     text-transform:uppercase;font-size:.65rem;letter-spacing:.5px;flex-shrink:0;
   }
 }
+/* ── INFORME IA ── */
+.ai-scope-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:18px;}
+.ai-scope-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+.ai-scope-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.ai-radio-lbl{display:flex;align-items:center;gap:6px;font-size:.9rem;cursor:pointer;color:var(--text);}
+.ai-radio-lbl input[type=radio]{accent-color:var(--accent);cursor:pointer;}
+.btn-ai-generate{background:linear-gradient(135deg,#3b82f6,#1e40af);color:#fff;border:none;padding:12px 30px;border-radius:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:.5px;transition:all .2s;box-shadow:0 4px 20px rgba(59,130,246,.3);}
+.btn-ai-generate:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(59,130,246,.5);}
+.btn-ai-generate:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.ai-summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:22px;}
+.ai-sum-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px;}
+.ai-sum-card-icon{font-size:1.8rem;}
+.ai-sum-card-val{font-size:1.7rem;font-weight:700;font-family:'Share Tech Mono';}
+.ai-sum-card-lbl{font-size:.72rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
+.ai-equip-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;}
+.ai-equip-card-header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.ai-equip-name{font-size:1rem;font-weight:700;color:#fff;}
+.ai-equip-meta{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.ai-equip-card-body{padding:16px 20px;}
+.ai-finding{background:var(--card2);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:.87rem;color:var(--text);border-left:3px solid var(--border2);line-height:1.6;}
+.ai-finding.critical{border-left-color:var(--critical);}
+.ai-finding.warning{border-left-color:var(--warning);}
+.ai-finding.elevated{border-left-color:var(--elevated);}
+.ai-finding.good{border-left-color:var(--good);}
+.ai-rec-list{list-style:none;padding:0;margin:0;}
+.ai-rec-list li{padding:6px 0 6px 22px;border-bottom:1px solid var(--border);font-size:.86rem;color:var(--text);position:relative;}
+.ai-rec-list li::before{content:'→';position:absolute;left:4px;color:var(--accent2);}
+.ai-rec-list li:last-child{border-bottom:none;}
+.ai-section-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:12px 0 6px;}
+.ai-fleet-box{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:18px 22px;margin-bottom:20px;}
+.ai-fleet-box-title{font-size:.72rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.ai-fleet-text{font-size:.92rem;color:var(--text);line-height:1.7;}
+.ai-plan-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px;}
+.ai-plan-table th{background:var(--card2);padding:9px 12px;text-align:left;font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);}
+.ai-plan-table td{padding:9px 12px;border-bottom:1px solid rgba(30,45,69,.5);color:var(--text);}
+.ai-plan-table tr:hover td{background:rgba(255,255,255,.02);}
+.ai-prio-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.ai-prio-1{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);}
+.ai-prio-2{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.ai-prio-3{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.ai-prio-4{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.ai-json-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;}
+.ai-json-pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'Share Tech Mono';font-size:.78rem;color:#a8c5e8;overflow-x:auto;max-height:500px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.ai-step-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:14px;}
+.ai-step-title{font-size:.88rem;font-weight:700;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.ai-step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:.75rem;font-weight:800;}
+.ai-step-hint{font-size:.8rem;color:var(--muted);margin:0 0 10px;}
+.ai-prompt-box,.ai-response-box{width:100%;min-height:140px;font-family:'Share Tech Mono',monospace;font-size:.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;resize:vertical;}
+.ai-response-box{min-height:120px;font-size:.78rem;}
+.ai-status{font-size:.8rem;color:var(--muted);margin-left:8px;}
 </style>
 </head>
 <body>
@@ -478,14 +528,25 @@ header{
         </div>
       </div>
 
-      <div class="modal-section-title">⚡ Corriente (A) y Tensión (V)</div>
+      <div class="modal-section-title">⚡ Corrientes de línea (A)</div>
       <div class="form-grid">
         <div class="fld"><label>Corriente R (A)</label><input type="number" step="0.1" id="me_iR"></div>
         <div class="fld"><label>Corriente S (A)</label><input type="number" step="0.1" id="me_iS"></div>
         <div class="fld"><label>Corriente T (A)</label><input type="number" step="0.1" id="me_iT"></div>
-        <div class="fld"><label>Tensión R (V)</label><input type="number" step="0.1" id="me_vR"></div>
-        <div class="fld"><label>Tensión S (V)</label><input type="number" step="0.1" id="me_vS"></div>
-        <div class="fld"><label>Tensión T (V)</label><input type="number" step="0.1" id="me_vT"></div>
+      </div>
+
+      <div class="modal-section-title">🔺 Tensión de línea (obligatorio)</div>
+      <div class="form-grid">
+        <div class="fld"><label>R-S (V)</label><input type="number" step="0.1" id="me_vRS"></div>
+        <div class="fld"><label>S-T (V)</label><input type="number" step="0.1" id="me_vST"></div>
+        <div class="fld"><label>R-T (V)</label><input type="number" step="0.1" id="me_vTR"></div>
+      </div>
+
+      <div class="modal-section-title">🔻 Tensión fase-neutro (opcional, si hay neutro)</div>
+      <div class="form-grid">
+        <div class="fld"><label>R-N (V)</label><input type="number" step="0.1" id="me_vRN"></div>
+        <div class="fld"><label>S-N (V)</label><input type="number" step="0.1" id="me_vSN"></div>
+        <div class="fld"><label>T-N (V)</label><input type="number" step="0.1" id="me_vTN"></div>
       </div>
 
       <div class="modal-section-title">📊 Calidad de energía y aislación</div>
@@ -589,8 +650,9 @@ let detailChart      = null;
 // v1 (histórico) = umbrales iniciales · v2 (actual) = rAisl recalibrado a
 // IEEE 43-2013 [100,25,5]. Subir este número cada vez que cambien
 // DEFAULT_THRESHOLDS o se agregue/quite un parámetro de diagnóstico.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 let thresholdsMigrated = false; // true si se descartaron umbrales de localStorage por ser de un esquema viejo
+let voltagesMigrated = false; // true si se reinterpretaron V_R/V_S/V_T como V_RS/V_ST/V_TR (línea-línea)
 
 // Supabase es la ÚNICA fuente de verdad: fichas de tablero (equipos.ficha),
 // historial de lecturas (mediciones) y umbrales (config_apps). localStorage
@@ -605,7 +667,9 @@ let _equipoIds = new Map();    // TAG (nombre de tablero) -> equipos.id
 const isN = v => typeof v === 'number' && isFinite(v);
 const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
 // Parámetros numéricos de una lectura de circuito vs. el único campo de texto (fase con temp. máxima).
-const NUM_PARAM_KEYS = ['TempAmb','TempMax','I_R','I_S','I_T','V_R','V_S','V_T','DesbI','DesbV','FP','THD_V','R_Aisl'];
+const NUM_PARAM_KEYS = ['TempAmb','TempMax','I_R','I_S','I_T',
+  'V_RS','V_ST','V_TR','V_RN','V_SN','V_TN',
+  'DesbI','DesbV','FP','THD_V','R_Aisl'];
 const STR_PARAM_KEYS = ['FaseMax'];
 
 function loadState() {
@@ -625,7 +689,18 @@ function loadState() {
     if (c.circuitsMeta) for (const [k,v] of Object.entries(c.circuitsMeta)) circuitsMeta.set(k,v);
     if (c.readingsData) {
       for (const [k,v] of Object.entries(c.readingsData)) {
-        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: v.params, obs: v.obs || [] });
+        const params = v.params || {};
+        // Migración pre-v3: V_R/V_S/V_T eran ambiguos (nunca se supo si eran
+        // línea-línea o fase-neutro). Se asume línea-línea — es lo que un técnico
+        // mide primero en un TGBT. Aviso en el informe.
+        if (params.V_R && !params.V_RS){
+          params.V_RS = params.V_R;
+          params.V_ST = params.V_S;
+          params.V_TR = params.V_T;
+          delete params.V_R; delete params.V_S; delete params.V_T;
+          voltagesMigrated = true;
+        }
+        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params, obs: v.obs || [] });
       }
     }
     if (c.nube){ _sucia = !!c.nube.sucia; _cfgSucia = !!c.nube.cfgSucia; _pend = c.nube.pend || []; }
@@ -633,6 +708,10 @@ function loadState() {
     // Los datos crudos no se tocan — lo único que cambia es la EVALUACIÓN: los
     // mismos valores se reevalúan solos con los umbrales nuevos en el próximo render.
     if (thresholdsMigrated) { _cfgSucia = true; escribirCache(); } // persiste ya con el esquema vigente y sube el cambio
+    // Si migramos tensiones, marcamos la caché como sucia para que subirCambios()
+    // reescriba esas mediciones en Supabase con las claves nuevas (V_RS/V_ST/V_TR)
+    // y los datos viejos queden normalizados.
+    if (voltagesMigrated) { _sucia = true; escribirCache(); }
   } catch(e){ console.warn('loadState error', e); }
 }
 function escribirCache() {
@@ -825,7 +904,18 @@ async function bajarTodo(){
         }
         const e = lect.get(key);
         e.dates.push(fecha); e.obs.push(cd.obs || '');
-        NUM_PARAM_KEYS.forEach(k => { const v = cd.params?.[k]; e.params[k].push(isN(v) ? v : NaN); });
+        NUM_PARAM_KEYS.forEach(k => {
+          let v = cd.params?.[k];
+          // Fallback a los keys pre-v3: si Supabase todavía tiene V_R/V_S/V_T,
+          // los mapeamos a los nuevos (se asume línea-línea, mismo criterio que
+          // la migración local de loadState).
+          if ((v === undefined || v === null) && cd.params) {
+            if (k === 'V_RS') v = cd.params.V_R;
+            else if (k === 'V_ST') v = cd.params.V_S;
+            else if (k === 'V_TR') v = cd.params.V_T;
+          }
+          e.params[k].push(isN(v) ? v : NaN);
+        });
         STR_PARAM_KEYS.forEach(k => e.params[k].push(cd.params?.[k] || ''));
       }
     }
@@ -936,6 +1026,8 @@ function evalReading(params, n){
   const fp     = p.FP?.[n];
   const rAisl  = p.R_Aisl?.[n];
   const faseMax = p.FaseMax?.[n] || '';
+  const vRS = p.V_RS?.[n], vST = p.V_ST?.[n], vTR = p.V_TR?.[n];
+  const vRN = p.V_RN?.[n], vSN = p.V_SN?.[n], vTN = p.V_TN?.[n];
 
   const subs = {
     deltaT: levelOf(deltaT, thresholds.deltaT, false),
@@ -947,7 +1039,8 @@ function evalReading(params, n){
   };
   let overall = 0;
   for (const k in subs) if (subs[k] > overall) overall = subs[k];
-  return { subs, overall, deltaT, desbV, desbI, thdV, fp, rAisl, faseMax };
+  return { subs, overall, deltaT, desbV, desbI, thdV, fp, rAisl, faseMax,
+           vRS, vST, vTR, vRN, vSN, vTN };
 }
 
 function computeDesbalance(a,b,c){
@@ -988,12 +1081,22 @@ function diagnoseCircuit(k){
 // ═══════════════════════════════════════════════════════════
 //  5. IMPORT (Excel / CSV)
 // ═══════════════════════════════════════════════════════════
-const TEMPLATE_HEADERS = ['Tablero','TipoTablero','Circuito','TipoCircuito','Sistema','Fecha','Temp_Ambiente_C','Temp_Max_C','Fase_Max','I_R_A','I_S_A','I_T_A','V_R_V','V_S_V','V_T_V','FP','THD_V_%','R_Aislacion_MOhm','Observaciones'];
+const TEMPLATE_HEADERS = ['Tablero','TipoTablero','Circuito','TipoCircuito','Sistema','Fecha',
+  'Temp_Ambiente_C','Temp_Max_C','Fase_Max',
+  'I_R_A','I_S_A','I_T_A',
+  'V_RS_V','V_ST_V','V_TR_V',
+  'V_RN_V','V_SN_V','V_TN_V',
+  'FP','THD_V_%','R_Aislacion_MOhm','Observaciones'];
 
 function downloadTemplate(){
   const sample = [
     TEMPLATE_HEADERS,
-    ['TAB-GENERAL-PLANTA','Tablero General (TGBT)','Alimentador Principal','Alimentador Principal','Trifásico','2026-08-01',32,38,'R',180,175,182,221,220,222,0.94,3.2,250,'Ejemplo de fila — Sistema: Trifásico/Bifásico/Monofásico (si se omite, se asume Trifásico)'],
+    ['TAB-GENERAL-PLANTA','Tablero General (TGBT)','Alimentador Principal','Alimentador Principal','Trifásico','2026-08-01',
+     32,38,'R',
+     180,175,182,
+     380,381,379,
+     220,221,219,
+     0.94,3.2,250,'Ejemplo — V_RS/V_ST/V_TR son línea-línea (obligatorio); V_RN/V_SN/V_TN son fase-neutro (opcional)'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(sample);
   const wb = XLSX.utils.book_new();
@@ -1094,23 +1197,35 @@ function importRows(rows){
     const iR = numOrNaN(findCol(row,['I_R_A']));
     const iS = numOrNaN(findCol(row,['I_S_A']));
     const iT = numOrNaN(findCol(row,['I_T_A']));
-    const vR = numOrNaN(findCol(row,['V_R_V']));
-    const vS = numOrNaN(findCol(row,['V_S_V']));
-    const vT = numOrNaN(findCol(row,['V_T_V']));
+    // Acepta tanto el formato nuevo (V_RS_V…) como el viejo (V_R_V…) para no
+    // romper Excels ya armados por el usuario. Si viene el viejo, se asume
+    // línea-línea (ver migración en loadState).
+    const vRS = numOrNaN(findCol(row,['V_RS_V','V_R_V']));
+    const vST = numOrNaN(findCol(row,['V_ST_V','V_S_V']));
+    const vTR = numOrNaN(findCol(row,['V_TR_V','V_T_V']));
+    const vRN = numOrNaN(findCol(row,['V_RN_V']));
+    const vSN = numOrNaN(findCol(row,['V_SN_V']));
+    const vTN = numOrNaN(findCol(row,['V_TN_V']));
     const fp = numOrNaN(findCol(row,['FP']));
     const thdV = numOrNaN(findCol(row,['THD_V_%','THD_V']));
     const rAisl = numOrNaN(findCol(row,['R_Aislacion_MOhm']));
     const obs = String(findCol(row,['Observaciones']) || '');
 
     const desbI = isTrifasico(key) ? computeDesbalance(iR,iS,iT) : NaN;
-    const desbV = isTrifasico(key) ? computeDesbalance(vR,vS,vT) : NaN;
+    const desbV = isTrifasico(key) ? computeDesbalance(vRS,vST,vTR) : NaN;
 
-    if (!touched.has(key)) touched.set(key, {dates:[], params:{TempAmb:[],TempMax:[],FaseMax:[],I_R:[],I_S:[],I_T:[],V_R:[],V_S:[],V_T:[],DesbI:[],DesbV:[],FP:[],THD_V:[],R_Aisl:[]}, obs:[]});
+    if (!touched.has(key)) touched.set(key, {dates:[], params:{
+      TempAmb:[],TempMax:[],FaseMax:[],
+      I_R:[],I_S:[],I_T:[],
+      V_RS:[],V_ST:[],V_TR:[],V_RN:[],V_SN:[],V_TN:[],
+      DesbI:[],DesbV:[],FP:[],THD_V:[],R_Aisl:[]
+    }, obs:[]});
     const t = touched.get(key);
     t.dates.push(fecha);
     t.params.TempAmb.push(tempAmb); t.params.TempMax.push(tempMax); t.params.FaseMax.push(faseMax);
     t.params.I_R.push(iR); t.params.I_S.push(iS); t.params.I_T.push(iT);
-    t.params.V_R.push(vR); t.params.V_S.push(vS); t.params.V_T.push(vT);
+    t.params.V_RS.push(vRS); t.params.V_ST.push(vST); t.params.V_TR.push(vTR);
+    t.params.V_RN.push(vRN); t.params.V_SN.push(vSN); t.params.V_TN.push(vTN);
     t.params.DesbI.push(desbI); t.params.DesbV.push(desbV);
     t.params.FP.push(fp); t.params.THD_V.push(thdV); t.params.R_Aisl.push(rAisl);
     t.obs.push(obs);
@@ -1164,7 +1279,7 @@ function openManualEntry(){
   if (!newCircuitSystem.dataset.filled){ newCircuitSystem.innerHTML = CIRCUIT_SYSTEMS.map(t=>`<option value="${t}">${t}</option>`).join(''); newCircuitSystem.dataset.filled='1'; }
 
   // limpiar campos
-  ['me_tempAmb','me_tempMax','me_iR','me_iS','me_iT','me_vR','me_vS','me_vT','me_fp','me_thdV','me_rAisl','me_newPanelName','me_newCircuitName','me_obs'].forEach(id=>document.getElementById(id).value='');
+  ['me_tempAmb','me_tempMax','me_iR','me_iS','me_iT','me_vRS','me_vST','me_vTR','me_vRN','me_vSN','me_vTN','me_fp','me_thdV','me_rAisl','me_newPanelName','me_newCircuitName','me_obs'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('me_faseMax').value = '';
   document.getElementById('me_fecha').value = new Date().toISOString().slice(0,10);
 
@@ -1237,15 +1352,31 @@ function saveManualReading(){
   const tempMax = numOrUndef('me_tempMax');
   const faseMax = document.getElementById('me_faseMax').value;
   const iR = numOrUndef('me_iR'), iS = numOrUndef('me_iS'), iT = numOrUndef('me_iT');
-  const vR = numOrUndef('me_vR'), vS = numOrUndef('me_vS'), vT = numOrUndef('me_vT');
+  const vRS = numOrUndef('me_vRS'), vST = numOrUndef('me_vST'), vTR = numOrUndef('me_vTR');
+  const vRN = numOrUndef('me_vRN'), vSN = numOrUndef('me_vSN'), vTN = numOrUndef('me_vTN');
+
+  // Chequeo cruzado V_RS ≈ √3 × V_RN (solo si ambos están)
+  if (vRS && vRN){
+    const ratio = vRS / vRN;
+    if (Math.abs(ratio - 1.732) / 1.732 > 0.15){
+      if (!confirm(`La relación V_RS / V_RN = ${ratio.toFixed(3)} se aleja del esperado ≈1.732 (>15%). Posible neutro flojo o carga monofásica concentrada. ¿Confirmás que los valores son correctos?`)) return;
+    }
+  }
+
   const fp = numOrUndef('me_fp'), thdV = numOrUndef('me_thdV'), rAisl = numOrUndef('me_rAisl');
   const obs = document.getElementById('me_obs').value.trim();
   const desbI = isTrifasico(key) ? computeDesbalance(iR,iS,iT) : NaN;
-  const desbV = isTrifasico(key) ? computeDesbalance(vR,vS,vT) : NaN;
+  const desbV = isTrifasico(key) ? computeDesbalance(vRS,vST,vTR) : NaN;
 
   const incoming = {
     dates:[fecha],
-    params:{ TempAmb:[tempAmb], TempMax:[tempMax], FaseMax:[faseMax], I_R:[iR], I_S:[iS], I_T:[iT], V_R:[vR], V_S:[vS], V_T:[vT], DesbI:[desbI], DesbV:[desbV], FP:[fp], THD_V:[thdV], R_Aisl:[rAisl] },
+    params:{
+      TempAmb:[tempAmb], TempMax:[tempMax], FaseMax:[faseMax],
+      I_R:[iR], I_S:[iS], I_T:[iT],
+      V_RS:[vRS], V_ST:[vST], V_TR:[vTR],
+      V_RN:[vRN], V_SN:[vSN], V_TN:[vTN],
+      DesbI:[desbI], DesbV:[desbV], FP:[fp], THD_V:[thdV], R_Aisl:[rAisl]
+    },
     obs:[obs]
   };
   const existing = readingsData.get(key);
@@ -1482,13 +1613,17 @@ function openDetail(k){
   <div class="modal-section-title">Historial reciente</div>
   <div style="overflow-x:auto;">
     <table class="rtable">
-      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th></tr></thead>
       <tbody>${d.dates.map((dt,i)=>{
         const ev = evalReading(d.params, i);
         return `<tr>
           <td data-label="Fecha">${fmtDate(dt)}</td>
           <td data-label="ΔT (°C)">${fmt(ev.deltaT,1)}</td>
           <td data-label="Fase Máx.">${escHtml(ev.faseMax||'—')}</td>
+          <td data-label="V_RS (V)">${!isNaN(ev.vRS)?fmt(ev.vRS,1):'—'}</td>
+          <td data-label="V_ST (V)">${!isNaN(ev.vST)?fmt(ev.vST,1):'—'}</td>
+          <td data-label="V_TR (V)">${!isNaN(ev.vTR)?fmt(ev.vTR,1):'—'}</td>
+          <td data-label="Desb.V (%)">${!isNaN(ev.desbV)?fmt(ev.desbV,1):'—'}</td>
           <td data-label="Desb.I (%)">${!isNaN(ev.desbI)?fmt(ev.desbI,1):'—'}</td>
           <td data-label="FP">${!isNaN(ev.fp)?fmt(ev.fp,2):'—'}</td>
           <td data-label="THD_V (%)">${!isNaN(ev.thdV)?fmt(ev.thdV,1):'—'}</td>
@@ -1724,6 +1859,7 @@ function generateOfflineReport(){
   </div>
   <div class="note-box">
     ⚠️ Informe generado por el motor de diagnóstico offline de <strong>MANTEC – Tablero Pro</strong>, basado en criterios generales de termografía industrial, desbalance NEMA MG-1, factor de potencia, THD (IEEE 519) y resistencia de aislación (IEEE 43). Los umbrales son orientativos y ajustables en la pestaña Umbrales; validá contra tu norma o política interna antes de usar el informe para decisiones críticas.
+    <br>⚡ Las tensiones de línea (V_RS, V_ST, V_TR) se usan para el desbalance NEMA MG-1. Los datos anteriores a esta versión asumen medición línea-línea.
   </div>`;
 
   document.getElementById('reportSections').innerHTML = html;
@@ -1742,7 +1878,7 @@ function copyReport(){
 // ═══════════════════════════════════════════════════════════
 function exportCSV(){
   if (!readingsData.size){ alert('Sin datos.'); return; }
-  let rows = ['Tablero,TipoTablero,Circuito,TipoCircuito,Fecha,Estado,DeltaT_C,DesbI_%,DesbV_%,FP,THD_V_%,R_Aisl_MOhm,Observaciones'];
+  let rows = ['Tablero,TipoTablero,Circuito,TipoCircuito,Fecha,Estado,DeltaT_C,V_RS_V,V_ST_V,V_TR_V,V_RN_V,V_SN_V,V_TN_V,DesbV_%,DesbI_%,FP,THD_V_%,R_Aisl_MOhm,Observaciones'];
   for (const [k, d] of readingsData.entries()){
     const panel = panelsRegistry.get(getPanelId(k)) || {};
     const circuit = circuitsMeta.get(k) || {};
@@ -1753,7 +1889,10 @@ function exportCSV(){
       const fecha = (dt instanceof Date && !isNaN(dt)) ? dt.toISOString().slice(0,10) : '';
       rows.push([
         `"${panel.name||''}"`, `"${panel.type||''}"`, `"${circuit.name||''}"`, `"${circuit.type||''}"`,
-        fecha, estado, fmt(ev.deltaT,2), !isNaN(ev.desbI)?fmt(ev.desbI,2):'', !isNaN(ev.desbV)?fmt(ev.desbV,2):'',
+        fecha, estado, fmt(ev.deltaT,2),
+        !isNaN(ev.vRS)?fmt(ev.vRS,1):'', !isNaN(ev.vST)?fmt(ev.vST,1):'', !isNaN(ev.vTR)?fmt(ev.vTR,1):'',
+        !isNaN(ev.vRN)?fmt(ev.vRN,1):'', !isNaN(ev.vSN)?fmt(ev.vSN,1):'', !isNaN(ev.vTN)?fmt(ev.vTN,1):'',
+        !isNaN(ev.desbV)?fmt(ev.desbV,2):'', !isNaN(ev.desbI)?fmt(ev.desbI,2):'',
         !isNaN(ev.fp)?fmt(ev.fp,2):'', !isNaN(ev.thdV)?fmt(ev.thdV,2):'', !isNaN(ev.rAisl)?fmt(ev.rAisl,1):'',
         `"${(d.obs&&d.obs[n])||''}"`
       ].join(','));
@@ -2062,9 +2201,15 @@ function copiarCapturaAFormulario(i){
   if (d.iR!=null) document.getElementById('me_iR').value = d.iR;
   if (d.iS!=null) document.getElementById('me_iS').value = d.iS;
   if (d.iT!=null) document.getElementById('me_iT').value = d.iT;
-  if (d.vR!=null) document.getElementById('me_vR').value = d.vR;
-  if (d.vS!=null) document.getElementById('me_vS').value = d.vS;
-  if (d.vT!=null) document.getElementById('me_vT').value = d.vT;
+  // Acepta el formato nuevo (vRS/vST/vTR) y el viejo (vR/vS/vT) por si
+  // quedaron capturas sin procesar del hub anterior.
+  const vRS = d.vRS ?? d.vR, vST = d.vST ?? d.vS, vTR = d.vTR ?? d.vT;
+  if (vRS!=null) document.getElementById('me_vRS').value = vRS;
+  if (vST!=null) document.getElementById('me_vST').value = vST;
+  if (vTR!=null) document.getElementById('me_vTR').value = vTR;
+  if (d.vRN!=null) document.getElementById('me_vRN').value = d.vRN;
+  if (d.vSN!=null) document.getElementById('me_vSN').value = d.vSN;
+  if (d.vTN!=null) document.getElementById('me_vTN').value = d.vTN;
   if (d.fp!=null) document.getElementById('me_fp').value = d.fp;
   if (d.thdV!=null) document.getElementById('me_thdV').value = d.thdV;
   if (d.rAisl!=null) document.getElementById('me_rAisl').value = d.rAisl;
@@ -2087,6 +2232,11 @@ if (thresholdsMigrated){
   status.className = 'load-status ok';
   status.textContent = '⚠️ Los umbrales de diagnóstico se actualizaron (aislación a IEEE 43-2013). Revisá la pestaña Umbrales.';
   setTimeout(()=>{ if (status.textContent.startsWith('⚠️ Los umbrales')) status.textContent = ''; }, 12000);
+}
+if (voltagesMigrated){
+  const status = document.getElementById('loadStatus');
+  status.className = 'load-status ok';
+  status.textContent = '⚠️ Tensiones migradas: V_R/V_S/V_T se reinterpretaron como V_RS/V_ST/V_TR (línea-línea). Los datos previos a esta versión asumen medición entre fases.';
 }
 iniciarNube(); // sube lo pendiente (si lo hay) y baja el estado actual de Supabase
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
