@@ -305,6 +305,57 @@ header{
     text-transform:uppercase;letter-spacing:.5px;text-align:left;font-family:'Rajdhani',sans-serif;
   }
 }
+
+/* ── INFORME IA ── */
+.ai-scope-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:18px;}
+.ai-scope-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+.ai-scope-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.ai-radio-lbl{display:flex;align-items:center;gap:6px;font-size:.9rem;cursor:pointer;color:var(--text);}
+.ai-radio-lbl input[type=radio]{accent-color:var(--accent);cursor:pointer;}
+.btn-ai-generate{background:linear-gradient(135deg,#3b82f6,#1e40af);color:#fff;border:none;padding:12px 30px;border-radius:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:.5px;transition:all .2s;box-shadow:0 4px 20px rgba(59,130,246,.3);}
+.btn-ai-generate:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(59,130,246,.5);}
+.btn-ai-generate:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.ai-summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:22px;}
+.ai-sum-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px;}
+.ai-sum-card-icon{font-size:1.8rem;}
+.ai-sum-card-val{font-size:1.7rem;font-weight:700;font-family:'Share Tech Mono';}
+.ai-sum-card-lbl{font-size:.72rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
+.ai-equip-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;}
+.ai-equip-card-header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.ai-equip-name{font-size:1rem;font-weight:700;color:#fff;}
+.ai-equip-meta{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.ai-equip-card-body{padding:16px 20px;}
+.ai-finding{background:var(--card2);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:.87rem;color:var(--text);border-left:3px solid var(--border2);line-height:1.6;}
+.ai-finding.critical{border-left-color:var(--critical);}
+.ai-finding.warning{border-left-color:var(--warning);}
+.ai-finding.elevated{border-left-color:var(--elevated);}
+.ai-finding.good{border-left-color:var(--good);}
+.ai-rec-list{list-style:none;padding:0;margin:0;}
+.ai-rec-list li{padding:6px 0 6px 22px;border-bottom:1px solid var(--border);font-size:.86rem;color:var(--text);position:relative;}
+.ai-rec-list li::before{content:'→';position:absolute;left:4px;color:var(--accent2);}
+.ai-rec-list li:last-child{border-bottom:none;}
+.ai-section-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:12px 0 6px;}
+.ai-fleet-box{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:18px 22px;margin-bottom:20px;}
+.ai-fleet-box-title{font-size:.72rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.ai-fleet-text{font-size:.92rem;color:var(--text);line-height:1.7;}
+.ai-plan-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px;}
+.ai-plan-table th{background:var(--card2);padding:9px 12px;text-align:left;font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);}
+.ai-plan-table td{padding:9px 12px;border-bottom:1px solid rgba(30,45,69,.5);color:var(--text);}
+.ai-plan-table tr:hover td{background:rgba(255,255,255,.02);}
+.ai-prio-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.ai-prio-1{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);}
+.ai-prio-2{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.ai-prio-3{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.ai-prio-4{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.ai-json-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;}
+.ai-json-pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'Share Tech Mono';font-size:.78rem;color:#a8c5e8;overflow-x:auto;max-height:500px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.ai-step-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:14px;}
+.ai-step-title{font-size:.88rem;font-weight:700;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.ai-step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:.75rem;font-weight:800;}
+.ai-step-hint{font-size:.8rem;color:var(--muted);margin:0 0 10px;}
+.ai-prompt-box,.ai-response-box{width:100%;min-height:140px;font-family:'Share Tech Mono',monospace;font-size:.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;resize:vertical;}
+.ai-response-box{min-height:120px;font-size:.78rem;}
+.ai-status{font-size:.8rem;color:var(--muted);margin-left:8px;}
 </style>
 </head>
 <body>
@@ -342,6 +393,7 @@ header{
   <button class="tab-btn" data-tab="intervenciones" onclick="switchTab('intervenciones')">🛠️ Intervenciones</button>
   <button class="tab-btn" data-tab="config" onclick="switchTab('config')">⚙️ Umbrales</button>
   <button class="tab-btn" data-tab="informe" onclick="switchTab('informe')">📋 Informe</button>
+  <button class="tab-btn" data-tab="ia" onclick="switchTab('ia')">🤖 Informe IA</button>
 </div>
 
 <!-- ═══ DASHBOARD TAB ═══ -->
@@ -466,6 +518,81 @@ header{
   </div>
   <div id="nubeStatus" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
   <div id="reportSections"><div class="empty-state"><div class="ei">📋</div>Generá el informe para ver el diagnóstico consolidado de la flota de motores.</div></div>
+</div>
+
+<!-- ═══ INFORME IA TAB ═══ -->
+<div class="tab-content" id="tab-ia">
+
+  <div class="ai-scope-section">
+    <div class="ai-scope-title">¿Qué querés analizar?</div>
+    <div class="ai-scope-row">
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="all" checked>
+        <span>Toda la flota (<span id="aiFleetCount">0</span> motores con ensayos)</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="critical">
+        <span>Solo críticos/alerta</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="single">
+        <span>Un motor:</span></label>
+      <select id="aiEquipSelect" class="sort-sel" style="min-width:200px;">
+        <option value="">— seleccionar —</option>
+      </select>
+    </div>
+    <div class="ai-scope-row" style="margin-top:10px;">
+      <span style="font-size:.82rem;color:var(--muted);">Idioma del informe:</span>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="es" checked> Español</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="en"> English</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="pt"> Português</label>
+    </div>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">1</span>Copiá el prompt para pegar en tu IA</div>
+    <p class="ai-step-hint">Usá la IA web que prefieras (ChatGPT, Claude.ai, Gemini, Copilot…). El prompt incluye el diagnóstico ya calculado por Motor Pro (IP/DAR según IEEE 43-2013, corrección a 40°C, desbalances NEMA MG-1) y el formato JSON que espera el procesador.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-ai-generate" onclick="copiarPromptManual()">📋 Copiar prompt para pegar en IA web</button>
+      <span id="manualPromptStatus" class="ai-status"></span>
+    </div>
+    <textarea id="aiManualPromptBox" readonly class="ai-prompt-box" style="display:none;"></textarea>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">2</span>Pegá la respuesta de la IA</div>
+    <p class="ai-step-hint">Pegá la respuesta completa (el JSON). Se limpian los backticks de markdown automáticamente.</p>
+    <textarea id="aiManualResponse" class="ai-response-box" placeholder="Pegá acá la respuesta completa de la IA…"></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-ai-generate" onclick="procesarRespuestaManual()">✅ Procesar respuesta</button>
+      <button class="btn-small" onclick="document.getElementById('aiManualResponse').value='';">Limpiar</button>
+    </div>
+  </div>
+
+  <div id="aiReportOutput" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small" id="btnVistaTecnica" onclick="setVistaIA('tecnica')">📊 Vista técnica</button>
+      <button class="btn-small" id="btnVistaEjecutiva" onclick="setVistaIA('ejecutiva')">📋 Vista ejecutiva</button>
+      <span style="flex:1;"></span>
+      <button class="btn-small" onclick="imprimirInformeEjecutivo()">🖨️ PDF ejecutivo</button>
+    </div>
+    <div id="aiSummaryCards" class="ai-summary-cards"></div>
+    <div id="aiReportSections"></div>
+    <div class="ai-json-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="ai-scope-title" style="margin-bottom:0;">📄 JSON del informe</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-small" onclick="toggleJsonView()">Mostrar/Ocultar</button>
+          <button class="btn-small" onclick="downloadJSON()">⬇ Descargar</button>
+          <button class="btn-small" onclick="copyJSON()">📋 Copiar</button>
+          <button class="btn-small" id="btnGuardarNubeIA" onclick="guardarIAEnLaNube()">☁️ Guardar en la nube</button>
+        </div>
+      </div>
+      <div id="iaNubeStatus" style="font-size:.78rem;color:var(--muted);margin-top:6px;"></div>
+      <pre id="aiJsonViewer" class="ai-json-pre" style="display:none;"></pre>
+    </div>
+  </div>
+
+  <div id="aiEmptyState" class="empty-state">
+    <div class="ei">🤖</div>
+    Elegí el alcance, copiá el prompt, pegalo en tu IA web, y traé la respuesta acá.
+  </div>
+
 </div>
 
 <!-- ═══ MODAL CARGA MANUAL ═══ -->
@@ -2068,6 +2195,7 @@ function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+tab));
   if (tab === 'intervenciones') renderIntervenciones();
+  if (tab === 'ia') initIATab();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2608,6 +2736,675 @@ async function sincronizarIntervencionesNube(){
     ? `☁️ ${subidas} subida(s), ${bajadas} traída(s) del hub${fallos ? `, ${fallos} con error` : ''}.`
     : `☁️ ${subidas} subida(s) al hub${fallos ? `, ${fallos} con error` : ''}.`;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  INFORME IA — FLUJO MANUAL
+// ═══════════════════════════════════════════════════════════
+
+let _lastIAReport = null;
+let _vistaIA = 'tecnica';
+
+// ── Paso 1: construir el prompt y copiarlo ──
+function buildAIPayload(){
+  const scope = document.querySelector('input[name="aiScope"]:checked').value;
+  const equipId = document.getElementById('aiEquipSelect').value;
+  const lang = document.querySelector('input[name="aiLang"]:checked').value;
+
+  let ids = [...readingsData.keys()];
+  if (scope === 'critical'){
+    ids = ids.filter(k => {
+      const diag = diagnoseMotor(k);
+      if (!diag || diag.overall < 0) return false;
+      return diag.overall >= 2;
+    });
+  } else if (scope === 'single' && equipId){
+    ids = ids.filter(k => k === equipId);
+  }
+
+  const motores = [];
+  for (const k of ids){
+    const diag = diagnoseMotor(k);
+    if (!diag || diag.overall < 0) continue;
+    const m = motorsRegistry.get(k) || {};
+    const d = readingsData.get(k);
+    const n = lastValidIdx(d);
+    const prevEv = n > 0 ? evalReading(d.params, n-1) : null;
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag, prevEv).filter(x => x.sev !== 'good');
+
+    // Variaciones respecto al ensayo anterior (para que la IA vea la evolución)
+    const delta = (curr, prev) => (isN(curr) && isN(prev) && prev !== 0) ? +(((curr-prev)/Math.abs(prev))*100).toFixed(1) : null;
+
+    motores.push({
+      motor: m.name || k,
+      tipo: m.type || null,
+      sistema: m.sistema || 'Trifásico',
+      hilos: m.hilos || '3',
+      ficha: {
+        potencia_kw: m.kw || null,
+        tension_nominal_v: m.vNom || null,
+        corriente_nominal_a: m.iNom || null,
+        rpm_nominal: m.rpm || null
+      },
+      diagnostico: {
+        nivel: STATUS[diag.overall],
+        indice_salud: health,
+        // Aislación
+        ip: isN(diag.ip) ? +diag.ip.toFixed(2) : null,
+        dar: isN(diag.dar) ? +diag.dar.toFixed(2) : null,
+        r_aisl_medida_mohm: isN(diag.rAisl) ? +diag.rAisl.toFixed(1) : null,
+        r_aisl_corregida_40c_mohm: diag.rAislCorregida ? +diag.rAislCorr.toFixed(1) : null,
+        temp_ensayo_c: diag.usingWindingTemp ? +diag.tempBob.toFixed(1) : (isN(diag.tempAmb) ? +diag.tempAmb.toFixed(1) : null),
+        temp_origen: diag.usingWindingTemp ? 'bobinado' : (isN(diag.tempAmb) ? 'ambiente' : null),
+        v_ensayo_megohmmetro: isN(diag.vEnsayo) ? diag.vEnsayo : null,
+        r1_min_mohm: isN(diag.r1) ? +diag.r1.toFixed(1) : null,
+        r10_min_mohm: isN(diag.r10) ? +diag.r10.toFixed(1) : null,
+        // Bobinado — solo tiene sentido en trifásicos
+        desb_bobinado_pct: isTrifasico(k) && isN(diag.desbR) ? +diag.desbR.toFixed(2) : null,
+        desb_corriente_pct: isTrifasico(k) && isN(diag.desbI) ? +diag.desbI.toFixed(2) : null
+      },
+      contexto_temporal: {
+        total_ensayos: d.dates.length,
+        ultimo_ensayo: fmtDate(diag.date),
+        // Variaciones vs ensayo anterior (para que la IA distinga tendencia de caída puntual)
+        delta_ip_pct: prevEv ? delta(diag.ip, prevEv.ip) : null,
+        delta_r_aisl_corregida_pct: prevEv ? delta(diag.rAislCorregida ? diag.rAislCorr : diag.rAisl, prevEv.rAislCorregida ? prevEv.rAislCorr : prevEv.rAisl) : null,
+        delta_dar_pct: prevEv ? delta(diag.dar, prevEv.dar) : null
+      },
+      hallazgos: msgs.map(x => ({
+        severidad: x.sev,
+        titulo: x.title.replace(/^[^\w]+/, ''),
+        detalle: x.action
+      }))
+    });
+  }
+
+  if (!motores.length) return null;
+
+  const langInstructions = {
+    es: 'Responde en español. Usa terminología técnica de mantenimiento predictivo de motores eléctricos industriales.',
+    en: 'Respond in English. Use industrial electric motor predictive maintenance terminology.',
+    pt: 'Responda em português. Use terminologia técnica de manutenção preditiva de motores elétricos industriais.'
+  };
+
+  const prompt = `Sos un experto en diagnóstico de motores eléctricos industriales: máquinas de inducción
+jaula de ardilla, rotor bobinado, sincrónicas y de corriente continua, con foco en la
+evaluación predictiva del aislamiento y del bobinado.
+${langInstructions[lang]}
+
+═══════════════════════════════════════════════════════════
+CÓMO LEER ESTE INFORME — MARCO TÉCNICO
+═══════════════════════════════════════════════════════════
+Cada motor trae su diagnóstico YA CALCULADO por Motor Pro. NO recalcules los
+números: interpretá, priorizá y redactá el informe.
+
+Marco normativo aplicado por Motor Pro:
+- IEEE 43-2013 para IP (índice de polarización = R10min/R1min) y DAR
+  (relación de absorción dieléctrica = R1min/R30seg).
+- Corrección de resistencia de aislación a 40°C: R40 = R × 0.5^((40−T)/10),
+  donde T es la temperatura del bobinado si se cargó (preferida cuando el motor
+  estuvo detenido poco tiempo) o ambiente como fallback.
+- NEMA MG-1 para desbalance de corriente de línea.
+- Criterio de taller (sin norma única) para desbalance de resistencia de bobinado.
+
+═══════════════════════════════════════════════════════════
+REGLAS DE INTERPRETACIÓN POR CAMPO
+═══════════════════════════════════════════════════════════
+
+1) ÍNDICE DE POLARIZACIÓN (ip):
+   · ≥4.0 → bueno
+   · 2.5–4.0 → zona de vigilancia (monitorear)
+   · 2.0–2.5 → zona límite
+   · <2.0 → malo (aislamiento en riesgo de falla)
+   Interpretación física: un IP bajo con R1min aceptable sugiere
+   CONTAMINACIÓN SUPERFICIAL (humedad, polvo conductivo, aceite), no
+   degradación distribuida del dieléctrico. Un IP bajo con R1min también bajo
+   apunta a degradación real del aislamiento.
+
+2) DAR (dar) — relación R1min/R30seg:
+   · ≥1.6 → bueno
+   · 1.4–1.6 → zona de vigilancia
+   · <1.4 (algunos criterios <1.25) → malo
+   El DAR es más confiable que el IP en bobinados recién limpiados, recién
+   barnizados o con poco tiempo de servicio — la absorción dieléctrica todavía
+   no se estabilizó y el IP puede dar valores falsos bajos.
+
+3) RESISTENCIA DE AISLACIÓN ABSOLUTA (r_aisl_corregida_40c_mohm):
+   · ≥100 MΩ → bueno (bobinados random-wound)
+   · 25–100 MΩ → zona de vigilancia
+   · 5–25 MΩ → zona límite
+   · <5 MΩ → crítico (riesgo de falla dieléctrica)
+   Si el campo r_aisl_corregida_40c_mohm es null y r_aisl_medida_mohm tiene
+   valor, fue porque el ensayo no trajo temperatura: advertilo en el informe
+   y pedí cargarla en el próximo ensayo para normalizar.
+
+4) CORRECCIÓN POR TEMPERATURA:
+   · Si temp_origen = "bobinado", la corrección es de alta confianza.
+   · Si temp_origen = "ambiente", es una aproximación: si el motor estuvo
+     detenido poco tiempo, la temperatura real del bobinado pudo ser bastante
+     más alta (o más baja) y la R corregida puede estar subestimada o
+     sobreestimada.
+
+5) DESBALANCE DE BOBINADO (desb_bobinado_pct):
+   · ≤1% → normal
+   · 1–2% → elevado (vigilancia)
+   · 2–5% → alerta
+   · >5% → crítico
+   Causas típicas: espiras en cortocircuito, conexión floja en borne, daño
+   térmico localizado en una fase. En valores >5% NO recomendar arrancar el
+   motor sin antes verificar con puente de Wheatstone o método Kelvin.
+
+6) DESBALANCE DE CORRIENTE DE LÍNEA (desb_corriente_pct) — NEMA MG-1:
+   · ≤5% → normal
+   · 5–10% → elevado
+   · 10–15% → alerta
+   · >15% → crítico
+   Causas: tensión de alimentación desbalanceada aguas arriba, entrehierro
+   no uniforme, rodamientos dañados, alineación mecánica defectuosa.
+
+7) VARIACIONES vs ENSAYO ANTERIOR (delta_ip_pct, delta_r_aisl_corregida_pct,
+   delta_dar_pct):
+   · Una caída >25% en IP, >15% en DAR o >40% en R aislación en UN solo
+     ensayo es sospechosa: puede ser contaminación puntual, no tendencia real.
+     Recomendá repetir el ensayo antes de intervenir.
+   · Una tendencia sostenida (varios ensayos consecutivos con deltas negativos)
+     sí amerita intervención progresiva.
+
+8) MOTORES DE 6 HILOS vs 3 HILOS:
+   · Un motor de 3 hilos tiene la estrella cerrada internamente: no se puede
+     medir cada devanado aislado del resto. Un IP bajo en este caso es del
+     bobinado completo, no de un devanado específico.
+   · Un motor de 6 hilos permite medir U-V-W a tierra por separado. Un devanado
+     con R1 sistemáticamente más bajo que los otros dos es el "gobernante" y
+     gobierna el diagnóstico — los otros dos pueden estar sanos.
+
+═══════════════════════════════════════════════════════════
+CUANDO GENERES HALLAZGOS
+═══════════════════════════════════════════════════════════
+- Citá valores concretos ("IP=1.9 sobre umbral 2.0", "R corregida 18 MΩ vs 25 MΩ mínimo").
+- Priorizá por riesgo de falla eléctrica: aislación <5 MΩ → parada inmediata.
+- Distinguí explícitamente entre:
+  · Aislamiento degradado (R absoluta baja): requiere acción correctiva real
+  · Contaminación superficial (solo IP bajo): limpieza + repetición de ensayo
+  · Desbalance de bobinado (posible espira en corto): no arrancar sin verificación
+  · Desbalance de corriente (síntoma eléctrico/mecánico): revisar alimentación y mecánica
+- NUNCA sugieras "rebobinar" sin antes confirmar el hallazgo con un segundo
+  ensayo o método independiente (puente, corriente de excitación, prueba de
+  subida de tensión).
+
+DATOS DE MOTORES ANALIZADOS (${motores.length}):
+${JSON.stringify(motores, null, 2)}
+
+UMBRALES CONFIGURADOS EN MOTOR PRO:
+${JSON.stringify({
+  ip: thresholds.ip,
+  dar: thresholds.dar,
+  rAisl_mohm: thresholds.rAisl,
+  desbR_pct: thresholds.desbR,
+  desbI_pct: thresholds.desbI
+}, null, 2)}
+
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
+(sin texto antes ni después, sin backticks, sin claves inventadas):
+{
+  "resumen_ejecutivo": "string — 2-4 oraciones sobre el estado global y riesgos principales",
+  "fecha_informe": "string",
+  "total_motores_analizados": number,
+  "distribucion_estado": { "normal": number, "elevado": number, "alerta": number, "critico": number },
+  "indice_salud_flota": number,
+  "motores": [
+    {
+      "motor": "string",
+      "tipo": "string",
+      "estado": "string",
+      "indice_salud": number,
+      "prioridad": number,
+      "hallazgos": ["string — hallazgo concreto con valores"],
+      "causa_probable": "string — causa raíz con fundamento técnico",
+      "recomendaciones": ["string — acción concreta"],
+      "plazo_accion": "INMEDIATO|7 DÍAS|30 DÍAS|RUTINA",
+      "riesgo_falla": "ALTO|MEDIO|BAJO"
+    }
+  ],
+  "plan_de_accion": [
+    { "prioridad": number, "motor": "string", "accion": "string", "plazo": "string",
+      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones" }
+  ],
+  "conclusiones": "string — párrafo estratégico",
+  "proxima_inspeccion": "string"
+}`;
+
+  return { prompt, motores };
+}
+
+function copiarPromptManual(){
+  const payload = buildAIPayload();
+  const st = document.getElementById('manualPromptStatus');
+  if (!payload){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ No hay motores en el alcance seleccionado.';
+    return;
+  }
+  const box = document.getElementById('aiManualPromptBox');
+  box.value = payload.prompt;
+  box.style.display = 'block';
+  const finish = ok => {
+    st.style.color = ok ? 'var(--good)' : 'var(--warning)';
+    st.textContent = ok
+      ? `✅ Prompt copiado (${payload.motores.length} motor/s). Pegalo en tu IA web.`
+      : '⚠️ No se pudo copiar automáticamente — seleccioná el texto y copiá con Ctrl+C.';
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload.prompt).then(()=>finish(true)).catch(()=>{ box.select(); finish(false); });
+  } else {
+    box.select(); finish(false);
+  }
+}
+
+function procesarRespuestaManual(){
+  const raw = document.getElementById('aiManualResponse').value.trim();
+  if (!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
+  try{
+    let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) cleaned = m[0];
+    const report = JSON.parse(cleaned);
+    _lastIAReport = report;
+    document.getElementById('aiEmptyState').style.display = 'none';
+    mostrarReporteIA(report);
+  }catch(err){
+    alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
+      '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
+  }
+}
+
+function setVistaIA(vista){
+  _vistaIA = vista;
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', vista === 'tecnica');
+  if (bE) bE.classList.toggle('active', vista === 'ejecutiva');
+  if (_lastIAReport) mostrarReporteIA(_lastIAReport);
+}
+
+function mostrarReporteIA(r){
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', _vistaIA === 'tecnica');
+  if (bE) bE.classList.toggle('active', _vistaIA === 'ejecutiva');
+  if (_vistaIA === 'ejecutiva') renderReporteEjecutivo(r);
+  else renderReporteTecnico(r);
+}
+
+function renderReporteTecnico(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  const salud = r.indice_salud_flota || '—';
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+  const dist = r.distribucion_estado || {};
+  document.getElementById('aiSummaryCards').innerHTML = `
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🔩</div>
+      <div><div class="ai-sum-card-val" style="color:var(--accent)">${r.total_motores_analizados || (r.motores||[]).length}</div><div class="ai-sum-card-lbl">Motores analizados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">💪</div>
+      <div><div class="ai-sum-card-val" style="color:${saludColor}">${salud}</div><div class="ai-sum-card-lbl">Salud flota (%)</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🔴</div>
+      <div><div class="ai-sum-card-val" style="color:var(--critical)">${dist.critico||0}</div><div class="ai-sum-card-lbl">Críticos</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟠</div>
+      <div><div class="ai-sum-card-val" style="color:var(--warning)">${dist.alerta||0}</div><div class="ai-sum-card-lbl">En alerta</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟡</div>
+      <div><div class="ai-sum-card-val" style="color:var(--elevated)">${dist.elevado||0}</div><div class="ai-sum-card-lbl">Elevados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟢</div>
+      <div><div class="ai-sum-card-val" style="color:var(--good)">${dist.normal||0}</div><div class="ai-sum-card-lbl">Normales</div></div></div>
+  `;
+  let html = '';
+  if (r.resumen_ejecutivo){
+    html += `<div class="ai-fleet-box">
+      <div class="ai-fleet-box-title">📋 Resumen Ejecutivo — ${escHtml(r.fecha_informe||'')}</div>
+      <div class="ai-fleet-text">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  const motores = (r.motores || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
+  if (motores.length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:20px 0 12px;">🔍 Análisis por Motor</div>`;
+    motores.forEach(m => {
+      const lvl = (m.estado||'').toLowerCase().includes('crít') ? 'critical'
+                : (m.estado||'').toLowerCase().includes('alert') ? 'warning'
+                : (m.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const prioClass = `ai-prio-${Math.min(m.prioridad||4,4)}`;
+      const riesgoIcon = m.riesgo_falla === 'ALTO' ? '⛔' : m.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `<div class="ai-equip-card">
+        <div class="ai-equip-card-header">
+          <div>
+            <div class="ai-equip-name">${escHtml(m.motor||'')} <span class="mpoint-badge">${escHtml(m.tipo||'')}</span></div>
+            <div class="ai-equip-meta">${riesgoIcon} Riesgo: ${escHtml(m.riesgo_falla||'—')} &nbsp;|&nbsp; Plazo: <strong>${escHtml(m.plazo_accion||'—')}</strong></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="mbadge badge-${lvl}">${escHtml(m.estado||'')}</span>
+            <span class="ai-prio-badge ${prioClass}">P${m.prioridad||'—'}</span>
+          </div>
+        </div>
+        <div class="ai-equip-card-body">
+          ${m.causa_probable ? `<div class="ai-finding ${lvl}"><strong>Causa probable:</strong> ${escHtml(m.causa_probable)}</div>` : ''}
+          ${(m.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
+            ${m.hallazgos.map(h => `<div class="ai-finding ${lvl}">${escHtml(typeof h==='string'?h:(h.titulo||'')+(h.detalle?' — '+h.detalle:''))}</div>`).join('')}` : ''}
+          ${(m.recomendaciones||[]).length ? `<div class="ai-section-label">Recomendaciones</div>
+            <ul class="ai-rec-list">${m.recomendaciones.map(rec=>`<li>${escHtml(rec)}</li>`).join('')}</ul>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  if ((r.plan_de_accion||[]).length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:24px 0 12px;">📅 Plan de Acción</div>
+    <div class="ai-equip-card"><div style="overflow-x:auto;padding:6px 0;">
+    <table class="ai-plan-table">
+      <thead><tr><th>#</th><th>Motor</th><th>Acción</th><th>Plazo</th><th>Responsable</th></tr></thead>
+      <tbody>${r.plan_de_accion.map((p,i)=>{
+        const pc = `ai-prio-${Math.min(p.prioridad||4,4)}`;
+        return `<tr>
+          <td><span class="ai-prio-badge ${pc}">P${p.prioridad||i+1}</span></td>
+          <td style="font-weight:700;color:#fff;">${escHtml(p.motor||p.equipo||'')}</td>
+          <td>${escHtml(p.accion||'')}</td>
+          <td style="white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          <td style="font-size:.8rem;color:var(--muted);">${escHtml(p.responsable||'')}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+  }
+  if (r.conclusiones || r.proxima_inspeccion){
+    html += `<div class="ai-fleet-box" style="border-color:rgba(16,201,138,.25);background:rgba(16,201,138,.05);">
+      <div class="ai-fleet-box-title" style="color:var(--good);">💡 Conclusiones y Próximos Pasos</div>
+      ${r.conclusiones ? `<div class="ai-fleet-text" style="margin-bottom:${r.proxima_inspeccion?'12px':'0'}">${escHtml(String(r.conclusiones))}</div>` : ''}
+      ${r.proxima_inspeccion ? `<div style="margin-top:8px;padding-top:10px;border-top:1px solid rgba(16,201,138,.2);font-size:.86rem;color:var(--good);">🗓 Próxima inspección: <strong>${escHtml(String(r.proxima_inspeccion))}</strong></div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function renderReporteEjecutivo(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  document.getElementById('aiEmptyState').style.display = 'none';
+  const dist  = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_motores_analizados || 0;
+  const salud = r.indice_salud_flota || 0;
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+  const top = (r.motores || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0, 6);
+  const planTop = (r.plan_de_accion || []).filter(p => (p.prioridad||99) <= 2).slice(0, 5);
+
+  let html = '';
+  html += `
+  <div style="background:linear-gradient(135deg,#0d1117,#111d30);border:1px solid var(--border2);border-radius:14px;padding:26px 30px;margin-bottom:20px;">
+    <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Informe Ejecutivo · Motor Pro</div>
+    <div style="font-size:1.6rem;font-weight:800;color:#fff;margin-top:6px;letter-spacing:-.3px;">Estado de la flota de motores</div>
+    <div style="font-size:.86rem;color:var(--muted);margin-top:4px;">${escHtml(r.fecha_informe||'')} · ${total} motor(es) analizados</div>
+  </div>`;
+
+  html += `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:18px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:${saludColor};line-height:1;">${salud}%</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Salud flota</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--critical);line-height:1;">${dist.critico}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Críticos</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--warning);line-height:1;">${dist.alerta}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">En alerta</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--elevated);line-height:1;">${dist.elevado}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Elevados</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--good);line-height:1;">${dist.normal}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Normales</div>
+    </div>
+  </div>`;
+
+  if (r.resumen_ejecutivo){
+    html += `
+    <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:10px;">Resumen ejecutivo</div>
+      <div style="font-size:1rem;color:var(--text);line-height:1.7;">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  if (top.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Top ${top.length} motores a atender</div>`;
+    html += `<div style="display:grid;gap:10px;margin-bottom:22px;">`;
+    for (const m of top){
+      const nivel = (m.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (m.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (m.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const nc = {critical:'var(--critical)',warning:'var(--warning)',elevated:'var(--elevated)',good:'var(--good)'}[nivel];
+      const ic = m.riesgo_falla === 'ALTO' ? '⛔' : m.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `
+      <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid ${nc};border-radius:10px;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">${escHtml(m.motor||'')} <span class="mpoint-badge">${escHtml(m.tipo||'')}</span></div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">${ic} Riesgo ${escHtml(m.riesgo_falla||'—')} · Plazo: <strong style="color:${nc};">${escHtml(m.plazo_accion||'—')}</strong></div>
+          </div>
+          <span class="mbadge badge-${nivel}">${escHtml(m.estado||'')}</span>
+        </div>
+        ${m.causa_probable ? `<div style="font-size:.85rem;color:var(--text);margin-top:8px;line-height:1.5;">${escHtml(m.causa_probable)}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  if (planTop.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Plan de acción inmediato</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <table class="ai-plan-table" style="margin:0;">
+        <thead><tr><th style="width:50px;">#</th><th>Motor</th><th>Acción</th><th style="width:100px;">Plazo</th></tr></thead>
+        <tbody>${planTop.map((p,i)=>`
+          <tr>
+            <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+            <td style="font-weight:700;color:#fff;">${escHtml(p.motor||p.equipo||'')}</td>
+            <td style="font-size:.88rem;">${escHtml(p.accion||'')}</td>
+            <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  if (r.proxima_inspeccion || r.conclusiones){
+    html += `
+    <div style="background:rgba(16,201,138,.06);border:1px solid rgba(16,201,138,.2);border-left:4px solid var(--good);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--good);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:8px;">Próximo paso</div>
+      ${r.proxima_inspeccion ? `<div style="font-size:1rem;color:var(--text);line-height:1.6;margin-bottom:${r.conclusiones?'10px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="font-size:.88rem;color:var(--muted);line-height:1.6;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiSummaryCards').innerHTML = '';
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function toggleJsonView(){
+  const pre = document.getElementById('aiJsonViewer');
+  pre.style.display = pre.style.display === 'none' ? 'block' : 'none';
+}
+function downloadJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const ts = new Date().toISOString().slice(0,10);
+  const blob = new Blob([JSON.stringify(_lastIAReport, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `motor_pro_informe_ia_${ts}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function copyJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  navigator.clipboard.writeText(JSON.stringify(_lastIAReport, null, 2))
+    .then(()=>alert('JSON copiado al portapapeles ✅'))
+    .catch(()=>alert('No se pudo copiar.'));
+}
+
+function mapEstadoASeveridadIA(estado){
+  const e = (estado || '').toLowerCase();
+  if (e.includes('crít')) return 'critico';
+  if (e.includes('alert') || e.includes('elev')) return 'atencion';
+  return 'ok';
+}
+
+async function guardarIAEnLaNube(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const statusEl = document.getElementById('iaNubeStatus');
+  const btn = document.getElementById('btnGuardarNubeIA');
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  const motores = _lastIAReport.motores || [];
+  if (!motores.length){
+    statusEl.textContent = '⚠️ El informe no trae motores individuales para guardar.';
+    return;
+  }
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const m of motores){
+    const tag = m.motor;
+    if (!tag){ fail++; continue; }
+    try{
+      await SatSync.guardarAnalisis({
+        modulo: 'motor_pro_informe_ia',
+        equipo_tag: tag,
+        severidad: mapEstadoASeveridadIA(m.estado),
+        resumen: m.causa_probable || (m.hallazgos && m.hallazgos[0]) || m.estado || '',
+        datos: m
+      });
+      ok++;
+    }catch(err){
+      console.error('[SatSync] error guardando', tag, err);
+      fail++;
+    }
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning)' : 'var(--good)';
+  statusEl.textContent = fail
+    ? `☁️ Guardados ${ok} de ${motores.length} (${fail} con error — ver consola).`
+    : `☁️ ${ok} motor(es) guardados en el informe IA.`;
+}
+
+function imprimirInformeEjecutivo(){
+  const r = _lastIAReport;
+  if (!r){ alert('Procesá un informe primero.'); return; }
+  const dist = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const salud = r.indice_salud_flota || 0;
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_motores_analizados || 0;
+  const saludColorHex = salud < 40 ? '#dc2626' : salud < 70 ? '#ea580c' : salud < 85 ? '#d97706' : '#16a34a';
+  const top = (r.motores || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0,6);
+  const planTop = (r.plan_de_accion||[]).filter(p=>(p.prioridad||99)<=2).slice(0,5);
+  const fecha = new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Informe Ejecutivo — Motor Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;font-size:12px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{max-width:840px;margin:0 auto;padding:32px 40px;}
+  .hdr{background:linear-gradient(135deg,#0b1628,#162e50);color:#fff;padding:26px 32px;border-radius:12px;margin-bottom:22px;}
+  .hdr-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#93c5fd;font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.3px;}
+  .hdr-meta{font-size:11px;color:#93c5fd;margin-top:6px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+  .kpi{padding:14px 8px;border-radius:10px;text-align:center;background:#f8fafc;border:1px solid #e5e7eb;}
+  .kpi-n{font-size:26px;font-weight:800;font-family:'Courier New',monospace;line-height:1;}
+  .kpi-l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:6px;font-weight:700;}
+  .sec-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#1e40af;font-weight:800;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+  .box{padding:16px 20px;border-radius:10px;margin-bottom:14px;border-left:4px solid #3b82f6;background:#eff6ff;}
+  .box.good{border-left-color:#16a34a;background:#f0fdf4;}
+  .eq{padding:12px 16px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;border-left:4px solid #dc2626;margin-bottom:8px;}
+  .eq-name{font-weight:800;color:#111827;}
+  .eq-meta{font-size:10px;color:#6b7280;margin-top:3px;}
+  .eq-cause{font-size:11.5px;color:#374151;margin-top:6px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;}
+  td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+  .badge.critical{background:#fff1f2;color:#991b1b;border:1px solid #fecaca;}
+  .badge.warning{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;}
+  .badge.elevated{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+  .badge.good{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+  .prio{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;}
+  .prio-1{background:#fee2e2;color:#991b1b;}
+  .prio-2{background:#ffedd5;color:#9a3412;}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
+  @page{margin:14mm;size:A4;}
+</style></head><body><div class="page">
+  <div class="hdr">
+    <div class="hdr-sub">Informe Ejecutivo · Motor Pro</div>
+    <div class="hdr-title">Estado de la flota de motores</div>
+    <div class="hdr-meta">${escHtml(fecha)} · ${total} motor(es) analizados</div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-n" style="color:${saludColorHex};">${salud}%</div><div class="kpi-l">Salud flota</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#dc2626;">${dist.critico}</div><div class="kpi-l">Críticos</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#ea580c;">${dist.alerta}</div><div class="kpi-l">En alerta</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#d97706;">${dist.elevado}</div><div class="kpi-l">Elevados</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#16a34a;">${dist.normal}</div><div class="kpi-l">Normales</div></div>
+  </div>
+  ${r.resumen_ejecutivo ? `<div class="sec-title">Resumen ejecutivo</div><div class="box">${escHtml(String(r.resumen_ejecutivo))}</div>` : ''}
+  ${top.length ? `<div class="sec-title">Top ${top.length} motores a atender</div>
+    ${top.map(m=>{
+      const nivel = (m.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (m.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (m.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      return `<div class="eq" style="border-left-color:${
+        nivel==='critical'?'#dc2626':nivel==='warning'?'#ea580c':nivel==='elevated'?'#d97706':'#16a34a'
+      };">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div><span class="eq-name">${escHtml(m.motor||'')} · ${escHtml(m.tipo||'')}</span></div>
+          <span class="badge ${nivel}">${escHtml(m.estado||'')}</span>
+        </div>
+        <div class="eq-meta">Riesgo ${escHtml(m.riesgo_falla||'—')} · Plazo: <strong>${escHtml(m.plazo_accion||'—')}</strong></div>
+        ${m.causa_probable ? `<div class="eq-cause">${escHtml(m.causa_probable)}</div>` : ''}
+      </div>`;
+    }).join('')}` : ''}
+  ${planTop.length ? `<div class="sec-title">Plan de acción inmediato</div>
+    <table><thead><tr><th style="width:44px;">#</th><th>Motor</th><th>Acción</th><th style="width:90px;">Plazo</th></tr></thead>
+    <tbody>${planTop.map((p,i)=>`<tr>
+      <td><span class="prio prio-${Math.min(p.prioridad||4,2)}">P${p.prioridad||i+1}</span></td>
+      <td style="font-weight:700;">${escHtml(p.motor||p.equipo||'')}</td>
+      <td>${escHtml(p.accion||'')}</td>
+      <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+    </tr>`).join('')}</tbody></table>` : ''}
+  ${(r.proxima_inspeccion || r.conclusiones) ? `<div class="sec-title">Próximo paso</div>
+    <div class="box good">
+      ${r.proxima_inspeccion ? `<div style="font-weight:600;margin-bottom:${r.conclusiones?'8px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="color:#4b5563;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>` : ''}
+  <div class="footer">
+    <span>MANTEC – Motor Pro · Motor de diagnóstico predictivo</span>
+    <span>Generado: ${escHtml(new Date().toLocaleString('es-PY'))}</span>
+  </div>
+</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1200');
+  if (!win){ alert('El navegador bloqueó la ventana emergente.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', ()=>setTimeout(()=>win.print(), 500));
+}
+
+function initIATab(){
+  const sel = document.getElementById('aiEquipSelect');
+  sel.innerHTML = '<option value="">— seleccionar —</option>';
+  for (const [id, m] of motorsRegistry.entries()){
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = m.name || id;
+    sel.appendChild(opt);
+  }
+  const fc = document.getElementById('aiFleetCount');
+  if (fc) fc.textContent = readingsData.size;
+  const hasData = readingsData.size > 0;
+  const empty = document.getElementById('aiEmptyState');
+  if (empty) empty.style.display = hasData ? 'none' : 'block';
+  if (!hasData) document.getElementById('aiReportOutput').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════
 //  13. INIT
