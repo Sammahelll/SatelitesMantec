@@ -326,6 +326,108 @@ header{
     text-transform:uppercase;font-size:.65rem;letter-spacing:.5px;flex-shrink:0;
   }
 }
+
+/* ── INFORME IA ── */
+.ai-scope-section{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:18px 22px;margin-bottom:18px;
+}
+.ai-scope-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+.ai-scope-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.ai-radio-lbl{display:flex;align-items:center;gap:6px;font-size:.9rem;cursor:pointer;color:var(--text);}
+.ai-radio-lbl input[type=radio]{accent-color:var(--accent);cursor:pointer;}
+.btn-ai-generate{
+  background:linear-gradient(135deg,#06b6d4,#0e7490);color:#fff;border:none;
+  padding:12px 30px;border-radius:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;
+  font-weight:700;font-size:1.05rem;letter-spacing:.5px;
+  transition:all .2s;box-shadow:0 4px 20px rgba(6,182,212,.3);
+}
+.btn-ai-generate:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(6,182,212,.5);}
+.btn-ai-generate:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.ai-summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:22px;}
+.ai-sum-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;display:flex;align-items:center;gap:12px;
+}
+.ai-sum-card-icon{font-size:1.8rem;}
+.ai-sum-card-val{font-size:1.7rem;font-weight:700;font-family:'Share Tech Mono';}
+.ai-sum-card-lbl{font-size:.72rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
+.ai-equip-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:14px;overflow:hidden;
+}
+.ai-equip-card-header{
+  padding:14px 20px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.ai-equip-name{font-size:1rem;font-weight:700;color:#fff;}
+.ai-equip-meta{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.ai-equip-card-body{padding:16px 20px;}
+.ai-finding{
+  background:var(--card2);border-radius:8px;padding:10px 14px;
+  margin-bottom:8px;font-size:.87rem;color:var(--text);
+  border-left:3px solid var(--border2);line-height:1.6;
+}
+.ai-finding.critical{border-left-color:var(--critical);}
+.ai-finding.warning{border-left-color:var(--warning);}
+.ai-finding.elevated{border-left-color:var(--elevated);}
+.ai-finding.good{border-left-color:var(--good);}
+.ai-rec-list{list-style:none;padding:0;margin:0;}
+.ai-rec-list li{
+  padding:6px 0 6px 22px;border-bottom:1px solid var(--border);
+  font-size:.86rem;color:var(--text);position:relative;
+}
+.ai-rec-list li::before{content:'→';position:absolute;left:4px;color:var(--accent2);}
+.ai-rec-list li:last-child{border-bottom:none;}
+.ai-section-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:12px 0 6px;}
+.ai-fleet-box{
+  background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2);
+  border-radius:12px;padding:18px 22px;margin-bottom:20px;
+}
+.ai-fleet-box-title{font-size:.72rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.ai-fleet-text{font-size:.92rem;color:var(--text);line-height:1.7;}
+.ai-plan-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px;}
+.ai-plan-table th{background:var(--card2);padding:9px 12px;text-align:left;
+  font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);}
+.ai-plan-table td{padding:9px 12px;border-bottom:1px solid rgba(30,45,69,.5);color:var(--text);}
+.ai-plan-table tr:hover td{background:rgba(255,255,255,.02);}
+.ai-prio-badge{
+  display:inline-block;padding:2px 9px;border-radius:20px;
+  font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+}
+.ai-prio-1{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);}
+.ai-prio-2{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.ai-prio-3{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.ai-prio-4{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.ai-json-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;}
+.ai-json-pre{
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:16px;font-family:'Share Tech Mono';font-size:.78rem;
+  color:#a8c5e8;overflow-x:auto;max-height:500px;overflow-y:auto;
+  line-height:1.6;white-space:pre-wrap;word-break:break-word;
+}
+.ai-step-box{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:18px 22px;margin-bottom:14px;
+}
+.ai-step-title{
+  font-size:.88rem;font-weight:700;color:#fff;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.ai-step-num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:6px;background:var(--accent);
+  color:#fff;font-size:.75rem;font-weight:800;
+}
+.ai-step-hint{font-size:.8rem;color:var(--muted);margin:0 0 10px;}
+.ai-prompt-box,.ai-response-box{
+  width:100%;min-height:140px;font-family:'Share Tech Mono',monospace;
+  font-size:.72rem;background:var(--bg);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;padding:10px;
+  box-sizing:border-box;resize:vertical;
+}
+.ai-response-box{min-height:120px;font-size:.78rem;}
+.ai-status{font-size:.8rem;color:var(--muted);margin-left:8px;}
 </style>
 </head>
 <body>
@@ -362,6 +464,7 @@ header{
   <button class="tab-btn" data-tab="intervenciones" onclick="switchTab('intervenciones')">🛠️ Intervenciones</button>
   <button class="tab-btn" data-tab="config" onclick="switchTab('config')">⚙️ Umbrales</button>
   <button class="tab-btn" data-tab="informe" onclick="switchTab('informe')">📋 Informe</button>
+  <button class="tab-btn" data-tab="ia" onclick="switchTab('ia')">🤖 Informe IA</button>
 </div>
 
 <!-- ═══ DASHBOARD TAB ═══ -->
@@ -516,6 +619,94 @@ header{
   </div>
   <div id="nubeStatus" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
   <div id="reportSections"><div class="empty-state"><div class="ei">📋</div>Generá el informe para ver el diagnóstico consolidado de la flota de refrigeración.</div></div>
+</div>
+
+<!-- ═══ INFORME IA TAB ═══ -->
+<div class="tab-content" id="tab-ia">
+
+  <!-- SCOPE + LANG -->
+  <div class="ai-scope-section">
+    <div class="ai-scope-title">¿Qué querés analizar?</div>
+    <div class="ai-scope-row">
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="all" checked>
+        <span>Toda la flota (<span id="aiFleetCount">0</span> equipos)</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="critical">
+        <span>Solo críticos/alerta</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="single">
+        <span>Un equipo:</span></label>
+      <select id="aiEquipSelect" class="sort-sel" style="min-width:200px;">
+        <option value="">— seleccionar —</option>
+      </select>
+    </div>
+    <div class="ai-scope-row" style="margin-top:10px;">
+      <span style="font-size:.82rem;color:var(--muted);">Idioma del informe:</span>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="es" checked> Español</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="en"> English</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="pt"> Português</label>
+    </div>
+  </div>
+
+  <!-- PASO 1 -->
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">1</span>Copiá el prompt para pegar en tu IA</div>
+    <p class="ai-step-hint">
+      Usá la IA web que prefieras (ChatGPT, Claude.ai, Gemini, Copilot…). El prompt ya incluye
+      el diagnóstico calculado por Refrigeración Pro (con tabla P-T real cuando el refrigerante
+      está soportado) y el formato JSON que espera el procesador.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-ai-generate" onclick="copiarPromptManual()">
+        📋 Copiar prompt para pegar en IA web
+      </button>
+      <span id="manualPromptStatus" class="ai-status"></span>
+    </div>
+    <textarea id="aiManualPromptBox" readonly class="ai-prompt-box" style="display:none;"></textarea>
+  </div>
+
+  <!-- PASO 2 -->
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">2</span>Pegá la respuesta de la IA</div>
+    <p class="ai-step-hint">
+      Pegá la respuesta completa (el JSON). Se limpian los backticks de markdown automáticamente.
+    </p>
+    <textarea id="aiManualResponse" class="ai-response-box"
+      placeholder="Pegá acá la respuesta completa de la IA…"></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-ai-generate" onclick="procesarRespuestaManual()">✅ Procesar respuesta</button>
+      <button class="btn-small" onclick="document.getElementById('aiManualResponse').value='';">Limpiar</button>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="aiReportOutput" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small" id="btnVistaTecnica" onclick="setVistaIA('tecnica')">📊 Vista técnica</button>
+      <button class="btn-small" id="btnVistaEjecutiva" onclick="setVistaIA('ejecutiva')">📋 Vista ejecutiva</button>
+      <span style="flex:1;"></span>
+      <button class="btn-small" onclick="imprimirInformeEjecutivo()">🖨️ PDF ejecutivo</button>
+    </div>
+    <div id="aiSummaryCards" class="ai-summary-cards"></div>
+    <div id="aiReportSections"></div>
+    <div class="ai-json-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="ai-scope-title" style="margin-bottom:0;">📄 JSON del informe</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-small" onclick="toggleJsonView()">Mostrar/Ocultar</button>
+          <button class="btn-small" onclick="downloadJSON()">⬇ Descargar</button>
+          <button class="btn-small" onclick="copyJSON()">📋 Copiar</button>
+          <button class="btn-small" id="btnGuardarNubeIA" onclick="guardarIAEnLaNube()">☁️ Guardar en la nube</button>
+        </div>
+      </div>
+      <div id="iaNubeStatus" style="font-size:.78rem;color:var(--muted);margin-top:6px;"></div>
+      <pre id="aiJsonViewer" class="ai-json-pre" style="display:none;"></pre>
+    </div>
+  </div>
+
+  <div id="aiEmptyState" class="empty-state">
+    <div class="ei">🤖</div>
+    Elegí el alcance, copiá el prompt, pegalo en tu IA web, y traé la respuesta acá.
+  </div>
+
 </div>
 
 <!-- ═══ MODAL CARGA MANUAL ═══ -->
@@ -757,7 +948,6 @@ function computeSubcooling(refrigerante, presAltaBar, tempLiquidoC){
 
 const STATUS        = ['good','elevated','warning','critical'];
 const STATUS_LABELS = ['Normal','Elevado','Alerta','Crítico'];
-const STATUS_ICONS  = ['🟢','🟡','🟠','🔴'];
 const STATUS_COLORS = ['#10c98a','#f0b429','#f97316','#ef4444'];
 
 // Umbrales por defecto (editables desde la pestaña Umbrales)
@@ -851,6 +1041,7 @@ function genId(){ return 'R'+Date.now().toString(36).toUpperCase().slice(-5)+Mat
 function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escJs(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function fmt(v,d=1){ return (v===undefined||v===null||isNaN(v)) ? '—' : Number(v).toFixed(d); }
+function isN(v){ return typeof v === 'number' && Number.isFinite(v); }
 function fmtDate(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function fmtDateTime(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function getEqName(id){ return equiposRegistry.get(id)?.tag || id; }
@@ -872,7 +1063,7 @@ function levelOf(value, band, inverse){
 }
 // Presión: rango [min,max] normal. Fuera de rango, gravedad según % de desviación
 // respecto al ancho del rango (orientativo — no calcula presión-temp. de saturación).
-function evalPresion(value, band){
+function evalRange(value, band){
   if (value===undefined||value===null||isNaN(value)) return -1;
   const {min,max} = band;
   if (value>=min && value<=max) return 0;
@@ -941,11 +1132,11 @@ function evalReading(params, n, fla, refrigerante, tipo){
     desbI:   levelOf(desbI,  thresholds.desbI,  false),
     cargaPct: levelOf(cargaPct, thresholds.cargaPct, false),
     velAire: levelOf(velAire, thresholds.velAire, true),
-    presAlta: ptSupported ? evalPresion(tSatCond, thresholds.presionAltaTsat) : evalPresion(presAlta, thresholds.presionAlta),
-    presBaja: ptSupported ? evalPresion(tSatEvap, thresholds.presionBajaTsat) : evalPresion(presBaja, thresholds.presionBaja),
+    presAlta: ptSupported ? evalRange(tSatCond, thresholds.presionAltaTsat) : evalRange(presAlta, thresholds.presionAlta),
+    presBaja: ptSupported ? evalRange(tSatEvap, thresholds.presionBajaTsat) : evalRange(presBaja, thresholds.presionBaja),
     filtro:  filtroLevel(filtro),
-    superheat: evalPresion(superheat, thresholds.superheat),
-    subenfriamiento: evalPresion(subcooling, thresholds.subenfriamiento),
+    superheat: evalRange(superheat, thresholds.superheat),
+    subenfriamiento: evalRange(subcooling, thresholds.subenfriamiento),
     deltaTAgua: esChiller ? levelOf(deltaTAgua, thresholds.deltaTAgua, true) : -1
   };
   let overall = 0;
@@ -1016,6 +1207,10 @@ function handleFileUpload(evt){
       status.textContent = `✅ ${result.rows} lectura(s) · ${result.equipos} equipo(s)`;
       saveState();
       renderAll();
+      (async () => {
+        for (const k of readingsData.keys())
+          await publicarAnalisisRefrigeracion(k).catch(() => {});
+      })();
     } catch(err){
       console.error(err);
       status.className = 'load-status err';
@@ -1183,6 +1378,33 @@ function numOrUndef(id){
   return isNaN(n) ? NaN : n;
 }
 
+// Sanity check de rangos físicos plausibles antes de guardar — no bloquea (podría ser un
+// caso real extremo), pero avisa para atajar errores de tipeo (ej: 9999 en vez de 9.9).
+function sanityIssues(v){
+  const issues = [];
+  const chk = (label, val, min, max, unit) => {
+    if (Number.isFinite(val) && (val < min || val > max)) issues.push(`${label}: ${val}${unit} (esperado ${min} a ${max}${unit})`);
+  };
+  chk('Temp. entrada', v.tempEntrada, -30, 80, '°C');
+  chk('Temp. salida', v.tempSalida, -30, 80, '°C');
+  chk('Temp. ambiente', v.tempAmb, -30, 80, '°C');
+  chk('Temp. succión', v.tempSuccion, -30, 80, '°C');
+  chk('Temp. línea líquido', v.tempLiquido, -30, 80, '°C');
+  chk('Temp. agua retorno', v.tempAguaRetorno, -10, 60, '°C');
+  chk('Temp. agua suministro', v.tempAguaSuministro, -10, 60, '°C');
+  chk('Presión alta', v.presAlta, 0, 50, ' bar');
+  chk('Presión baja', v.presBaja, 0, 50, ' bar');
+  chk('Corriente I_R', v.iR, 0, 2000, ' A');
+  chk('Corriente I_S', v.iS, 0, 2000, ' A');
+  chk('Corriente I_T', v.iT, 0, 2000, ' A');
+  chk('Tensión V_R', v.vR, 0, 1000, ' V');
+  chk('Tensión V_S', v.vS, 0, 1000, ' V');
+  chk('Tensión V_T', v.vT, 0, 1000, ' V');
+  chk('Velocidad de aire', v.velAire, 0, 30, ' m/s');
+  chk('Caudal de agua', v.caudalAgua, 0, 500, ' m³/h');
+  return issues;
+}
+
 function saveManualReading(){
   const eqSelVal = document.getElementById('me_eqSel').value;
   const fechaStr = document.getElementById('me_fecha').value;
@@ -1218,6 +1440,9 @@ function saveManualReading(){
   const tempAguaSuministro = numOrUndef('me_tempAguaSuministro');
   const caudalAgua = numOrUndef('me_caudalAgua');
 
+  const issues = sanityIssues({tempEntrada, tempSalida, tempAmb, presAlta, presBaja, tempSuccion, tempLiquido, iR, iS, iT, vR, vS, vT, velAire, tempAguaRetorno, tempAguaSuministro, caudalAgua});
+  if (issues.length && !confirm(`⚠️ Valores fuera de rango físico esperado — puede ser un error de tipeo:\n\n${issues.join('\n')}\n\n¿Guardar de todas formas?`)) return;
+
   const incoming = {
     dates:[fecha],
     params:{ TempEntrada:[tempEntrada], TempSalida:[tempSalida], TempAmb:[tempAmb], PresAlta:[presAlta], PresBaja:[presBaja], TempSuccion:[tempSuccion], TempLiquido:[tempLiquido], I_R:[iR], I_S:[iS], I_T:[iT], V_R:[vR], V_S:[vS], V_T:[vT], DesbI:[desbI], DesbV:[desbV], VelAire:[velAire], Filtro:[filtro], TempAguaRetorno:[tempAguaRetorno], TempAguaSuministro:[tempAguaSuministro], CaudalAgua:[caudalAgua] },
@@ -1229,6 +1454,7 @@ function saveManualReading(){
   saveState();
   closeManualEntry();
   renderAll();
+  publicarAnalisisRefrigeracion(eqId).catch(() => {});
   if (_capturaActual){
     const capId = _capturaActual.id;
     _capturaActual = null;
@@ -1542,12 +1768,13 @@ function computeTrends(k, N){
   const start = Math.max(0, total - N);
   const results = [];
   const metrics = TREND_METRICS.filter(m => !m.onlyFor || m.onlyFor === eq.tipo);
+  const t0 = d.dates[start].getTime();
   for (const m of metrics){
     const xs=[], ys=[];
     for (let i=start;i<total;i++){
       const v = m.get(d.params, i, eq.fla);
       if (v===undefined || v===null || isNaN(v)) continue;
-      xs.push(i-start);
+      xs.push((d.dates[i].getTime() - t0) / 86400000); // días transcurridos desde la primera lectura de la ventana
       ys.push(v);
     }
     if (xs.length < 3){ results.push({ ...m, insufficient:true, nPoints:xs.length }); continue; }
@@ -1588,7 +1815,7 @@ function renderTrendPanel(){
     const arrow = Math.abs(t.slope) < eps ? '→' : (t.slope>0 ? '↑' : '↓');
     return `<div class="trend-card">
       <div class="trend-lbl">${t.label}</div>
-      <div class="trend-val ${v.cls}">${arrow} ${t.slope>=0?'+':''}${fmt(t.slope,3)} ${t.unit}/lectura</div>
+      <div class="trend-val ${v.cls}">${arrow} ${t.slope>=0?'+':''}${fmt(t.slope,3)} ${t.unit}/día</div>
       <div class="trend-sub">${v.label} · R²=${fmt(t.r2,2)} · ${t.nPoints} lecturas (${fmtDate(t.firstDate)}–${fmtDate(t.lastDate)})</div>
     </div>`;
   }).join('');
@@ -1644,7 +1871,7 @@ function openDetail(k){
   <div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <span>Tendencia temporal simple (regresión)</span>
     <label style="font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:6px;">
-      N puntos:
+      Últimas N mediciones:
       <select id="trendNSel" class="trend-select" onchange="renderTrendPanel()">
         <option value="5">5</option>
         <option value="8" selected>8</option>
@@ -1679,7 +1906,24 @@ function openDetail(k){
         </tr>`;
       }).reverse().slice(0,15).join('')}</tbody>
     </table>
-  </div>`;
+  </div>
+
+  <div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span>🛠️ Últimas intervenciones</span>
+    <button class="btn-small" onclick="closeDetail();switchTab('intervenciones');document.getElementById('ivFiltroEquipo').value='${escJs(eq.tag)}';renderIntervenciones();">Ver todas / cargar nueva</button>
+  </div>
+  ${(()=>{
+    const ivs = intervenciones.filter(r=>r.eqTag===eq.tag).sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
+    if (!ivs.length) return `<div class="empty-state"><div class="ei">🛠️</div>Sin intervenciones registradas para este equipo.</div>`;
+    return `<div style="overflow-x:auto;"><table class="rtable">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th></tr></thead>
+      <tbody>${ivs.map(r=>`<tr>
+        <td data-label="Fecha">${escHtml(r.fecha)}</td>
+        <td data-label="Tipo">${escHtml(r.tipo)}</td>
+        <td data-label="Descripción" style="white-space:normal;">${escHtml(r.descripcion)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  })()}`;
 
   document.getElementById('modalBody').innerHTML = html;
 
@@ -1745,7 +1989,7 @@ function createEquipo(){
   const fla = parseFloat(document.getElementById('newEqFLA').value) || 0;
   const id = genId();
   equiposRegistry.set(id, {tag, tipo, ambiente, ubicacion, capacidad, capUnidad, refrigerante, fla});
-  publicarEquipoEnHub(tag, tipo);
+  publicarEquipoEnHub(tag, tipo, {ubicacion});
   document.getElementById('newEqTag').value='';
   document.getElementById('newEqAmbiente').value='';
   document.getElementById('newEqUbicacion').value='';
@@ -1875,6 +2119,7 @@ function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+tab));
   if (tab === 'intervenciones') renderIntervenciones();
+  if (tab === 'ia') initIATab();   // ← NUEVO
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2025,10 +2270,13 @@ async function sincronizarEquiposHub(silencioso){
   }
 }
 
-async function publicarEquipoEnHub(name, tipo){
+async function publicarEquipoEnHub(name, tipo, extra={}){
   if(typeof SatSync === 'undefined' || !SatSync.init()) return;
   try{
-    await SatSync.buscarOCrearEquipo(name, {tipo});
+    // Nota: la tabla "equipos" del hub (sat-sync.js) solo persiste tag/nombre/tipo/ubicacion.
+    // Capacidad, refrigerante y FLA son propios de este módulo y no viajan al hub hasta que
+    // se agreguen esas columnas al esquema compartido (afectaría a los 6 módulos satélite).
+    await SatSync.buscarOCrearEquipo(name, {tipo, ubicacion: extra.ubicacion || null});
     equiposHub.set(name, {tag:name, nombre:name, tipo});
   }catch(err){
     console.warn('[SatSync] no se pudo publicar el equipo en el hub', err);
@@ -2041,12 +2289,67 @@ function mapNivelASeveridad(nivel){
   return 'ok';
 }
 
+// Publica el análisis del equipo `eqId` a `analisis`. Fire-and-forget: pensada
+// para llamarse desde saveManualReading/handleFileUpload, así la medición queda
+// guardada en la UI aunque la subida a la nube falle (offline, sin conexión).
+// true → publicado · false → falló · null → no aplica (sin diag o sin tag)
+async function publicarAnalisisRefrigeracion(eqId){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
+  const diag = diagnoseEquipo(eqId);
+  if (!diag || diag.overall < 0) return null;
+  const eq = equiposRegistry.get(eqId);
+  const tag = eq?.tag;
+  if (!tag) return null;
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const nivel  = STATUS[diag.overall];
+  const msgs   = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+  const resumen = `${tag}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/, '') : 'Sin hallazgos relevantes');
+  try {
+    await SatSync.guardarAnalisis({
+      modulo: 'refrigeracion',
+      equipo_tag: tag,
+      severidad: mapNivelASeveridad(nivel),
+      resumen,
+      datos: {
+        equipo: tag,
+        tipo: eq?.tipo,
+        refrigerante: eq?.refrigerante || null,
+        ptSupported: !!diag.ptSupported,
+        health, nivel,
+        // Lado aire
+        deltaT: diag.deltaT,
+        velAire: diag.velAire,
+        filtro: diag.filtro,
+        // Lado refrigerante (con T° de saturación y SH/SC si el refrigerante está soportado)
+        presAlta: diag.presAlta, tSatCond: diag.tSatCond,
+        presBaja: diag.presBaja, tSatEvap: diag.tSatEvap,
+        superheat: diag.superheat, subcooling: diag.subcooling,
+        // Lado eléctrico
+        iAvg: diag.iAvg, fla: eq?.fla, cargaPct: diag.cargaPct,
+        desbI: diag.desbI, desbV: diag.desbV,
+        // Lado agua (solo Chillers)
+        esChiller: diag.esChiller,
+        deltaTAgua: diag.deltaTAgua,
+        tempAguaRetorno: diag.tempAguaRetorno,
+        tempAguaSuministro: diag.tempAguaSuministro,
+        caudalAgua: diag.caudalAgua,
+        fecha: diag.date,
+        hallazgos: msgs.map(m => ({ sev: m.sev, title: m.title, action: m.action }))
+      }
+    });
+    return true;
+  } catch (err) {
+    console.warn('[SatSync] no se pudo publicar análisis de', tag, err);
+    return false;
+  }
+}
+
 async function guardarEnLaNube(){
-  if(!readingsData.size){ alert('Generá el informe primero.'); return; }
+  if (!readingsData.size){ alert('Generá el informe primero.'); return; }
   const statusEl = document.getElementById('nubeStatus');
   const btn = document.getElementById('btnGuardarNube');
 
-  if(typeof SatSync === 'undefined' || !SatSync.init()){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
     statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero — la config se comparte entre este módulo y el hub.';
     statusEl.style.color = 'var(--warning, #f0b429)';
     return;
@@ -2055,34 +2358,8 @@ async function guardarEnLaNube(){
   btn.disabled = true;
   let ok = 0, fail = 0;
   for (const k of readingsData.keys()){
-    const diag = diagnoseEquipo(k);
-    if(!diag || diag.overall < 0) continue;
-    const eq = equiposRegistry.get(k);
-    const tag = eq?.tag;
-    if(!tag){ fail++; continue; }
-    const health = healthScoreFromLevel(diag.overall, diag.subs);
-    const nivel  = STATUS[diag.overall];
-    const msgs   = diagnosisMessages(diag).filter(m=>m.sev!=='good');
-    const resumen = `${tag}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Sin hallazgos relevantes');
-    try{
-      await SatSync.guardarAnalisis({
-        modulo: 'refrigeracion',
-        equipo_tag: tag,
-        severidad: mapNivelASeveridad(nivel),
-        resumen,
-        datos: {
-          equipo: tag, tipo: eq?.tipo, health, nivel,
-          deltaT: diag.deltaT, presAlta: diag.presAlta, presBaja: diag.presBaja,
-          velAire: diag.velAire, filtro: diag.filtro, desbI: diag.desbI, desbV: diag.desbV,
-          cargaPct: diag.cargaPct, iAvg: diag.iAvg, fla: eq?.fla,
-          fecha: diag.date, hallazgos: msgs
-        }
-      });
-      ok++;
-    }catch(err){
-      console.error('[SatSync] error guardando', tag, err);
-      fail++;
-    }
+    const r = await publicarAnalisisRefrigeracion(k);
+    if (r === true) ok++; else if (r === false) fail++;
   }
   btn.disabled = false;
   statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
@@ -2202,9 +2479,7 @@ function renderIntervenciones(){
 }
 
 // Sube una intervención puntual al hub (SatSync), reusando el canal genérico de análisis
-// del módulo. severidad: 'intervencion' (no 'ok') — es un evento histórico, no un resultado
-// de ensayo/lectura; mismo criterio que Motor Pro, evita que aparezca en verde en vistas
-// por severidad del hub.
+// del módulo (no hay severidad real para una intervención, se guarda como informativa).
 async function guardarIntervencionEnNube(rec){
   if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
   try{
@@ -2306,8 +2581,9 @@ function renderCapturasBadge(){
   b.textContent = _capturasPendientes.length;
   b.classList.toggle('hidden', _capturasPendientes.length===0);
 }
-// Chequea capturas pendientes sin abrir el modal — para que el badge avise
-// apenas se carga la página, igual que en Motor Pro.
+
+// Chequea capturas pendientes sin abrir el modal — el badge avisa apenas
+// se carga la app, igual que en Bomba Pro / Motor Pro / Tablero Pro / Alineación.
 async function actualizarBadgeCapturas(){
   const badge = document.getElementById('capturasBadge');
   if(!badge) return;
@@ -2378,13 +2654,674 @@ function copiarCapturaAFormulario(i){
 }
 
 // ═══════════════════════════════════════════════════════════
+//  INFORME IA — FLUJO MANUAL
+// ═══════════════════════════════════════════════════════════
+
+let _lastIAReport = null;
+let _vistaIA = 'tecnica';
+
+// ── Paso 1: construir el prompt y copiarlo ──
+function buildAIPayload(){
+  const scope = document.querySelector('input[name="aiScope"]:checked').value;
+  const equipId = document.getElementById('aiEquipSelect').value;
+  const lang = document.querySelector('input[name="aiLang"]:checked').value;
+
+  let ids = [...readingsData.keys()];
+  if (scope === 'critical'){
+    ids = ids.filter(k => {
+      const diag = diagnoseEquipo(k);
+      if (!diag || diag.overall < 0) return false;
+      return diag.overall >= 2;
+    });
+  } else if (scope === 'single' && equipId){
+    ids = ids.filter(k => k === equipId);
+  }
+
+  const equipos = [];
+  for (const k of ids){
+    const diag = diagnoseEquipo(k);
+    if (!diag || diag.overall < 0) continue;
+    const eq = equiposRegistry.get(k) || {};
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+    equipos.push({
+      equipo: eq.tag || k,
+      tipo: eq.tipo || null,
+      refrigerante: eq.refrigerante || null,
+      ambiente: eq.ambiente || null,
+      ubicacion: eq.ubicacion || null,
+      capacidad: eq.capacidad || null,
+      capUnidad: eq.capUnidad || null,
+      ficha: {
+        fla_rla_placa_A: eq.fla || null
+      },
+      diagnostico: {
+        nivel: STATUS[diag.overall],
+        indice_salud: health,
+        // Aire
+        deltaT_aire_C: isN(diag.deltaT) ? +diag.deltaT.toFixed(2) : null,
+        velAire_ms: isN(diag.velAire) ? +diag.velAire.toFixed(2) : null,
+        filtro: diag.filtro || null,
+        // Refrigerante
+        ptSupported: !!diag.ptSupported,
+        presAlta_bar: isN(diag.presAlta) ? +diag.presAlta.toFixed(2) : null,
+        tSatCond_C: (diag.ptSupported && isN(diag.tSatCond)) ? +diag.tSatCond.toFixed(2) : null,
+        presBaja_bar: isN(diag.presBaja) ? +diag.presBaja.toFixed(2) : null,
+        tSatEvap_C: (diag.ptSupported && isN(diag.tSatEvap)) ? +diag.tSatEvap.toFixed(2) : null,
+        superheat_C: (diag.ptSupported && isN(diag.superheat)) ? +diag.superheat.toFixed(2) : null,
+        subcooling_C: (diag.ptSupported && isN(diag.subcooling)) ? +diag.subcooling.toFixed(2) : null,
+        // Eléctrico
+        iAvg_A: isN(diag.iAvg) ? +diag.iAvg.toFixed(2) : null,
+        cargaPct: isN(diag.cargaPct) ? +diag.cargaPct.toFixed(0) : null,
+        desbI_pct: isN(diag.desbI) ? +diag.desbI.toFixed(2) : null,
+        desbV_pct: isN(diag.desbV) ? +diag.desbV.toFixed(2) : null,
+        // Lado agua (solo Chillers)
+        esChiller: !!diag.esChiller,
+        deltaTAgua_C: (diag.esChiller && isN(diag.deltaTAgua)) ? +diag.deltaTAgua.toFixed(2) : null,
+        tempAguaRetorno_C: (diag.esChiller && isN(diag.tempAguaRetorno)) ? +diag.tempAguaRetorno.toFixed(1) : null,
+        tempAguaSuministro_C: (diag.esChiller && isN(diag.tempAguaSuministro)) ? +diag.tempAguaSuministro.toFixed(1) : null,
+        caudalAgua_m3h: (diag.esChiller && isN(diag.caudalAgua)) ? +diag.caudalAgua.toFixed(1) : null
+      },
+      ultimaMedicion: fmtDate(diag.date),
+      hallazgos: msgs.map(m => ({
+        severidad: m.sev,
+        titulo: m.title.replace(/^[^\w]+/, ''),
+        detalle: m.action
+      }))
+    });
+  }
+
+  if (!equipos.length) return null;
+
+  const langInstructions = {
+    es: 'Responde en español. Usa terminología técnica de refrigeración industrial (HVAC-R).',
+    en: 'Respond in English. Use HVAC-R industrial terminology.',
+    pt: 'Responda em português. Use terminologia técnica de refrigeração industrial (HVAC-R).'
+  };
+
+  const prompt = `Sos un experto en refrigeración industrial (HVAC-R): acondicionadores de aire,
+chillers, cámaras frigoríficas y sistemas de compresión de vapor.
+${langInstructions[lang]}
+
+═══════════════════════════════════════════════════════════
+CONTEXTO IMPORTANTE — CÓMO LEER CADA EQUIPO
+═══════════════════════════════════════════════════════════
+Cada equipo trae su diagnóstico YA CALCULADO por Refrigeración Pro:
+
+- ΔT aire (entrada − salida del aire) y velocidad de aire medida con anemómetro.
+- Estado de filtros / serpentinas (Bueno / Sucio / Muy sucio).
+- Presiones alta y baja del refrigerante. La EVALUACIÓN depende de si el
+  refrigerante tiene tabla P-T cargada:
+
+  · ptSupported = true (R410A, R22, R134a, R407C, R404A):
+    La presión se evalúa por su TEMPERATURA DE SATURACIÓN equivalente.
+      - tSatCond_C → temperatura de saturación de condensación (lado de alta).
+      - tSatEvap_C → temperatura de saturación de evaporación (lado de baja).
+    Además se calculan:
+      - superheat_C (SH, recalentamiento) = T° succión − T° saturación a la presión de baja.
+      - subcooling_C (SC, subenfriamiento) = T° saturación a la presión de alta − T° líquido.
+    Estos dos son la clave para distinguir falta/exceso de carga vs. restricciones.
+
+  · ptSupported = false (refrigerante "Otro" o vacío):
+    Se evalúan contra rangos en BAR. NO hay SH/SC ni T° de saturación disponibles.
+    En este caso indicá expresamente que falta cargar un refrigerante soportado
+    para obtener el análisis completo.
+
+- Corriente promedio del compresor y %Carga (I_medida / FLA·RLA de placa).
+- Desbalances NEMA MG-1: tensión (desbV_pct) y corriente (desbI_pct).
+
+- SOLO para Chillers (esChiller = true):
+  LADO DE AGUA del evaporador. ΔT agua (retorno − suministro), caudal y temperaturas.
+  Este lado es INDEPENDIENTE del circuito de refrigerante: si el diagnóstico de
+  refrigerante está OK pero el ΔT agua está bajo, priorizá CAUSA HIDRÁULICA
+  (bajo caudal, bomba, filtro de agua, incrustación) antes de tocar el gas.
+
+NO recalcules los números. Interpretá, priorizá y redactá el informe.
+
+═══════════════════════════════════════════════════════════
+REGLAS DE INTERPRETACIÓN POR TIPO DE EQUIPO
+═══════════════════════════════════════════════════════════
+
+1) AC Split / AC Precisión (aire-aire):
+   - Diagnóstico centrado en ΔT de aire, filtros, presiones y SH/SC.
+   - Patrones canónicos de SH/SC (solo si ptSupported=true):
+       · SH alto + SC bajo  → FALTA DE CARGA (undercharge) o restricción antes de TXV.
+                              Revisar fugas ANTES de recargar.
+       · SH bajo + SC alto  → EXCESO DE CARGA (overcharge). Riesgo de retorno de líquido
+                              al compresor.
+       · SH alto + SC alto  → RESTRICCIÓN en línea de líquido (filtro deshidratador
+                              obstruido, válvula solenoide parcial, TXV subalimentando).
+       · SH bajo + SC bajo  → TXV SOBREALIMENTANDO el evaporador o bulbo remoto con
+                              mal contacto térmico. Riesgo de retorno de líquido.
+   - Si ptSupported=false → trabájá con ΔT aire, filtros y presión en bar, y aclaralo.
+
+2) Chiller (esChiller=true):
+   - Además del circuito de refrigerante, evaluá explícitamente el LADO DE AGUA.
+   - ΔT agua bajo (< threshold.deltaTAgua) → bajo caudal, incrustación del
+     intercambiador o baja carga térmica real del sistema.
+   - Si el lado eléctrico y refrigerante están OK pero el lado agua no, priorizá
+     causas hidráulicas ANTES de intervenir el circuito de refrigerante.
+
+3) Si ptSupported=false: NO calcules SH/SC ni T° de saturación. Trabajá con los
+   valores en bar y aclará en el informe que faltaría cargar un refrigerante
+   soportado (R410A, R22, R134a, R407C, R404A) para el análisis completo.
+
+CUANDO GENERES HALLAZGOS:
+- Citá valores concretos (ej: "SH=15.2°C sobre el máximo de 12°C").
+- Si el diagnóstico de Refrigeración Pro ya trae hallazgos, usalos como base;
+  agregá contexto técnico, no los repitas textualmente.
+- Priorizá por riesgo de daño (compresor > pérdida de carga > eficiencia).
+- NUNCA sugieras acciones incompatibles con el refrigerante del equipo
+  (ej: no propongas mezclas, ni cambio a un refrigerante no soportado).
+
+DATOS DE EQUIPOS ANALIZADOS (${equipos.length}):
+${JSON.stringify(equipos, null, 2)}
+
+UMBRALES CONFIGURADOS EN REFRIGERACIÓN PRO:
+${JSON.stringify({
+  deltaT_aire_C: thresholds.deltaT,
+  desbV_pct: thresholds.desbV,
+  desbI_pct: thresholds.desbI,
+  cargaPct_FLA: thresholds.cargaPct,
+  velAire_ms: thresholds.velAire,
+  presAltaTsat_C: thresholds.presionAltaTsat,
+  presBajaTsat_C: thresholds.presionBajaTsat,
+  presAlta_bar: thresholds.presionAlta,
+  presBaja_bar: thresholds.presionBaja,
+  superheat_C: thresholds.superheat,
+  subcooling_C: thresholds.subenfriamiento,
+  deltaTAgua_C: thresholds.deltaTAgua
+}, null, 2)}
+
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
+(sin texto antes ni después, sin backticks, sin claves inventadas):
+{
+  "resumen_ejecutivo": "string — 2-4 oraciones sobre el estado global y riesgos principales",
+  "fecha_informe": "string",
+  "total_equipos_analizados": number,
+  "distribucion_estado": { "normal": number, "elevado": number, "alerta": number, "critico": number },
+  "indice_salud_flota": number,
+  "equipos": [
+    {
+      "equipo": "string",
+      "tipo": "string",
+      "refrigerante": "string",
+      "estado": "string",
+      "indice_salud": number,
+      "prioridad": number,
+      "hallazgos": ["string — hallazgo concreto con valores"],
+      "causa_probable": "string — causa raíz con fundamento técnico",
+      "recomendaciones": ["string — acción concreta"],
+      "plazo_accion": "INMEDIATO|7 DÍAS|30 DÍAS|RUTINA",
+      "riesgo_falla": "ALTO|MEDIO|BAJO"
+    }
+  ],
+  "plan_de_accion": [
+    { "prioridad": number, "equipo": "string", "accion": "string", "plazo": "string",
+      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones" }
+  ],
+  "conclusiones": "string — párrafo estratégico",
+  "proxima_inspeccion": "string"
+}`;
+
+  return { prompt, equipos };
+}
+
+function copiarPromptManual(){
+  const payload = buildAIPayload();
+  const st = document.getElementById('manualPromptStatus');
+  if (!payload){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ No hay equipos en el alcance seleccionado.';
+    return;
+  }
+  const box = document.getElementById('aiManualPromptBox');
+  box.value = payload.prompt;
+  box.style.display = 'block';
+
+  const finish = ok => {
+    st.style.color = ok ? 'var(--good)' : 'var(--warning)';
+    st.textContent = ok
+      ? `✅ Prompt copiado (${payload.equipos.length} equipo/s). Pegalo en tu IA web.`
+      : '⚠️ No se pudo copiar automáticamente — seleccioná el texto y copiá con Ctrl+C.';
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload.prompt).then(()=>finish(true)).catch(()=>{ box.select(); finish(false); });
+  } else {
+    box.select(); finish(false);
+  }
+}
+
+// ── Paso 2: procesar la respuesta pegada ──
+function procesarRespuestaManual(){
+  const raw = document.getElementById('aiManualResponse').value.trim();
+  if (!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
+  try{
+    let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) cleaned = m[0];
+    const report = JSON.parse(cleaned);
+    _lastIAReport = report;
+    document.getElementById('aiEmptyState').style.display = 'none';
+    mostrarReporteIA(report);
+  }catch(err){
+    alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
+      '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
+  }
+}
+
+function setVistaIA(vista){
+  _vistaIA = vista;
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', vista === 'tecnica');
+  if (bE) bE.classList.toggle('active', vista === 'ejecutiva');
+  if (_lastIAReport) mostrarReporteIA(_lastIAReport);
+}
+
+function mostrarReporteIA(r){
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', _vistaIA === 'tecnica');
+  if (bE) bE.classList.toggle('active', _vistaIA === 'ejecutiva');
+  if (_vistaIA === 'ejecutiva') renderReporteEjecutivo(r);
+  else renderReporteTecnico(r);
+}
+
+function renderReporteTecnico(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+
+  const salud = r.indice_salud_flota || '—';
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+  const dist = r.distribucion_estado || {};
+  document.getElementById('aiSummaryCards').innerHTML = `
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🧊</div>
+      <div><div class="ai-sum-card-val" style="color:var(--accent)">${r.total_equipos_analizados || (r.equipos||[]).length}</div><div class="ai-sum-card-lbl">Equipos analizados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">💪</div>
+      <div><div class="ai-sum-card-val" style="color:${saludColor}">${salud}</div><div class="ai-sum-card-lbl">Salud flota (%)</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🔴</div>
+      <div><div class="ai-sum-card-val" style="color:var(--critical)">${dist.critico||0}</div><div class="ai-sum-card-lbl">Críticos</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟠</div>
+      <div><div class="ai-sum-card-val" style="color:var(--warning)">${dist.alerta||0}</div><div class="ai-sum-card-lbl">En alerta</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟡</div>
+      <div><div class="ai-sum-card-val" style="color:var(--elevated)">${dist.elevado||0}</div><div class="ai-sum-card-lbl">Elevados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟢</div>
+      <div><div class="ai-sum-card-val" style="color:var(--good)">${dist.normal||0}</div><div class="ai-sum-card-lbl">Normales</div></div></div>
+  `;
+
+  let html = '';
+
+  if (r.resumen_ejecutivo){
+    html += `<div class="ai-fleet-box">
+      <div class="ai-fleet-box-title">📋 Resumen Ejecutivo — ${escHtml(r.fecha_informe||'')}</div>
+      <div class="ai-fleet-text">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+
+  const equipos = (r.equipos || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
+  if (equipos.length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:20px 0 12px;">🔍 Análisis por Equipo</div>`;
+    equipos.forEach(e => {
+      const lvl = (e.estado||'').toLowerCase().includes('crít') ? 'critical'
+                : (e.estado||'').toLowerCase().includes('alert') ? 'warning'
+                : (e.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const prioClass = `ai-prio-${Math.min(e.prioridad||4,4)}`;
+      const riesgoIcon = e.riesgo_falla === 'ALTO' ? '⛔' : e.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `<div class="ai-equip-card">
+        <div class="ai-equip-card-header">
+          <div>
+            <div class="ai-equip-name">${escHtml(e.equipo||'')} <span class="mpoint-badge">${escHtml(e.tipo||'')}</span></div>
+            <div class="ai-equip-meta">${riesgoIcon} Riesgo: ${escHtml(e.riesgo_falla||'—')} &nbsp;|&nbsp; Plazo: <strong>${escHtml(e.plazo_accion||'—')}</strong>${e.refrigerante?` &nbsp;|&nbsp; Refrigerante: ${escHtml(e.refrigerante)}`:''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="mbadge badge-${lvl}">${escHtml(e.estado||'')}</span>
+            <span class="ai-prio-badge ${prioClass}">P${e.prioridad||'—'}</span>
+          </div>
+        </div>
+        <div class="ai-equip-card-body">
+          ${e.causa_probable ? `<div class="ai-finding ${lvl}"><strong>Causa probable:</strong> ${escHtml(e.causa_probable)}</div>` : ''}
+          ${(e.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
+            ${e.hallazgos.map(h => `<div class="ai-finding ${lvl}">${escHtml(typeof h==='string'?h:(h.titulo||'')+(h.detalle?' — '+h.detalle:''))}</div>`).join('')}` : ''}
+          ${(e.recomendaciones||[]).length ? `<div class="ai-section-label">Recomendaciones</div>
+            <ul class="ai-rec-list">${e.recomendaciones.map(rec=>`<li>${escHtml(rec)}</li>`).join('')}</ul>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+
+  if ((r.plan_de_accion||[]).length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:24px 0 12px;">📅 Plan de Acción</div>
+    <div class="ai-equip-card"><div style="overflow-x:auto;padding:6px 0;">
+    <table class="ai-plan-table">
+      <thead><tr><th>#</th><th>Equipo</th><th>Acción</th><th>Plazo</th><th>Responsable</th></tr></thead>
+      <tbody>${r.plan_de_accion.map((p,i)=>{
+        const pc = `ai-prio-${Math.min(p.prioridad||4,4)}`;
+        return `<tr>
+          <td><span class="ai-prio-badge ${pc}">P${p.prioridad||i+1}</span></td>
+          <td style="font-weight:700;color:#fff;">${escHtml(p.equipo||'')}</td>
+          <td>${escHtml(p.accion||'')}</td>
+          <td style="white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          <td style="font-size:.8rem;color:var(--muted);">${escHtml(p.responsable||'')}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+  }
+
+  if (r.conclusiones || r.proxima_inspeccion){
+    html += `<div class="ai-fleet-box" style="border-color:rgba(16,201,138,.25);background:rgba(16,201,138,.05);">
+      <div class="ai-fleet-box-title" style="color:var(--good);">💡 Conclusiones y Próximos Pasos</div>
+      ${r.conclusiones ? `<div class="ai-fleet-text" style="margin-bottom:${r.proxima_inspeccion?'12px':'0'}">${escHtml(String(r.conclusiones))}</div>` : ''}
+      ${r.proxima_inspeccion ? `<div style="margin-top:8px;padding-top:10px;border-top:1px solid rgba(16,201,138,.2);font-size:.86rem;color:var(--good);">🗓 Próxima inspección: <strong>${escHtml(String(r.proxima_inspeccion))}</strong></div>` : ''}
+    </div>`;
+  }
+
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function renderReporteEjecutivo(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  document.getElementById('aiEmptyState').style.display = 'none';
+
+  const dist  = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_equipos_analizados || 0;
+  const salud = r.indice_salud_flota || 0;
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+
+  const top = (r.equipos || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0, 6);
+  const planTop = (r.plan_de_accion || []).filter(p => (p.prioridad||99) <= 2).slice(0, 5);
+
+  let html = '';
+  html += `
+  <div style="background:linear-gradient(135deg,#0d1117,#0e1f26);border:1px solid var(--border2);border-radius:14px;padding:26px 30px;margin-bottom:20px;">
+    <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Informe Ejecutivo · Refrigeración Pro</div>
+    <div style="font-size:1.6rem;font-weight:800;color:#fff;margin-top:6px;letter-spacing:-.3px;">Estado de la flota de refrigeración</div>
+    <div style="font-size:.86rem;color:var(--muted);margin-top:4px;">${escHtml(r.fecha_informe||'')} · ${total} equipo(s) analizados</div>
+  </div>`;
+
+  html += `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:18px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:${saludColor};line-height:1;">${salud}%</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Salud flota</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--critical);line-height:1;">${dist.critico}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Críticos</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--warning);line-height:1;">${dist.alerta}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">En alerta</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--elevated);line-height:1;">${dist.elevado}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Elevados</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--good);line-height:1;">${dist.normal}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Normales</div>
+    </div>
+  </div>`;
+
+  if (r.resumen_ejecutivo){
+    html += `
+    <div style="background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:10px;">Resumen ejecutivo</div>
+      <div style="font-size:1rem;color:var(--text);line-height:1.7;">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+
+  if (top.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Top ${top.length} equipos a atender</div>`;
+    html += `<div style="display:grid;gap:10px;margin-bottom:22px;">`;
+    for (const e of top){
+      const nivel = (e.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (e.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (e.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const nc = {critical:'var(--critical)',warning:'var(--warning)',elevated:'var(--elevated)',good:'var(--good)'}[nivel];
+      const ic = e.riesgo_falla === 'ALTO' ? '⛔' : e.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `
+      <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid ${nc};border-radius:10px;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">${escHtml(e.equipo||'')} <span class="mpoint-badge">${escHtml(e.tipo||'')}</span></div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">${ic} Riesgo ${escHtml(e.riesgo_falla||'—')} · Plazo: <strong style="color:${nc};">${escHtml(e.plazo_accion||'—')}</strong></div>
+          </div>
+          <span class="mbadge badge-${nivel}">${escHtml(e.estado||'')}</span>
+        </div>
+        ${e.causa_probable ? `<div style="font-size:.85rem;color:var(--text);margin-top:8px;line-height:1.5;">${escHtml(e.causa_probable)}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (planTop.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Plan de acción inmediato</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <table class="ai-plan-table" style="margin:0;">
+        <thead><tr><th style="width:50px;">#</th><th>Equipo</th><th>Acción</th><th style="width:100px;">Plazo</th></tr></thead>
+        <tbody>${planTop.map((p,i)=>`
+          <tr>
+            <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+            <td style="font-weight:700;color:#fff;">${escHtml(p.equipo||'')}</td>
+            <td style="font-size:.88rem;">${escHtml(p.accion||'')}</td>
+            <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  if (r.proxima_inspeccion || r.conclusiones){
+    html += `
+    <div style="background:rgba(16,201,138,.06);border:1px solid rgba(16,201,138,.2);border-left:4px solid var(--good);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--good);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:8px;">Próximo paso</div>
+      ${r.proxima_inspeccion ? `<div style="font-size:1rem;color:var(--text);line-height:1.6;margin-bottom:${r.conclusiones?'10px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="font-size:.88rem;color:var(--muted);line-height:1.6;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>`;
+  }
+
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiSummaryCards').innerHTML = '';
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function toggleJsonView(){
+  const pre = document.getElementById('aiJsonViewer');
+  pre.style.display = pre.style.display === 'none' ? 'block' : 'none';
+}
+function downloadJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const ts = new Date().toISOString().slice(0,10);
+  const blob = new Blob([JSON.stringify(_lastIAReport, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `refrigeracion_informe_ia_${ts}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function copyJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  navigator.clipboard.writeText(JSON.stringify(_lastIAReport, null, 2))
+    .then(()=>alert('JSON copiado al portapapeles ✅'))
+    .catch(()=>alert('No se pudo copiar.'));
+}
+
+// ── Publicar el informe IA al hub ──
+function mapEstadoASeveridadIA(estado){
+  const e = (estado || '').toLowerCase();
+  if (e.includes('crít')) return 'critico';
+  if (e.includes('alert') || e.includes('elev')) return 'atencion';
+  return 'ok';
+}
+
+async function guardarIAEnLaNube(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const statusEl = document.getElementById('iaNubeStatus');
+  const btn = document.getElementById('btnGuardarNubeIA');
+
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  const equipos = _lastIAReport.equipos || [];
+  if (!equipos.length){
+    statusEl.textContent = '⚠️ El informe no trae equipos individuales para guardar.';
+    return;
+  }
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const e of equipos){
+    const tag = e.equipo;
+    if (!tag){ fail++; continue; }
+    try{
+      await SatSync.guardarAnalisis({
+        modulo: 'refrigeracion_informe_ia',
+        equipo_tag: tag,
+        severidad: mapEstadoASeveridadIA(e.estado),
+        resumen: e.causa_probable || (e.hallazgos && e.hallazgos[0]) || e.estado || '',
+        datos: e
+      });
+      ok++;
+    }catch(err){
+      console.error('[SatSync] error guardando', tag, err);
+      fail++;
+    }
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning)' : 'var(--good)';
+  statusEl.textContent = fail
+    ? `☁️ Guardados ${ok} de ${equipos.length} (${fail} con error — ver consola).`
+    : `☁️ ${ok} equipo(s) guardados en el informe IA.`;
+}
+
+// ── PDF ejecutivo ──
+function imprimirInformeEjecutivo(){
+  const r = _lastIAReport;
+  if (!r){ alert('Procesá un informe primero.'); return; }
+  const dist = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const salud = r.indice_salud_flota || 0;
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_equipos_analizados || 0;
+  const saludColorHex = salud < 40 ? '#dc2626' : salud < 70 ? '#ea580c' : salud < 85 ? '#d97706' : '#16a34a';
+
+  const top = (r.equipos || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0,6);
+  const planTop = (r.plan_de_accion||[]).filter(p=>(p.prioridad||99)<=2).slice(0,5);
+  const fecha = new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Informe Ejecutivo — Refrigeración Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;font-size:12px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{max-width:840px;margin:0 auto;padding:32px 40px;}
+  .hdr{background:linear-gradient(135deg,#082f3f,#0e4c63);color:#fff;padding:26px 32px;border-radius:12px;margin-bottom:22px;}
+  .hdr-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#67e8f9;font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.3px;}
+  .hdr-meta{font-size:11px;color:#67e8f9;margin-top:6px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+  .kpi{padding:14px 8px;border-radius:10px;text-align:center;background:#f8fafc;border:1px solid #e5e7eb;}
+  .kpi-n{font-size:26px;font-weight:800;font-family:'Courier New',monospace;line-height:1;}
+  .kpi-l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:6px;font-weight:700;}
+  .sec-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#0e7490;font-weight:800;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+  .box{padding:16px 20px;border-radius:10px;margin-bottom:14px;border-left:4px solid #06b6d4;background:#ecfeff;}
+  .box.good{border-left-color:#16a34a;background:#f0fdf4;}
+  .eq{padding:12px 16px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;border-left:4px solid #dc2626;margin-bottom:8px;}
+  .eq-name{font-weight:800;color:#111827;}
+  .eq-meta{font-size:10px;color:#6b7280;margin-top:3px;}
+  .eq-cause{font-size:11.5px;color:#374151;margin-top:6px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;}
+  td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+  .badge.critical{background:#fff1f2;color:#991b1b;border:1px solid #fecaca;}
+  .badge.warning{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;}
+  .badge.elevated{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+  .badge.good{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+  .prio{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;}
+  .prio-1{background:#fee2e2;color:#991b1b;}
+  .prio-2{background:#ffedd5;color:#9a3412;}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
+  @page{margin:14mm;size:A4;}
+</style></head><body><div class="page">
+  <div class="hdr">
+    <div class="hdr-sub">Informe Ejecutivo · Refrigeración Pro</div>
+    <div class="hdr-title">Estado de la flota de refrigeración</div>
+    <div class="hdr-meta">${escHtml(fecha)} · ${total} equipo(s) analizados</div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-n" style="color:${saludColorHex};">${salud}%</div><div class="kpi-l">Salud flota</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#dc2626;">${dist.critico}</div><div class="kpi-l">Críticos</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#ea580c;">${dist.alerta}</div><div class="kpi-l">En alerta</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#d97706;">${dist.elevado}</div><div class="kpi-l">Elevados</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#16a34a;">${dist.normal}</div><div class="kpi-l">Normales</div></div>
+  </div>
+  ${r.resumen_ejecutivo ? `<div class="sec-title">Resumen ejecutivo</div><div class="box">${escHtml(String(r.resumen_ejecutivo))}</div>` : ''}
+  ${top.length ? `<div class="sec-title">Top ${top.length} equipos a atender</div>
+    ${top.map(e=>{
+      const nivel = (e.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (e.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (e.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      return `<div class="eq" style="border-left-color:${
+        nivel==='critical'?'#dc2626':nivel==='warning'?'#ea580c':nivel==='elevated'?'#d97706':'#16a34a'
+      };">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div><span class="eq-name">${escHtml(e.equipo||'')} · ${escHtml(e.tipo||'')}</span></div>
+          <span class="badge ${nivel}">${escHtml(e.estado||'')}</span>
+        </div>
+        <div class="eq-meta">Riesgo ${escHtml(e.riesgo_falla||'—')} · Plazo: <strong>${escHtml(e.plazo_accion||'—')}</strong></div>
+        ${e.causa_probable ? `<div class="eq-cause">${escHtml(e.causa_probable)}</div>` : ''}
+      </div>`;
+    }).join('')}` : ''}
+  ${planTop.length ? `<div class="sec-title">Plan de acción inmediato</div>
+    <table><thead><tr><th style="width:44px;">#</th><th>Equipo</th><th>Acción</th><th style="width:90px;">Plazo</th></tr></thead>
+    <tbody>${planTop.map((p,i)=>`<tr>
+      <td><span class="prio prio-${Math.min(p.prioridad||4,2)}">P${p.prioridad||i+1}</span></td>
+      <td style="font-weight:700;">${escHtml(p.equipo||'')}</td>
+      <td>${escHtml(p.accion||'')}</td>
+      <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+    </tr>`).join('')}</tbody></table>` : ''}
+  ${(r.proxima_inspeccion || r.conclusiones) ? `<div class="sec-title">Próximo paso</div>
+    <div class="box good">
+      ${r.proxima_inspeccion ? `<div style="font-weight:600;margin-bottom:${r.conclusiones?'8px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="color:#4b5563;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>` : ''}
+  <div class="footer">
+    <span>MANTEC – Refrigeración Pro · Motor de diagnóstico predictivo</span>
+    <span>Generado: ${escHtml(new Date().toLocaleString('es-PY'))}</span>
+  </div>
+</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1200');
+  if (!win){ alert('El navegador bloqueó la ventana emergente.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', ()=>setTimeout(()=>win.print(), 500));
+}
+
+// ── Init del tab IA ──
+function initIATab(){
+  const sel = document.getElementById('aiEquipSelect');
+  sel.innerHTML = '<option value="">— seleccionar —</option>';
+  for (const [id, e] of equiposRegistry.entries()){
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = e.tag || id;
+    sel.appendChild(opt);
+  }
+  const fc = document.getElementById('aiFleetCount');
+  if (fc) fc.textContent = readingsData.size;
+  const hasData = readingsData.size > 0;
+  const empty = document.getElementById('aiEmptyState');
+  if (empty) empty.style.display = hasData ? 'none' : 'block';
+  if (!hasData) document.getElementById('aiReportOutput').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
 //  13. INIT
 // ═══════════════════════════════════════════════════════════
 loadState();
 populateEquipoTypeSelect();
 renderAll();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
-actualizarBadgeCapturas(); // avisa si hay capturas del hub sin importar
+actualizarBadgeCapturas();   // avisa si hay capturas del hub sin importar
 
 </script>
 </body>
