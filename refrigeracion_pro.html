@@ -760,14 +760,25 @@ header{
         <div class="fld"><label>Temp. línea de líquido (°C)</label><input type="number" step="0.1" id="me_tempLiquido" placeholder="Salida del condensador/receptor"></div>
       </div>
 
-      <div class="modal-section-title">⚡ Corriente (A) y Tensión (V) del compresor</div>
+      <div class="modal-section-title">⚡ Corrientes de línea del compresor (A)</div>
       <div class="form-grid">
         <div class="fld"><label>Corriente R (A)</label><input type="number" step="0.1" id="me_iR"></div>
         <div class="fld"><label>Corriente S (A)</label><input type="number" step="0.1" id="me_iS"></div>
         <div class="fld"><label>Corriente T (A)</label><input type="number" step="0.1" id="me_iT"></div>
-        <div class="fld"><label>Tensión R (V)</label><input type="number" step="0.1" id="me_vR"></div>
-        <div class="fld"><label>Tensión S (V)</label><input type="number" step="0.1" id="me_vS"></div>
-        <div class="fld"><label>Tensión T (V)</label><input type="number" step="0.1" id="me_vT"></div>
+      </div>
+
+      <div class="modal-section-title">🔺 Tensión de línea (obligatorio)</div>
+      <div class="form-grid">
+        <div class="fld"><label>R-S (V)</label><input type="number" step="0.1" id="me_vRS"></div>
+        <div class="fld"><label>S-T (V)</label><input type="number" step="0.1" id="me_vST"></div>
+        <div class="fld"><label>R-T (V)</label><input type="number" step="0.1" id="me_vTR"></div>
+      </div>
+
+      <div class="modal-section-title">🔻 Tensión fase-neutro (opcional, si hay neutro)</div>
+      <div class="form-grid">
+        <div class="fld"><label>R-N (V)</label><input type="number" step="0.1" id="me_vRN"></div>
+        <div class="fld"><label>S-N (V)</label><input type="number" step="0.1" id="me_vSN"></div>
+        <div class="fld"><label>T-N (V)</label><input type="number" step="0.1" id="me_vTN"></div>
       </div>
 
       <div class="modal-section-title">💨 Caudal de aire y estado de filtros</div>
@@ -993,6 +1004,7 @@ let _capturasPendientes = [];     // capturas crudas desde el Hub de Campo
 let _capturaActual = null;        // captura en edición dentro del modal manual
 let intervenciones = [];          // [{id, eqTag, fecha, tipo, descripcion, ts, synced}] — historial de intervenciones (todos los equipos)
 let thresholds      = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
+let voltagesMigrated = false; // true si se reinterpretaron V_R/V_S/V_T como V_RS/V_ST/V_TR (línea-línea)
 let statusFilter    = 'all';
 let currentKey      = null;
 let detailChart      = null;
@@ -1015,10 +1027,23 @@ function loadState() {
     if (c.equiposRegistry) for (const [k,v] of Object.entries(c.equiposRegistry)) equiposRegistry.set(k,v);
     if (c.readingsData) {
       for (const [k,v] of Object.entries(c.readingsData)) {
-        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: v.params, obs: v.obs || [] });
+        const params = v.params || {};
+        // Migración pre-v2: V_R/V_S/V_T eran ambiguos (nunca se supo si eran
+        // línea-línea o fase-neutro). Se asume línea-línea — es lo que un técnico
+        // mide primero en el compresor trifásico de un equipo de refrigeración.
+        if (params.V_R && !params.V_RS){
+          params.V_RS = params.V_R;
+          params.V_ST = params.V_S;
+          params.V_TR = params.V_T;
+          delete params.V_R; delete params.V_S; delete params.V_T;
+          voltagesMigrated = true;
+        }
+        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params, obs: v.obs || [] });
       }
     }
     if (Array.isArray(c.intervenciones)) intervenciones = c.intervenciones;
+    // Guardar recién acá (con intervenciones ya cargadas) para no pisarlas.
+    if (voltagesMigrated) saveState();
   } catch(e){ console.warn('loadState error', e); }
 }
 function saveState() {
@@ -1143,7 +1168,9 @@ function evalReading(params, n, fla, refrigerante, tipo){
   for (const k in subs) if (subs[k] > overall) overall = subs[k];
   return { subs, overall, deltaT, desbV, desbI, cargaPct, iAvg, velAire, presAlta, presBaja, filtro,
     tempSuccion, tempLiquido, superheat, subcooling, tSatCond, tSatEvap, ptSupported, refrigerante: refrigerante||'',
-    esChiller, tempAguaRetorno, tempAguaSuministro, caudalAgua, deltaTAgua };
+    esChiller, tempAguaRetorno, tempAguaSuministro, caudalAgua, deltaTAgua,
+    vRS: p.V_RS?.[n], vST: p.V_ST?.[n], vTR: p.V_TR?.[n],
+    vRN: p.V_RN?.[n], vSN: p.V_SN?.[n], vTN: p.V_TN?.[n] };
 }
 
 function computeDesbalance(a,b,c){
@@ -1176,13 +1203,13 @@ function diagnoseEquipo(k){
 // ═══════════════════════════════════════════════════════════
 //  5. IMPORT (Excel / CSV)
 // ═══════════════════════════════════════════════════════════
-const TEMPLATE_HEADERS = ['TAG','Tipo','Ambiente','Ubicacion','Capacidad','UnidadCapacidad','Refrigerante','FLA_A','Fecha','Temp_Entrada_C','Temp_Salida_C','Temp_Ambiente_C','Presion_Alta_bar','Presion_Baja_bar','Temp_Succion_C','Temp_Liquido_C','I_R_A','I_S_A','I_T_A','V_R_V','V_S_V','V_T_V','Velocidad_Aire_ms','Estado_Filtro','Temp_Agua_Retorno_C','Temp_Agua_Suministro_C','Caudal_Agua_m3h','Observaciones'];
+const TEMPLATE_HEADERS = ['TAG','Tipo','Ambiente','Ubicacion','Capacidad','UnidadCapacidad','Refrigerante','FLA_A','Fecha','Temp_Entrada_C','Temp_Salida_C','Temp_Ambiente_C','Presion_Alta_bar','Presion_Baja_bar','Temp_Succion_C','Temp_Liquido_C','I_R_A','I_S_A','I_T_A','V_RS_V','V_ST_V','V_TR_V','V_RN_V','V_SN_V','V_TN_V','Velocidad_Aire_ms','Estado_Filtro','Temp_Agua_Retorno_C','Temp_Agua_Suministro_C','Caudal_Agua_m3h','Observaciones'];
 
 function downloadTemplate(){
   const sample = [
     TEMPLATE_HEADERS,
-    ['AC-SALA-CONTROL','AC Precisión','Sala de control','Planta - techo sala eléctrica',5,'TR','R410A',8.5,'2026-08-01',24,15,22,12.5,5.2,11,20,8.1,7.9,8.0,220,221,219,3.1,'Bueno','','','','Ejemplo — Temp_Succion_C y Temp_Liquido_C habilitan el cálculo de Recalentamiento (SH) y Subenfriamiento (SC) por tabla P-T del refrigerante. FLA_A es la corriente de placa del compresor; Estado_Filtro: Bueno / Sucio / Muy sucio'],
-    ['CH-PLANTA-01','Chiller','Planta general','Sala de máquinas',80,'TR','R134a',95,'2026-08-01','','','',6.5,2.1,'','',65,66,64,380,381,379,'','Bueno',12.5,7.0,45,'Ejemplo Chiller — Temp_Agua_Retorno_C/Suministro_C habilitan el diagnóstico del lado de agua del evaporador (solo se evalúa cuando Tipo=Chiller). Caudal_Agua_m3h es opcional/informativo.'],
+    ['AC-SALA-CONTROL','AC Precisión','Sala de control','Planta - techo sala eléctrica',5,'TR','R410A',8.5,'2026-08-01',24,15,22,12.5,5.2,11,20,8.1,7.9,8.0,380,381,379,220,221,219,3.1,'Bueno','','','','Ejemplo — V_RS/V_ST/V_TR son tensión de línea (obligatorio); V_RN/V_SN/V_TN son fase-neutro (opcional). Temp_Succion_C y Temp_Liquido_C habilitan el cálculo de Recalentamiento (SH) y Subenfriamiento (SC) por tabla P-T del refrigerante. FLA_A es la corriente de placa del compresor; Estado_Filtro: Bueno / Sucio / Muy sucio'],
+    ['CH-PLANTA-01','Chiller','Planta general','Sala de máquinas',80,'TR','R134a',95,'2026-08-01','','','',6.5,2.1,'','',65,66,64,380,381,379,220,221,219,'','Bueno',12.5,7.0,45,'Ejemplo Chiller — los tríos de tensión aplican igual. Temp_Agua_Retorno_C/Suministro_C habilitan el diagnóstico del lado de agua del evaporador (solo se evalúa cuando Tipo=Chiller). Caudal_Agua_m3h es opcional/informativo.'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(sample);
   const wb = XLSX.utils.book_new();
@@ -1276,9 +1303,15 @@ function importRows(rows){
     const iR = numOrNaN(findCol(row,['I_R_A']));
     const iS = numOrNaN(findCol(row,['I_S_A']));
     const iT = numOrNaN(findCol(row,['I_T_A']));
-    const vR = numOrNaN(findCol(row,['V_R_V']));
-    const vS = numOrNaN(findCol(row,['V_S_V']));
-    const vT = numOrNaN(findCol(row,['V_T_V']));
+    // Acepta tanto el formato nuevo (V_RS_V…) como el viejo (V_R_V…) para no
+    // romper Excels ya armados. Si viene el viejo, se asume línea-línea
+    // (ver migración en loadState).
+    const vRS = numOrNaN(findCol(row,['V_RS_V','V_R_V']));
+    const vST = numOrNaN(findCol(row,['V_ST_V','V_S_V']));
+    const vTR = numOrNaN(findCol(row,['V_TR_V','V_T_V']));
+    const vRN = numOrNaN(findCol(row,['V_RN_V']));
+    const vSN = numOrNaN(findCol(row,['V_SN_V']));
+    const vTN = numOrNaN(findCol(row,['V_TN_V']));
     const velAire = numOrNaN(findCol(row,['Velocidad_Aire_ms']));
     const filtro = String(findCol(row,['Estado_Filtro']) || '');
     const tempAguaRetorno = numOrNaN(findCol(row,['Temp_Agua_Retorno_C']));
@@ -1287,16 +1320,17 @@ function importRows(rows){
     const obs = String(findCol(row,['Observaciones']) || '');
 
     const desbI = computeDesbalance(iR,iS,iT);
-    const desbV = computeDesbalance(vR,vS,vT);
+    const desbV = computeDesbalance(vRS,vST,vTR);
 
-    if (!touched.has(eqId)) touched.set(eqId, {dates:[], params:{TempEntrada:[],TempSalida:[],TempAmb:[],PresAlta:[],PresBaja:[],TempSuccion:[],TempLiquido:[],I_R:[],I_S:[],I_T:[],V_R:[],V_S:[],V_T:[],DesbI:[],DesbV:[],VelAire:[],Filtro:[],TempAguaRetorno:[],TempAguaSuministro:[],CaudalAgua:[]}, obs:[]});
+    if (!touched.has(eqId)) touched.set(eqId, {dates:[], params:{TempEntrada:[],TempSalida:[],TempAmb:[],PresAlta:[],PresBaja:[],TempSuccion:[],TempLiquido:[],I_R:[],I_S:[],I_T:[],V_RS:[],V_ST:[],V_TR:[],V_RN:[],V_SN:[],V_TN:[],DesbI:[],DesbV:[],VelAire:[],Filtro:[],TempAguaRetorno:[],TempAguaSuministro:[],CaudalAgua:[]}, obs:[]});
     const t = touched.get(eqId);
     t.dates.push(fecha);
     t.params.TempEntrada.push(tempEntrada); t.params.TempSalida.push(tempSalida); t.params.TempAmb.push(tempAmb);
     t.params.PresAlta.push(presAlta); t.params.PresBaja.push(presBaja);
     t.params.TempSuccion.push(tempSuccion); t.params.TempLiquido.push(tempLiquido);
     t.params.I_R.push(iR); t.params.I_S.push(iS); t.params.I_T.push(iT);
-    t.params.V_R.push(vR); t.params.V_S.push(vS); t.params.V_T.push(vT);
+    t.params.V_RS.push(vRS); t.params.V_ST.push(vST); t.params.V_TR.push(vTR);
+    t.params.V_RN.push(vRN); t.params.V_SN.push(vSN); t.params.V_TN.push(vTN);
     t.params.DesbI.push(desbI); t.params.DesbV.push(desbV);
     t.params.VelAire.push(velAire); t.params.Filtro.push(filtro);
     t.params.TempAguaRetorno.push(tempAguaRetorno); t.params.TempAguaSuministro.push(tempAguaSuministro); t.params.CaudalAgua.push(caudalAgua);
@@ -1346,7 +1380,7 @@ function openManualEntry(){
   const newEqTipo = document.getElementById('me_newEqTipo');
   if (!newEqTipo.dataset.filled){ newEqTipo.innerHTML = TIPOS_EQUIPO.map(t=>`<option value="${t}">${t}</option>`).join(''); newEqTipo.dataset.filled='1'; }
 
-  ['me_tempEntrada','me_tempSalida','me_tempAmb','me_presAlta','me_presBaja','me_tempSuccion','me_tempLiquido','me_iR','me_iS','me_iT','me_vR','me_vS','me_vT','me_velAire','me_newEqTag','me_obs','me_tempAguaRetorno','me_tempAguaSuministro','me_caudalAgua'].forEach(id=>document.getElementById(id).value='');
+  ['me_tempEntrada','me_tempSalida','me_tempAmb','me_presAlta','me_presBaja','me_tempSuccion','me_tempLiquido','me_iR','me_iS','me_iT','me_vRS','me_vST','me_vTR','me_vRN','me_vSN','me_vTN','me_velAire','me_newEqTag','me_obs','me_tempAguaRetorno','me_tempAguaSuministro','me_caudalAgua'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('me_filtro').value = '';
   document.getElementById('me_fecha').value = new Date().toISOString().slice(0,10);
 
@@ -1397,9 +1431,12 @@ function sanityIssues(v){
   chk('Corriente I_R', v.iR, 0, 2000, ' A');
   chk('Corriente I_S', v.iS, 0, 2000, ' A');
   chk('Corriente I_T', v.iT, 0, 2000, ' A');
-  chk('Tensión V_R', v.vR, 0, 1000, ' V');
-  chk('Tensión V_S', v.vS, 0, 1000, ' V');
-  chk('Tensión V_T', v.vT, 0, 1000, ' V');
+  chk('Tensión V_RS', v.vRS, 0, 1000, ' V');
+  chk('Tensión V_ST', v.vST, 0, 1000, ' V');
+  chk('Tensión V_TR', v.vTR, 0, 1000, ' V');
+  chk('Tensión V_RN', v.vRN, 0, 1000, ' V');
+  chk('Tensión V_SN', v.vSN, 0, 1000, ' V');
+  chk('Tensión V_TN', v.vTN, 0, 1000, ' V');
   chk('Velocidad de aire', v.velAire, 0, 30, ' m/s');
   chk('Caudal de agua', v.caudalAgua, 0, 500, ' m³/h');
   return issues;
@@ -1430,22 +1467,31 @@ function saveManualReading(){
   const tempSuccion = numOrUndef('me_tempSuccion');
   const tempLiquido = numOrUndef('me_tempLiquido');
   const iR = numOrUndef('me_iR'), iS = numOrUndef('me_iS'), iT = numOrUndef('me_iT');
-  const vR = numOrUndef('me_vR'), vS = numOrUndef('me_vS'), vT = numOrUndef('me_vT');
+  const vRS = numOrUndef('me_vRS'), vST = numOrUndef('me_vST'), vTR = numOrUndef('me_vTR');
+  const vRN = numOrUndef('me_vRN'), vSN = numOrUndef('me_vSN'), vTN = numOrUndef('me_vTN');
+
+  // Chequeo cruzado √3: en sistema balanceado V_RS ≈ √3 × V_RN.
+  if (vRS && vRN){
+    const ratio = vRS / vRN;
+    if (Math.abs(ratio - 1.732) / 1.732 > 0.15){
+      if (!confirm(`La relación V_RS / V_RN = ${ratio.toFixed(3)} se aleja del esperado ≈1.732 (>15%). Posible neutro flojo o carga monofásica concentrada. ¿Confirmás que los valores son correctos?`)) return;
+    }
+  }
   const velAire = numOrUndef('me_velAire');
   const filtro = document.getElementById('me_filtro').value;
   const obs = document.getElementById('me_obs').value.trim();
   const desbI = computeDesbalance(iR,iS,iT);
-  const desbV = computeDesbalance(vR,vS,vT);
+  const desbV = computeDesbalance(vRS,vST,vTR);
   const tempAguaRetorno = numOrUndef('me_tempAguaRetorno');
   const tempAguaSuministro = numOrUndef('me_tempAguaSuministro');
   const caudalAgua = numOrUndef('me_caudalAgua');
 
-  const issues = sanityIssues({tempEntrada, tempSalida, tempAmb, presAlta, presBaja, tempSuccion, tempLiquido, iR, iS, iT, vR, vS, vT, velAire, tempAguaRetorno, tempAguaSuministro, caudalAgua});
+  const issues = sanityIssues({tempEntrada, tempSalida, tempAmb, presAlta, presBaja, tempSuccion, tempLiquido, iR, iS, iT, vRS, vST, vTR, vRN, vSN, vTN, velAire, tempAguaRetorno, tempAguaSuministro, caudalAgua});
   if (issues.length && !confirm(`⚠️ Valores fuera de rango físico esperado — puede ser un error de tipeo:\n\n${issues.join('\n')}\n\n¿Guardar de todas formas?`)) return;
 
   const incoming = {
     dates:[fecha],
-    params:{ TempEntrada:[tempEntrada], TempSalida:[tempSalida], TempAmb:[tempAmb], PresAlta:[presAlta], PresBaja:[presBaja], TempSuccion:[tempSuccion], TempLiquido:[tempLiquido], I_R:[iR], I_S:[iS], I_T:[iT], V_R:[vR], V_S:[vS], V_T:[vT], DesbI:[desbI], DesbV:[desbV], VelAire:[velAire], Filtro:[filtro], TempAguaRetorno:[tempAguaRetorno], TempAguaSuministro:[tempAguaSuministro], CaudalAgua:[caudalAgua] },
+    params:{ TempEntrada:[tempEntrada], TempSalida:[tempSalida], TempAmb:[tempAmb], PresAlta:[presAlta], PresBaja:[presBaja], TempSuccion:[tempSuccion], TempLiquido:[tempLiquido], I_R:[iR], I_S:[iS], I_T:[iT], V_RS:[vRS], V_ST:[vST], V_TR:[vTR], V_RN:[vRN], V_SN:[vSN], V_TN:[vTN], DesbI:[desbI], DesbV:[desbV], VelAire:[velAire], Filtro:[filtro], TempAguaRetorno:[tempAguaRetorno], TempAguaSuministro:[tempAguaSuministro], CaudalAgua:[caudalAgua] },
     obs:[obs]
   };
   const existing = readingsData.get(eqId);
@@ -2214,7 +2260,7 @@ function copyReport(){
 // ═══════════════════════════════════════════════════════════
 function exportCSV(){
   if (!readingsData.size){ alert('Sin datos.'); return; }
-  let rows = ['TAG,Tipo,Refrigerante,Fecha,Estado,DeltaT_C,PresAlta_bar,TSatCond_C,PresBaja_bar,TSatEvap_C,TempSuccion_C,TempLiquido_C,Superheat_C,Subcooling_C,VelAire_ms,Filtro,DesbI_%,DesbV_%,CargaPct_%,Observaciones'];
+  let rows = ['TAG,Tipo,Refrigerante,Fecha,Estado,DeltaT_C,PresAlta_bar,TSatCond_C,PresBaja_bar,TSatEvap_C,TempSuccion_C,TempLiquido_C,Superheat_C,Subcooling_C,V_RS_V,V_ST_V,V_TR_V,V_RN_V,V_SN_V,V_TN_V,DesbV_%,DesbI_%,VelAire_ms,Filtro,CargaPct_%,Observaciones'];
   for (const [k, d] of readingsData.entries()){
     const eq = equiposRegistry.get(k) || {};
     for (let n=0;n<d.dates.length;n++){
@@ -2228,8 +2274,10 @@ function exportCSV(){
         !isNaN(ev.presBaja)?fmt(ev.presBaja,2):'', (ev.ptSupported && !isNaN(ev.tSatEvap))?fmt(ev.tSatEvap,2):'',
         !isNaN(ev.tempSuccion)?fmt(ev.tempSuccion,2):'', !isNaN(ev.tempLiquido)?fmt(ev.tempLiquido,2):'',
         !isNaN(ev.superheat)?fmt(ev.superheat,2):'', !isNaN(ev.subcooling)?fmt(ev.subcooling,2):'',
+        !isNaN(ev.vRS)?fmt(ev.vRS,1):'', !isNaN(ev.vST)?fmt(ev.vST,1):'', !isNaN(ev.vTR)?fmt(ev.vTR,1):'',
+        !isNaN(ev.vRN)?fmt(ev.vRN,1):'', !isNaN(ev.vSN)?fmt(ev.vSN,1):'', !isNaN(ev.vTN)?fmt(ev.vTN,1):'',
+        !isNaN(ev.desbV)?fmt(ev.desbV,2):'', !isNaN(ev.desbI)?fmt(ev.desbI,2):'',
         !isNaN(ev.velAire)?fmt(ev.velAire,2):'', `"${ev.filtro||''}"`,
-        !isNaN(ev.desbI)?fmt(ev.desbI,2):'', !isNaN(ev.desbV)?fmt(ev.desbV,2):'',
         !isNaN(ev.cargaPct)?fmt(ev.cargaPct,1):'',
         `"${(d.obs&&d.obs[n])||''}"`
       ].join(','));
@@ -2640,9 +2688,15 @@ function copiarCapturaAFormulario(i){
   if (d.iR!=null) document.getElementById('me_iR').value = d.iR;
   if (d.iS!=null) document.getElementById('me_iS').value = d.iS;
   if (d.iT!=null) document.getElementById('me_iT').value = d.iT;
-  if (d.vR!=null) document.getElementById('me_vR').value = d.vR;
-  if (d.vS!=null) document.getElementById('me_vS').value = d.vS;
-  if (d.vT!=null) document.getElementById('me_vT').value = d.vT;
+  // Acepta el formato nuevo (vRS/vST/vTR) y el viejo (vR/vS/vT) por si
+  // quedaron capturas sin procesar del hub anterior.
+  const vRS = d.vRS ?? d.vR, vST = d.vST ?? d.vS, vTR = d.vTR ?? d.vT;
+  if (vRS!=null) document.getElementById('me_vRS').value = vRS;
+  if (vST!=null) document.getElementById('me_vST').value = vST;
+  if (vTR!=null) document.getElementById('me_vTR').value = vTR;
+  if (d.vRN!=null) document.getElementById('me_vRN').value = d.vRN;
+  if (d.vSN!=null) document.getElementById('me_vSN').value = d.vSN;
+  if (d.vTN!=null) document.getElementById('me_vTN').value = d.vTN;
   if (d.velAire!=null) document.getElementById('me_velAire').value = d.velAire;
   if (d.filtro) document.getElementById('me_filtro').value = d.filtro;
   if (d.obs) document.getElementById('me_obs').value = d.obs;
@@ -2715,6 +2769,9 @@ function buildAIPayload(){
         cargaPct: isN(diag.cargaPct) ? +diag.cargaPct.toFixed(0) : null,
         desbI_pct: isN(diag.desbI) ? +diag.desbI.toFixed(2) : null,
         desbV_pct: isN(diag.desbV) ? +diag.desbV.toFixed(2) : null,
+        vRS_V: isN(diag.vRS) ? +diag.vRS.toFixed(1) : null,
+        vST_V: isN(diag.vST) ? +diag.vST.toFixed(1) : null,
+        vTR_V: isN(diag.vTR) ? +diag.vTR.toFixed(1) : null,
         // Lado agua (solo Chillers)
         esChiller: !!diag.esChiller,
         deltaTAgua_C: (diag.esChiller && isN(diag.deltaTAgua)) ? +diag.deltaTAgua.toFixed(2) : null,
@@ -3322,6 +3379,11 @@ populateEquipoTypeSelect();
 renderAll();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
 actualizarBadgeCapturas();   // avisa si hay capturas del hub sin importar
+if (voltagesMigrated){
+  const status = document.getElementById('loadStatus');
+  status.className = 'load-status ok';
+  status.textContent = '⚠️ Tensiones migradas: V_R/V_S/V_T se reinterpretaron como V_RS/V_ST/V_TR (línea-línea). Los datos previos a esta versión asumen medición entre fases.';
+}
 
 </script>
 </body>
