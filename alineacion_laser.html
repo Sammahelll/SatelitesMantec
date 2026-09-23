@@ -433,6 +433,7 @@ function renderEquiposTab(){
       <h2 style="margin:0;">Equipos</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn secondary" onclick="sincronizarYRenderEquipos()">🔄 Sincronizar equipos del hub</button>
+        <button class="btn secondary" onclick="publicarTodosAnalisisAlineacion()">☁️ Publicar análisis al hub</button>
         <button class="btn secondary" onclick="exportCSV()">⬇️ Exportar CSV</button>
         <button class="btn secondary" id="btnNuevoEquipo">+ Nuevo equipo</button>
       </div>
@@ -836,6 +837,7 @@ function wireEvents(){
     alineaciones.get(equipoId).push(registro);
     saveData();
     guardarMedicionEnLaNube(registro, equiposRegistry.get(equipoId)); // asíncrono, no bloquea el registro local
+    publicarAnalisisAlineacion(equipoId).catch(() => {});
 
     if(_capturaActual){
       const capId = _capturaActual.id;
@@ -1068,6 +1070,68 @@ async function guardarMedicionEnLaNube(registro, equipo){
   }catch(err){
     console.warn('[SatSync] no se pudo guardar la alineación en la nube', err);
   }
+}
+
+// Publica el análisis de alineación del equipo a `analisis`. La severidad
+// sale de los flags de diagnosticarEquipo() — si hay al menos un 'danger'
+// va como crítico, si hay algún 'warn' como atención, si no OK.
+async function publicarAnalisisAlineacion(equipoId){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
+  const eq = equiposRegistry.get(equipoId);
+  if (!eq || !eq.tag) return null;
+  const diag = diagnosticarEquipo(equipoId);
+  if (!diag || !diag.ultimo) return null;
+
+  const sevFlags = diag.flags.map(f => f.level);
+  const nivel = sevFlags.includes('danger') ? 'critical'
+              : sevFlags.includes('warn')   ? 'warning'
+              : 'good';
+  const severidad = nivel === 'critical' ? 'critico'
+                  : nivel === 'warning'  ? 'atencion'
+                  : 'ok';
+  const health = nivel === 'critical' ? 30 : nivel === 'warning' ? 65 : 100;
+  const u = diag.ultimo;
+  const resumen = (diag.flags[0]?.text || `${eq.tag}: ${u.semaforo}`).slice(0, 200);
+
+  try {
+    await SatSync.guardarAnalisis({
+      modulo: 'alineacion',
+      equipo_tag: eq.tag,
+      severidad,
+      resumen,
+      datos: {
+        equipo: eq.tag,
+        planta: eq.planta || null,
+        rpm: eq.rpm || null,
+        tipoAcople: eq.tipoAcople || null,
+        health, nivel,
+        ultimaFecha: u.fecha,
+        semaforo: u.semaforo,
+        asLeft: u.asLeft,
+        pataBlanda: u.pataBlanda,
+        proximaRevision: u.proximaRevision || null,
+        totalIntervenciones: (alineaciones.get(equipoId) || []).length,
+        hallazgos: diag.flags.map(f => ({ nivel: f.level, texto: f.text }))
+      }
+    });
+    return true;
+  } catch (err) {
+    console.warn('[SatSync] no se pudo publicar análisis de alineación', eq.tag, err);
+    return false;
+  }
+}
+
+async function publicarTodosAnalisisAlineacion(){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return;
+  }
+  let ok = 0, fail = 0;
+  for (const equipoId of equiposRegistry.keys()){
+    const r = await publicarAnalisisAlineacion(equipoId);
+    if (r === true) ok++; else if (r === false) fail++;
+  }
+  alert(fail ? `Publicados ${ok} con ${fail} error(es).` : `Publicados ${ok} equipo(s) al hub.`);
 }
 
 // ═══════════════════════════════════════════════════════════
