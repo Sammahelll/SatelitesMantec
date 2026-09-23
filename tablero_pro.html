@@ -75,6 +75,7 @@ header{
 }
 .btn-small:hover{border-color:var(--accent);color:var(--accent);}
 .btn-small.danger:hover{border-color:var(--critical);color:var(--critical);}
+.btn-small.active{border-color:var(--accent);color:var(--accent2);background:rgba(59,130,246,.12);}
 
 /* ── TABS ── */
 .tabs{
@@ -403,6 +404,7 @@ header{
   <button class="tab-btn" data-tab="tableros" onclick="switchTab('tableros')">🗄️ Tableros y Circuitos</button>
   <button class="tab-btn" data-tab="config" onclick="switchTab('config')">⚙️ Umbrales</button>
   <button class="tab-btn" data-tab="informe" onclick="switchTab('informe')">📋 Informe</button>
+  <button class="tab-btn" data-tab="ia" onclick="switchTab('ia')">🤖 Informe IA</button>
 </div>
 
 <!-- ═══ DASHBOARD TAB ═══ -->
@@ -470,6 +472,81 @@ header{
   </div>
   <div id="nubeStatus" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
   <div id="reportSections"><div class="empty-state"><div class="ei">📋</div>Generá el informe para ver el diagnóstico consolidado de la flota de tableros.</div></div>
+</div>
+
+<!-- ═══ INFORME IA TAB ═══ -->
+<div class="tab-content" id="tab-ia">
+
+  <div class="ai-scope-section">
+    <div class="ai-scope-title">¿Qué querés analizar?</div>
+    <div class="ai-scope-row">
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="all" checked>
+        <span>Toda la flota (<span id="aiFleetCount">0</span> circuitos con mediciones)</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="critical">
+        <span>Solo críticos/alerta</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="single">
+        <span>Un tablero:</span></label>
+      <select id="aiEquipSelect" class="sort-sel" style="min-width:220px;">
+        <option value="">— seleccionar —</option>
+      </select>
+    </div>
+    <div class="ai-scope-row" style="margin-top:10px;">
+      <span style="font-size:.82rem;color:var(--muted);">Idioma del informe:</span>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="es" checked> Español</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="en"> English</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="pt"> Português</label>
+    </div>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">1</span>Copiá el prompt para pegar en tu IA</div>
+    <p class="ai-step-hint">Usá la IA web que prefieras (ChatGPT, Claude.ai, Gemini, Copilot…). El prompt incluye el diagnóstico ya calculado por Tablero Pro (termografía, desbalance NEMA MG-1, FP, THD según IEEE 519, aislación según IEEE 43) y el formato JSON que espera el procesador.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-ai-generate" onclick="copiarPromptManual()">📋 Copiar prompt para pegar en IA web</button>
+      <span id="manualPromptStatus" class="ai-status"></span>
+    </div>
+    <textarea id="aiManualPromptBox" readonly class="ai-prompt-box" style="display:none;"></textarea>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">2</span>Pegá la respuesta de la IA</div>
+    <p class="ai-step-hint">Pegá la respuesta completa (el JSON). Se limpian los backticks de markdown automáticamente.</p>
+    <textarea id="aiManualResponse" class="ai-response-box" placeholder="Pegá acá la respuesta completa de la IA…"></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-ai-generate" onclick="procesarRespuestaManual()">✅ Procesar respuesta</button>
+      <button class="btn-small" onclick="document.getElementById('aiManualResponse').value='';">Limpiar</button>
+    </div>
+  </div>
+
+  <div id="aiReportOutput" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small" id="btnVistaTecnica" onclick="setVistaIA('tecnica')">📊 Vista técnica</button>
+      <button class="btn-small" id="btnVistaEjecutiva" onclick="setVistaIA('ejecutiva')">📋 Vista ejecutiva</button>
+      <span style="flex:1;"></span>
+      <button class="btn-small" onclick="imprimirInformeEjecutivo()">🖨️ PDF ejecutivo</button>
+    </div>
+    <div id="aiSummaryCards" class="ai-summary-cards"></div>
+    <div id="aiReportSections"></div>
+    <div class="ai-json-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="ai-scope-title" style="margin-bottom:0;">📄 JSON del informe</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-small" onclick="toggleJsonView()">Mostrar/Ocultar</button>
+          <button class="btn-small" onclick="downloadJSON()">⬇ Descargar</button>
+          <button class="btn-small" onclick="copyJSON()">📋 Copiar</button>
+          <button class="btn-small" id="btnGuardarNubeIA" onclick="guardarIAEnLaNube()">☁️ Guardar en la nube</button>
+        </div>
+      </div>
+      <div id="iaNubeStatus" style="font-size:.78rem;color:var(--muted);margin-top:6px;"></div>
+      <pre id="aiJsonViewer" class="ai-json-pre" style="display:none;"></pre>
+    </div>
+  </div>
+
+  <div id="aiEmptyState" class="empty-state">
+    <div class="ei">🤖</div>
+    Elegí el alcance, copiá el prompt, pegalo en tu IA web, y traé la respuesta acá.
+  </div>
+
 </div>
 
 <!-- ═══ MODAL CARGA MANUAL ═══ -->
@@ -1776,6 +1853,7 @@ function resetThresholds(){
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+tab));
+  if (tab === 'ia') initIATab();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2219,6 +2297,691 @@ function copiarCapturaAFormulario(i){
   const status = document.getElementById('loadStatus');
   status.className = 'load-status ok';
   status.textContent = `📋 Datos de ${tag} copiados — revisá y confirmá con "Guardar medición".`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INFORME IA — FLUJO MANUAL
+// ═══════════════════════════════════════════════════════════
+
+let _lastIAReport = null;
+let _vistaIA = 'tecnica';
+
+// ── Paso 1: construir el prompt y copiarlo ──
+function buildAIPayload(){
+  const scope = document.querySelector('input[name="aiScope"]:checked').value;
+  const panelId = document.getElementById('aiEquipSelect').value;
+  const lang = document.querySelector('input[name="aiLang"]:checked').value;
+
+  let ids = [...readingsData.keys()];
+  if (scope === 'critical'){
+    ids = ids.filter(k => {
+      const diag = diagnoseCircuit(k);
+      if (!diag || diag.overall < 0) return false;
+      return diag.overall >= 2;
+    });
+  } else if (scope === 'single' && panelId){
+    ids = ids.filter(k => getPanelId(k) === panelId);
+  }
+
+  const circuitos = [];
+  for (const k of ids){
+    const diag = diagnoseCircuit(k);
+    if (!diag || diag.overall < 0) continue;
+    const panel = panelsRegistry.get(getPanelId(k)) || {};
+    const circuit = circuitsMeta.get(k) || {};
+    const d = readingsData.get(k);
+    const n = lastValidIdx(d);
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag).filter(x => x.sev !== 'good');
+    const trifasico = isTrifasico(k);
+
+    // Historial corto de ΔT y DesbI para que la IA vea tendencia (últimas 5 lecturas)
+    const ultimas = [];
+    const N_ULT = Math.min(5, d.dates.length);
+    for (let i = d.dates.length - N_ULT; i < d.dates.length; i++){
+      const ev = evalReading(d.params, i);
+      ultimas.push({
+        fecha: fmtDate(d.dates[i]),
+        deltaT_c: isN(ev.deltaT) ? +ev.deltaT.toFixed(1) : null,
+        desb_tension_pct: isN(ev.desbV) ? +ev.desbV.toFixed(2) : null,
+        desb_corriente_pct: isN(ev.desbI) ? +ev.desbI.toFixed(2) : null,
+        fp: isN(ev.fp) ? +ev.fp.toFixed(3) : null,
+        thd_tension_pct: isN(ev.thdV) ? +ev.thdV.toFixed(2) : null,
+        r_aisl_mohm: isN(ev.rAisl) ? +ev.rAisl.toFixed(1) : null
+      });
+    }
+
+    circuitos.push({
+      tablero: panel.name || getPanelId(k),
+      tipo_tablero: panel.type || null,
+      ubicacion: panel.location || null,
+      circuito: circuit.name || getCircuitId(k),
+      tipo_circuito: circuit.type || null,
+      sistema: circuit.sistema || 'Trifásico',
+      es_trifasico: trifasico,
+      diagnostico: {
+        nivel: STATUS[diag.overall],
+        indice_salud: health,
+        // Termografía
+        deltaT_c: isN(diag.deltaT) ? +diag.deltaT.toFixed(1) : null,
+        temp_ambiente_c: isN(d.TempAmb?.[n]) ? +d.TempAmb[n].toFixed(1) : null,
+        temp_maxima_c: isN(d.TempMax?.[n]) ? +d.TempMax[n].toFixed(1) : null,
+        fase_max_temp: diag.faseMax || null,
+        // Tensiones de línea (obligatorias, usadas para desbalance NEMA MG-1)
+        tension_rs_v: isN(diag.vRS) ? +diag.vRS.toFixed(1) : null,
+        tension_st_v: isN(diag.vST) ? +diag.vST.toFixed(1) : null,
+        tension_tr_v: isN(diag.vTR) ? +diag.vTR.toFixed(1) : null,
+        // Tensiones fase-neutro (opcionales, si hay neutro)
+        tension_rn_v: isN(diag.vRN) ? +diag.vRN.toFixed(1) : null,
+        tension_sn_v: isN(diag.vSN) ? +diag.vSN.toFixed(1) : null,
+        tension_tn_v: isN(diag.vTN) ? +diag.vTN.toFixed(1) : null,
+        // Desbalances (solo aplicables en trifásicos)
+        desb_tension_pct:  trifasico && isN(diag.desbV) ? +diag.desbV.toFixed(2) : null,
+        desb_corriente_pct: trifasico && isN(diag.desbI) ? +diag.desbI.toFixed(2) : null,
+        // Calidad de energía y aislación
+        factor_potencia: isN(diag.fp) ? +diag.fp.toFixed(3) : null,
+        thd_tension_pct: isN(diag.thdV) ? +diag.thdV.toFixed(2) : null,
+        r_aislacion_mohm: isN(diag.rAisl) ? +diag.rAisl.toFixed(1) : null
+      },
+      ultimas_lecturas: ultimas,
+      hallazgos: msgs.map(x => ({
+        severidad: x.sev,
+        titulo: x.title.replace(/^[^\w]+/, ''),
+        detalle: x.action
+      }))
+    });
+  }
+
+  if (!circuitos.length) return null;
+
+  const langInstructions = {
+    es: 'Responde en español. Usa terminología técnica de mantenimiento predictivo eléctrico industrial.',
+    en: 'Respond in English. Use industrial electrical predictive maintenance terminology.',
+    pt: 'Responda em português. Use terminologia técnica de manutenção preditiva elétrica industrial.'
+  };
+
+  const prompt = `Sos un experto en diagnóstico de tableros eléctricos industriales: TGBT,
+tableros de distribución, CCM, bancos de capacitores, ATS — con foco en la
+evaluación predictiva por termografía y calidad de energía.
+${langInstructions[lang]}
+
+═══════════════════════════════════════════════════════════
+CÓMO LEER ESTE INFORME — MARCO TÉCNICO
+═══════════════════════════════════════════════════════════
+Cada circuito trae su diagnóstico YA CALCULADO por Tablero Pro. NO recalcules los
+números: interpretá, priorizá y redactá el informe.
+
+Cada entrada es UN circuito (no un tablero individual): puede haber varios
+circuitos del mismo tablero. Tratalos como unidades independientes pero
+aprovechá el contexto común (mismo tablero = mismo alimentador principal).
+
+Marco normativo aplicado por Tablero Pro:
+- Termografía industrial (NETA/IEEE): ΔT = Temp. máx − Temp. ambiente, con
+  umbrales escalonados.
+- NEMA MG-1 para desbalance de tensión y de corriente de línea.
+- IEEE 519 para THD de tensión.
+- IEEE 43 para resistencia de aislación (mismo criterio que Motor Pro).
+
+═══════════════════════════════════════════════════════════
+REGLAS DE INTERPRETACIÓN POR CAMPO
+═══════════════════════════════════════════════════════════
+
+1) ΔT TERMOGRÁFICO (deltaT_c) — criterio NETA/IEEE orientativo:
+   · ≤3°C  → normal
+   · 3–15°C → elevado (incipiente, monitorear)
+   · 15–40°C → alerta (deficiencia clara)
+   · >40°C → crítico (punto caliente activo, intervención inmediata)
+   Si fase_max_temp tiene valor (R/S/T/N), priorizá ese borne/fase: probable
+   conexión floja, terminal oxidado o sobrecarga localizada en esa fase.
+
+2) DESBALANCE DE TENSIÓN (desb_tension_pct) — NEMA MG-1:
+   · ≤1% → normal
+   · 1–2% → elevado (monitorear)
+   · 2–3.5% → alerta
+   · >3.5% → crítico
+   Se calcula sobre V_RS, V_ST, V_TR (tensiones de línea — un técnico nunca mide
+   "fase contra tierra" como tensión de fase). Un desbalance >2% derratea motores
+   trifásicos aguas abajo y acorta su vida útil.
+
+3) TENSIÓN FASE-NEUTRO (tension_rn_v, tension_sn_v, tension_tn_v):
+   Opcionales. En un sistema balanceado, V_RS ≈ √3 × V_RN (ej: 380 ≈ 1.732 × 220).
+   Si esa relación se aleja mucho (>15%), puede haber neutro flojo, carga
+   monofásica concentrada o problema en una fase. NO evalúes desbalance sobre
+   estas tensiones — el desbalance se calcula solo sobre las de línea.
+
+4) DESBALANCE DE CORRIENTE (desb_corriente_pct) — NEMA MG-1:
+   · ≤10% → normal
+   · 10–20% → elevado
+   · 20–30% → alerta
+   · >30% → crítico
+   Revisar cargas monofásicas mal distribuidas, conexión floja o fase con mayor
+   impedancia de contacto.
+
+5) FACTOR DE POTENCIA (factor_potencia):
+   · ≥0.95 → normal
+   · 0.90–0.95 → elevado
+   · 0.85–0.90 → alerta
+   · <0.85 → crítico
+   FP bajo sugiere banco de capacitores con etapa desconectada, carga inductiva
+   sin compensar, o penalización tarifaria inminente.
+
+6) THD DE TENSIÓN (thd_tension_pct) — IEEE 519:
+   · ≤3% → normal
+   · 3–5% → elevado
+   · 5–8% → alerta
+   · >8% → crítico
+   Causas: variadores de frecuencia, UPS, rectificadores. Riesgo especial de
+   resonancia si hay banco de capacitores en el mismo tablero.
+
+7) RESISTENCIA DE AISLACIÓN (r_aislacion_mohm) — IEEE 43-2013:
+   · ≥100 MΩ → bueno
+   · 25–100 MΩ → zona de vigilancia
+   · 5–25 MΩ → zona límite
+   · <5 MΩ → crítico (riesgo de falla dieléctrica)
+   Revisar humedad/condensación, estado de cables y sellado IP del tablero.
+
+8) ÚLTIMAS LECTURAS (ultimas_lecturas):
+   Historial corto de los últimos 5 eventos. Usalo para distinguir entre:
+   · Tendencia sostenida (varios eventos con valores que empeoran) → intervención.
+   · Lectura puntual fuera de rango → repetir medición antes de actuar, puede
+     deberse a condición puntual (carga especial, clima, error de tipeo).
+
+9) CIRCUITOS MONO/BIFÁSICOS (es_trifasico = false):
+   Los campos desb_tension_pct y desb_corriente_pct vienen null porque el
+   desbalance NEMA MG-1 solo tiene sentido en sistemas trifásicos. No sugieras
+   "medir el desbalance" en estos circuitos — no aplica.
+
+═══════════════════════════════════════════════════════════
+CUANDO GENERES HALLAZGOS
+═══════════════════════════════════════════════════════════
+- Citá valores concretos ("ΔT=18°C sobre umbral 15°C", "DesbV=4.2% sobre 3.5%").
+- Priorizá por riesgo de falla eléctrica:
+  · ΔT >40°C o fase_max identificada → revisión física inmediata del borne.
+  · R aislación <5 MΩ → riesgo de arco, prioridad absoluta.
+  · Desbalance de tensión sostenido → afecta a todos los motores del circuito.
+- Distinguí "punto caliente activo" (medición reciente con ΔT alto) de
+  "condición térmica elevada crónica" (ΔT alto pero estable en el tiempo) —
+  la primera requiere intervención ya, la segunda puede ser por carga.
+- NUNCA sugieras "reemplazar el tablero" sin antes confirmar el hallazgo con
+  una segunda medición o inspección visual del borne.
+
+DATOS DE CIRCUITOS ANALIZADOS (${circuitos.length}):
+${JSON.stringify(circuitos, null, 2)}
+
+UMBRALES CONFIGURADOS EN TABLERO PRO:
+${JSON.stringify({
+  deltaT_c: thresholds.deltaT,
+  desbV_pct: thresholds.desbV,
+  desbI_pct: thresholds.desbI,
+  thdV_pct: thresholds.thdV,
+  fp: thresholds.fp,
+  rAisl_mohm: thresholds.rAisl
+}, null, 2)}
+
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
+(sin texto antes ni después, sin backticks, sin claves inventadas):
+{
+  "resumen_ejecutivo": "string — 2-4 oraciones sobre el estado global y riesgos principales",
+  "fecha_informe": "string",
+  "total_circuitos_analizados": number,
+  "distribucion_estado": { "normal": number, "elevado": number, "alerta": number, "critico": number },
+  "indice_salud_flota": number,
+  "circuitos": [
+    {
+      "tablero": "string",
+      "circuito": "string",
+      "tipo_circuito": "string",
+      "estado": "string",
+      "indice_salud": number,
+      "prioridad": number,
+      "hallazgos": ["string — hallazgo concreto con valores"],
+      "causa_probable": "string — causa raíz con fundamento técnico",
+      "recomendaciones": ["string — acción concreta"],
+      "plazo_accion": "INMEDIATO|7 DÍAS|30 DÍAS|RUTINA",
+      "riesgo_falla": "ALTO|MEDIO|BAJO"
+    }
+  ],
+  "plan_de_accion": [
+    { "prioridad": number, "tablero": "string", "circuito": "string", "accion": "string", "plazo": "string",
+      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones" }
+  ],
+  "conclusiones": "string — párrafo estratégico",
+  "proxima_inspeccion": "string"
+}`;
+
+  return { prompt, circuitos };
+}
+
+function copiarPromptManual(){
+  const payload = buildAIPayload();
+  const st = document.getElementById('manualPromptStatus');
+  if (!payload){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ No hay circuitos en el alcance seleccionado.';
+    return;
+  }
+  const box = document.getElementById('aiManualPromptBox');
+  box.value = payload.prompt;
+  box.style.display = 'block';
+  const finish = ok => {
+    st.style.color = ok ? 'var(--good)' : 'var(--warning)';
+    st.textContent = ok
+      ? `✅ Prompt copiado (${payload.circuitos.length} circuito/s). Pegalo en tu IA web.`
+      : '⚠️ No se pudo copiar automáticamente — seleccioná el texto y copiá con Ctrl+C.';
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload.prompt).then(()=>finish(true)).catch(()=>{ box.select(); finish(false); });
+  } else {
+    box.select(); finish(false);
+  }
+}
+
+function procesarRespuestaManual(){
+  const raw = document.getElementById('aiManualResponse').value.trim();
+  if (!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
+  try{
+    let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) cleaned = m[0];
+    const report = JSON.parse(cleaned);
+    _lastIAReport = report;
+    document.getElementById('aiEmptyState').style.display = 'none';
+    mostrarReporteIA(report);
+    document.getElementById('aiManualResponse').value = '';
+  }catch(err){
+    alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
+      '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
+  }
+}
+
+function setVistaIA(vista){
+  _vistaIA = vista;
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', vista === 'tecnica');
+  if (bE) bE.classList.toggle('active', vista === 'ejecutiva');
+  if (_lastIAReport) mostrarReporteIA(_lastIAReport);
+}
+
+function mostrarReporteIA(r){
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', _vistaIA === 'tecnica');
+  if (bE) bE.classList.toggle('active', _vistaIA === 'ejecutiva');
+  if (_vistaIA === 'ejecutiva') renderReporteEjecutivo(r);
+  else renderReporteTecnico(r);
+}
+
+function renderReporteTecnico(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  const salud = r.indice_salud_flota || '—';
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+  const dist = r.distribucion_estado || {};
+  document.getElementById('aiSummaryCards').innerHTML = `
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">⚡</div>
+      <div><div class="ai-sum-card-val" style="color:var(--accent)">${r.total_circuitos_analizados || (r.circuitos||[]).length}</div><div class="ai-sum-card-lbl">Circuitos analizados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">💪</div>
+      <div><div class="ai-sum-card-val" style="color:${saludColor}">${salud}</div><div class="ai-sum-card-lbl">Salud flota (%)</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🔴</div>
+      <div><div class="ai-sum-card-val" style="color:var(--critical)">${dist.critico||0}</div><div class="ai-sum-card-lbl">Críticos</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟠</div>
+      <div><div class="ai-sum-card-val" style="color:var(--warning)">${dist.alerta||0}</div><div class="ai-sum-card-lbl">En alerta</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟡</div>
+      <div><div class="ai-sum-card-val" style="color:var(--elevated)">${dist.elevado||0}</div><div class="ai-sum-card-lbl">Elevados</div></div></div>
+    <div class="ai-sum-card"><div class="ai-sum-card-icon">🟢</div>
+      <div><div class="ai-sum-card-val" style="color:var(--good)">${dist.normal||0}</div><div class="ai-sum-card-lbl">Normales</div></div></div>
+  `;
+  let html = '';
+  if (r.resumen_ejecutivo){
+    html += `<div class="ai-fleet-box">
+      <div class="ai-fleet-box-title">📋 Resumen Ejecutivo — ${escHtml(r.fecha_informe||'')}</div>
+      <div class="ai-fleet-text">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  const circuitos = (r.circuitos || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
+  if (circuitos.length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:20px 0 12px;">🔍 Análisis por Circuito</div>`;
+    circuitos.forEach(c => {
+      const lvl = (c.estado||'').toLowerCase().includes('crít') ? 'critical'
+                : (c.estado||'').toLowerCase().includes('alert') ? 'warning'
+                : (c.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const prioClass = `ai-prio-${Math.min(c.prioridad||4,4)}`;
+      const riesgoIcon = c.riesgo_falla === 'ALTO' ? '⛔' : c.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `<div class="ai-equip-card">
+        <div class="ai-equip-card-header">
+          <div>
+            <div class="ai-equip-name">${escHtml(c.circuito||'')} <span class="mpoint-badge">${escHtml(c.tipo_circuito||'')}</span></div>
+            <div class="ai-equip-meta">${riesgoIcon} Riesgo: ${escHtml(c.riesgo_falla||'—')} &nbsp;|&nbsp; Plazo: <strong>${escHtml(c.plazo_accion||'—')}</strong>${c.tablero?` &nbsp;|&nbsp; Tablero: ${escHtml(c.tablero)}`:''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="mbadge badge-${lvl}">${escHtml(c.estado||'')}</span>
+            <span class="ai-prio-badge ${prioClass}">P${c.prioridad||'—'}</span>
+          </div>
+        </div>
+        <div class="ai-equip-card-body">
+          ${c.causa_probable ? `<div class="ai-finding ${lvl}"><strong>Causa probable:</strong> ${escHtml(c.causa_probable)}</div>` : ''}
+          ${(c.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
+            ${c.hallazgos.map(h => `<div class="ai-finding ${lvl}">${escHtml(typeof h==='string'?h:(h.titulo||'')+(h.detalle?' — '+h.detalle:''))}</div>`).join('')}` : ''}
+          ${(c.recomendaciones||[]).length ? `<div class="ai-section-label">Recomendaciones</div>
+            <ul class="ai-rec-list">${c.recomendaciones.map(rec=>`<li>${escHtml(rec)}</li>`).join('')}</ul>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  if ((r.plan_de_accion||[]).length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:24px 0 12px;">📅 Plan de Acción</div>
+    <div class="ai-equip-card"><div style="overflow-x:auto;padding:6px 0;">
+    <table class="ai-plan-table">
+      <thead><tr><th>#</th><th>Tablero</th><th>Circuito</th><th>Acción</th><th>Plazo</th><th>Responsable</th></tr></thead>
+      <tbody>${r.plan_de_accion.map((p,i)=>{
+        const pc = `ai-prio-${Math.min(p.prioridad||4,4)}`;
+        return `<tr>
+          <td><span class="ai-prio-badge ${pc}">P${p.prioridad||i+1}</span></td>
+          <td style="font-weight:700;color:#fff;">${escHtml(p.tablero||'')}</td>
+          <td>${escHtml(p.circuito||'')}</td>
+          <td>${escHtml(p.accion||'')}</td>
+          <td style="white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          <td style="font-size:.8rem;color:var(--muted);">${escHtml(p.responsable||'')}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+  }
+  if (r.conclusiones || r.proxima_inspeccion){
+    html += `<div class="ai-fleet-box" style="border-color:rgba(16,201,138,.25);background:rgba(16,201,138,.05);">
+      <div class="ai-fleet-box-title" style="color:var(--good);">💡 Conclusiones y Próximos Pasos</div>
+      ${r.conclusiones ? `<div class="ai-fleet-text" style="margin-bottom:${r.proxima_inspeccion?'12px':'0'}">${escHtml(String(r.conclusiones))}</div>` : ''}
+      ${r.proxima_inspeccion ? `<div style="margin-top:8px;padding-top:10px;border-top:1px solid rgba(16,201,138,.2);font-size:.86rem;color:var(--good);">🗓 Próxima inspección: <strong>${escHtml(String(r.proxima_inspeccion))}</strong></div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function renderReporteEjecutivo(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  document.getElementById('aiEmptyState').style.display = 'none';
+  const dist  = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_circuitos_analizados || 0;
+  const salud = r.indice_salud_flota || 0;
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+  const top = (r.circuitos || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0, 6);
+  const planTop = (r.plan_de_accion || []).filter(p => (p.prioridad||99) <= 2).slice(0, 5);
+
+  let html = '';
+  html += `
+  <div style="background:linear-gradient(135deg,#0d1117,#111d30);border:1px solid var(--border2);border-radius:14px;padding:26px 30px;margin-bottom:20px;">
+    <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Informe Ejecutivo · Tablero Pro</div>
+    <div style="font-size:1.6rem;font-weight:800;color:#fff;margin-top:6px;letter-spacing:-.3px;">Estado de la flota de tableros</div>
+    <div style="font-size:.86rem;color:var(--muted);margin-top:4px;">${escHtml(r.fecha_informe||'')} · ${total} circuito(s) analizados</div>
+  </div>`;
+
+  html += `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:18px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:${saludColor};line-height:1;">${salud}%</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Salud flota</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--critical);line-height:1;">${dist.critico}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Críticos</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--warning);line-height:1;">${dist.alerta}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">En alerta</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--elevated);line-height:1;">${dist.elevado}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Elevados</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--good);line-height:1;">${dist.normal}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Normales</div>
+    </div>
+  </div>`;
+
+  if (r.resumen_ejecutivo){
+    html += `
+    <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:10px;">Resumen ejecutivo</div>
+      <div style="font-size:1rem;color:var(--text);line-height:1.7;">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  if (top.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Top ${top.length} circuitos a atender</div>`;
+    html += `<div style="display:grid;gap:10px;margin-bottom:22px;">`;
+    for (const c of top){
+      const nivel = (c.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (c.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (c.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const nc = {critical:'var(--critical)',warning:'var(--warning)',elevated:'var(--elevated)',good:'var(--good)'}[nivel];
+      const ic = c.riesgo_falla === 'ALTO' ? '⛔' : c.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `
+      <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid ${nc};border-radius:10px;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">${escHtml(c.circuito||'')} <span class="mpoint-badge">${escHtml(c.tipo_circuito||'')}</span></div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">${ic} Tablero: ${escHtml(c.tablero||'')} · Riesgo ${escHtml(c.riesgo_falla||'—')} · Plazo: <strong style="color:${nc};">${escHtml(c.plazo_accion||'—')}</strong></div>
+          </div>
+          <span class="mbadge badge-${nivel}">${escHtml(c.estado||'')}</span>
+        </div>
+        ${c.causa_probable ? `<div style="font-size:.85rem;color:var(--text);margin-top:8px;line-height:1.5;">${escHtml(c.causa_probable)}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  if (planTop.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Plan de acción inmediato</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <table class="ai-plan-table" style="margin:0;">
+        <thead><tr><th style="width:50px;">#</th><th>Tablero</th><th>Circuito</th><th>Acción</th><th style="width:100px;">Plazo</th></tr></thead>
+        <tbody>${planTop.map((p,i)=>`
+          <tr>
+            <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+            <td style="font-weight:700;color:#fff;">${escHtml(p.tablero||'')}</td>
+            <td>${escHtml(p.circuito||'')}</td>
+            <td style="font-size:.88rem;">${escHtml(p.accion||'')}</td>
+            <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  if (r.proxima_inspeccion || r.conclusiones){
+    html += `
+    <div style="background:rgba(16,201,138,.06);border:1px solid rgba(16,201,138,.2);border-left:4px solid var(--good);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--good);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:8px;">Próximo paso</div>
+      ${r.proxima_inspeccion ? `<div style="font-size:1rem;color:var(--text);line-height:1.6;margin-bottom:${r.conclusiones?'10px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="font-size:.88rem;color:var(--muted);line-height:1.6;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiSummaryCards').innerHTML = '';
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function toggleJsonView(){
+  const pre = document.getElementById('aiJsonViewer');
+  pre.style.display = pre.style.display === 'none' ? 'block' : 'none';
+}
+function downloadJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const ts = new Date().toISOString().slice(0,10);
+  const blob = new Blob([JSON.stringify(_lastIAReport, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tablero_pro_informe_ia_${ts}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function copyJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  navigator.clipboard.writeText(JSON.stringify(_lastIAReport, null, 2))
+    .then(()=>alert('JSON copiado al portapapeles ✅'))
+    .catch(()=>alert('No se pudo copiar.'));
+}
+
+function mapEstadoASeveridadIA(estado){
+  const e = (estado || '').toLowerCase();
+  if (e.includes('crít')) return 'critico';
+  if (e.includes('alert') || e.includes('elev')) return 'atencion';
+  return 'ok';
+}
+
+async function guardarIAEnLaNube(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const statusEl = document.getElementById('iaNubeStatus');
+  const btn = document.getElementById('btnGuardarNubeIA');
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  const circuitos = _lastIAReport.circuitos || [];
+  if (!circuitos.length){
+    statusEl.textContent = '⚠️ El informe no trae circuitos individuales para guardar.';
+    return;
+  }
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const c of circuitos){
+    const tag = c.tablero;
+    if (!tag){ fail++; continue; }
+    try{
+      await SatSync.guardarAnalisis({
+        modulo: 'tablero_pro_informe_ia',
+        equipo_tag: tag,  // tag plano del tablero (no compuesto con circuito)
+        severidad: mapEstadoASeveridadIA(c.estado),
+        resumen: (c.circuito ? c.circuito + ': ' : '') + (c.causa_probable || (c.hallazgos && c.hallazgos[0]) || c.estado || ''),
+        datos: c
+      });
+      ok++;
+    }catch(err){
+      console.error('[SatSync] error guardando', tag, err);
+      fail++;
+    }
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning)' : 'var(--good)';
+  statusEl.textContent = fail
+    ? `☁️ Guardados ${ok} de ${circuitos.length} (${fail} con error — ver consola).`
+    : `☁️ ${ok} circuito(s) guardados en el informe IA.`;
+}
+
+function imprimirInformeEjecutivo(){
+  const r = _lastIAReport;
+  if (!r){ alert('Procesá un informe primero.'); return; }
+  const dist = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const salud = r.indice_salud_flota || 0;
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_circuitos_analizados || 0;
+  const saludColorHex = salud < 40 ? '#dc2626' : salud < 70 ? '#ea580c' : salud < 85 ? '#d97706' : '#16a34a';
+  const top = (r.circuitos || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0,6);
+  const planTop = (r.plan_de_accion||[]).filter(p=>(p.prioridad||99)<=2).slice(0,5);
+  const fecha = new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Informe Ejecutivo — Tablero Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;font-size:12px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{max-width:840px;margin:0 auto;padding:32px 40px;}
+  .hdr{background:linear-gradient(135deg,#0b1628,#162e50);color:#fff;padding:26px 32px;border-radius:12px;margin-bottom:22px;}
+  .hdr-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#93c5fd;font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.3px;}
+  .hdr-meta{font-size:11px;color:#93c5fd;margin-top:6px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+  .kpi{padding:14px 8px;border-radius:10px;text-align:center;background:#f8fafc;border:1px solid #e5e7eb;}
+  .kpi-n{font-size:26px;font-weight:800;font-family:'Courier New',monospace;line-height:1;}
+  .kpi-l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:6px;font-weight:700;}
+  .sec-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#1e40af;font-weight:800;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+  .box{padding:16px 20px;border-radius:10px;margin-bottom:14px;border-left:4px solid #3b82f6;background:#eff6ff;}
+  .box.good{border-left-color:#16a34a;background:#f0fdf4;}
+  .eq{padding:12px 16px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;border-left:4px solid #dc2626;margin-bottom:8px;}
+  .eq-name{font-weight:800;color:#111827;}
+  .eq-meta{font-size:10px;color:#6b7280;margin-top:3px;}
+  .eq-cause{font-size:11.5px;color:#374151;margin-top:6px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;}
+  td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+  .badge.critical{background:#fff1f2;color:#991b1b;border:1px solid #fecaca;}
+  .badge.warning{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;}
+  .badge.elevated{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+  .badge.good{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+  .prio{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;}
+  .prio-1{background:#fee2e2;color:#991b1b;}
+  .prio-2{background:#ffedd5;color:#9a3412;}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
+  @page{margin:14mm;size:A4;}
+</style></head><body><div class="page">
+  <div class="hdr">
+    <div class="hdr-sub">Informe Ejecutivo · Tablero Pro</div>
+    <div class="hdr-title">Estado de la flota de tableros</div>
+    <div class="hdr-meta">${escHtml(fecha)} · ${total} circuito(s) analizados</div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-n" style="color:${saludColorHex};">${salud}%</div><div class="kpi-l">Salud flota</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#dc2626;">${dist.critico}</div><div class="kpi-l">Críticos</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#ea580c;">${dist.alerta}</div><div class="kpi-l">En alerta</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#d97706;">${dist.elevado}</div><div class="kpi-l">Elevados</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#16a34a;">${dist.normal}</div><div class="kpi-l">Normales</div></div>
+  </div>
+  ${r.resumen_ejecutivo ? `<div class="sec-title">Resumen ejecutivo</div><div class="box">${escHtml(String(r.resumen_ejecutivo))}</div>` : ''}
+  ${top.length ? `<div class="sec-title">Top ${top.length} circuitos a atender</div>
+    ${top.map(c=>{
+      const nivel = (c.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (c.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (c.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      return `<div class="eq" style="border-left-color:${
+        nivel==='critical'?'#dc2626':nivel==='warning'?'#ea580c':nivel==='elevated'?'#d97706':'#16a34a'
+      };">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div><span class="eq-name">${escHtml(c.circuito||'')} · ${escHtml(c.tipo_circuito||'')}</span></div>
+          <span class="badge ${nivel}">${escHtml(c.estado||'')}</span>
+        </div>
+        <div class="eq-meta">Tablero: ${escHtml(c.tablero||'')} · Riesgo ${escHtml(c.riesgo_falla||'—')} · Plazo: <strong>${escHtml(c.plazo_accion||'—')}</strong></div>
+        ${c.causa_probable ? `<div class="eq-cause">${escHtml(c.causa_probable)}</div>` : ''}
+      </div>`;
+    }).join('')}` : ''}
+  ${planTop.length ? `<div class="sec-title">Plan de acción inmediato</div>
+    <table><thead><tr><th style="width:44px;">#</th><th>Tablero</th><th>Circuito</th><th>Acción</th><th style="width:90px;">Plazo</th></tr></thead>
+    <tbody>${planTop.map((p,i)=>`<tr>
+      <td><span class="prio prio-${Math.min(p.prioridad||4,2)}">P${p.prioridad||i+1}</span></td>
+      <td style="font-weight:700;">${escHtml(p.tablero||'')}</td>
+      <td>${escHtml(p.circuito||'')}</td>
+      <td>${escHtml(p.accion||'')}</td>
+      <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+    </tr>`).join('')}</tbody></table>` : ''}
+  ${(r.proxima_inspeccion || r.conclusiones) ? `<div class="sec-title">Próximo paso</div>
+    <div class="box good">
+      ${r.proxima_inspeccion ? `<div style="font-weight:600;margin-bottom:${r.conclusiones?'8px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="color:#4b5563;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>` : ''}
+  <div class="footer">
+    <span>MANTEC – Tablero Pro · Motor de diagnóstico predictivo</span>
+    <span>Generado: ${escHtml(new Date().toLocaleString('es-PY'))}</span>
+  </div>
+</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1200');
+  if (!win){ alert('El navegador bloqueó la ventana emergente.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', ()=>setTimeout(()=>win.print(), 500));
+}
+
+function initIATab(){
+  const sel = document.getElementById('aiEquipSelect');
+  sel.innerHTML = '<option value="">— seleccionar —</option>';
+  for (const [id, p] of panelsRegistry.entries()){
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = p.name || id;
+    sel.appendChild(opt);
+  }
+  const fc = document.getElementById('aiFleetCount');
+  if (fc) fc.textContent = readingsData.size;
+  const hasData = readingsData.size > 0;
+  const empty = document.getElementById('aiEmptyState');
+  if (empty) empty.style.display = hasData ? 'none' : 'block';
+  if (!hasData) document.getElementById('aiReportOutput').style.display = 'none';
+  document.querySelectorAll('#tab-ia .ai-step-box').forEach(b => b.style.display = hasData ? '' : 'none');
 }
 
 // ═══════════════════════════════════════════════════════════
