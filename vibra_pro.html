@@ -76,6 +76,7 @@ header{
   font-size:.83rem;cursor:pointer;transition:all .2s;
 }
 .btn-small:hover{border-color:var(--accent);color:var(--accent);}
+.btn-small.active{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.1);}
 
 /* ── TABS ── */
 .tabs{
@@ -1133,6 +1134,12 @@ header{
 
   <!-- REPORT OUTPUT -->
   <div id="aiReportOutput" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small" id="btnVistaTecnica" onclick="setVistaIA('tecnica')">📊 Vista técnica</button>
+      <button class="btn-small" id="btnVistaEjecutiva" onclick="setVistaIA('ejecutiva')">📋 Vista ejecutiva</button>
+      <span style="flex:1;"></span>
+      <button class="btn-small" onclick="imprimirInformeEjecutivo()">🖨️ PDF ejecutivo</button>
+    </div>
     <div id="aiSummaryCards" class="ai-summary-cards"></div>
     <div id="aiReportSections"></div>
     <div class="ai-json-section">
@@ -4761,79 +4768,100 @@ function buildAIPayload(){
 
   if(!keys.length) return null;
 
-  const equipos = keys.map(k => {
-    const d = machinesData.get(k);
-    const {diagnosis, health, level, faults=[]} = diagnoseMachine(k);
-    const n = d.dates.length - 1;
-    const r = getLastRecord(k);
-    const eq = equipmentRegistry.get(getEquipId(k)) || {};
+  // Agrupar por equipo → por ubicación física (rodamiento). Así el payload
+  // manda UNA entrada por rodamiento en lugar de una por eje (MLX/MLY/MLZ
+  // dejan de ser tres "puntos" distintos y pasan a ser un solo rodamiento
+  // con tres ejes medidos).
+  const porEquipo = new Map();
+  for (const k of keys){
+    const eid = getEquipId(k);
+    if (!porEquipo.has(eid)) porEquipo.set(eid, []);
+    porEquipo.get(eid).push(k);
+  }
 
-    // Multi-param trends
-    function trendData(param){
-      const v=(d.params[param]||[]).filter(x=>!isNaN(x)).slice(-10);
-      if(v.length<3)return null;
-      const reg=weightedRegression(v);
-      return{slope:parseFloat(reg.slope.toFixed(5)),r2:parseFloat(reg.r2.toFixed(3)),n:v.length,last:parseFloat(v[v.length-1].toFixed(4))};
+  const rodamientos = [];
+  for (const [eid, eidKeys] of porEquipo.entries()){
+    const eq = equipmentRegistry.get(eid) || {};
+    const locGroups = groupKeysByLocation(eidKeys);
+
+    for (const [locPrefix, locKeys] of locGroups.entries()){
+      const loc = diagnoseLocation(locKeys);
+      if (!loc) continue;
+
+      // Ejes con sus valores + tendencia individual
+      const ejes = loc.axes.map(a => {
+        const d = machinesData.get(a.k);
+        const r = getLastRecord(a.k);
+        const tv = (d.params.Vel_RMS || []).filter(x=>!isNaN(x)).slice(-10);
+        const tendencia = tv.length >= 3
+          ? (()=>{ const reg = weightedRegression(tv);
+              return {slope: parseFloat(reg.slope.toFixed(5)),
+                      r2:    parseFloat(reg.r2.toFixed(3))}; })()
+          : null;
+        return {
+          eje:               a.axis,             // Horizontal | Vertical | Axial
+          codigo:            a.pt,               // MLX, MLY, MLZ
+          nivel:             a.level,
+          indice_salud:      a.health,
+          ultima_lectura: {
+            vel_rms_mms: fmt(r.ov_vel_rms_mms,4),
+            hf_peak_g:   fmt(r.hf_acc_peak_g,2),
+            cf_plus:     fmt(r.cfplus,2),
+            acc_peak_g:  fmt(r.ov_acc_peak_g,3),
+            temp_c:      fmt(r.temp_c,1)
+          },
+          tendencia_vel_rms: tendencia,
+          modos_falla_eje: a.faults.map(f=>({
+            codigo:f.code, severidad:f.severity, score:Math.round(f.score)
+          }))
+        };
+      });
+
+      // Contexto temporal del eje peor
+      const wd = machinesData.get(loc.worstAxis.k);
+      let intervaloDias = null, totalLect = 0, primera = null, ultima = null;
+      if (wd && wd.dates.length >= 1){
+        totalLect = wd.dates.length;
+        primera   = fmtDate(wd.dates[0]);
+        ultima    = fmtDate(wd.dates[wd.dates.length - 1]);
+        if (wd.dates.length >= 2){
+          const span = (wd.dates[wd.dates.length-1] - wd.dates[0]) / (1000*86400);
+          intervaloDias = parseFloat((span / (wd.dates.length - 1)).toFixed(1));
+        }
+      }
+
+      rodamientos.push({
+        tipo_entrada:            'rodamiento',     // ← marca explícita para la IA
+        equipo:                  getEquipName(eid),
+        tipo_equipo:             eq.type || 'Desconocido',
+        potencia_kw:             eq.powerKW || 0,
+        rpm:                     eq.rpmBase || 0,
+        rodamiento:              loc.locLabel,      // "Motor LL", "Bomba LA", etc.
+        codigo_rodamiento:       loc.locPrefix,     // "ML", "BA", ...
+        ejes_medidos:            loc.axes.length,
+        indice_salud_rodamiento: loc.locHealth,
+        nivel_consolidado:       loc.locLevel,
+        ejes,
+        modos_falla_detectados: loc.faults.map(f=>({
+          codigo:          f.code,
+          label:           f.label,
+          severidad:       f.severity,
+          score:           Math.round(f.avgScore),
+          confirmado:      f.confirmed,             // true si apareció en ≥2 ejes
+          ejes_afectados:  f.axesCount,
+          total_ejes:      f.totalAxes
+        })),
+        pista_direccional:      loc.directionalHint || null,
+        recomendaciones_locales: loc.recommendations.map(r => r.text),
+        intervalo_promedio_dias: intervaloDias,
+        total_lecturas:          totalLect,
+        primera_medicion:        primera,
+        ultima_medicion:         ultima
+      });
     }
+  }
 
-    const hist = [...Array(Math.min(5, d.dates.length))].map((_,i) => {
-      const idx = n - i;
-      return {
-        fecha: fmtDate(d.dates[idx]),
-        vel_rms: fmt(d.params.Vel_RMS[idx],4),
-        acc_peak: fmt(d.params.Acc_Peak[idx],3),
-        hf_peak: fmt(d.params.HF_Peak[idx],2),
-        temp_c: fmt(d.params.Temp[idx],1),
-        cf_plus: fmt(d.params.CFPlus[idx],2)
-      };
-    });
-    const anoms = detectAnomalies(k,'Vel_RMS').length + detectAnomalies(k,'HF_Peak').length;
-
-    // Avg interval between measurements (for context)
-    let avgIntervalDays = null;
-    if(d.dates.length>=2){
-      const span=(d.dates[n]-d.dates[0])/(1000*86400);
-      avgIntervalDays=parseFloat((span/(d.dates.length-1)).toFixed(1));
-    }
-
-    return {
-      equipo: getEquipNameOnly(k),
-      tipo: eq.type || 'Desconocido',
-      potencia_kw: eq.powerKW || 0,
-      rpm: eq.rpmBase || 0,
-      punto: getPointCode(k),
-      punto_descripcion: POINT_LABELS[getPointCode(k)] || getPointCode(k),
-      total_lecturas: d.dates.length,
-      intervalo_promedio_dias: avgIntervalDays,
-      primera_medicion: fmtDate(d.dates[0]),
-      ultima_medicion: fmtDate(d.dates[n]),
-      estado_actual: STATUS_LABELS[STATUS.indexOf(level)],
-      nivel_estado: level,
-      indice_salud: health,
-      diagnostico_local: diagnosis,
-      modos_falla_detectados: faults.map(f=>({codigo:f.code, label:f.label, score:Math.round(f.score), severidad:f.severity})),
-      ultima_lectura: {
-        vel_rms_mms: fmt(r.ov_vel_rms_mms,4),
-        vel_peak_mms: fmt(r.ov_vel_peak_mms,4),
-        acc_peak_g: fmt(r.ov_acc_peak_g,3),
-        acc_rms_g: fmt(r.ov_acc_rms_g,3),
-        hf_peak_g: fmt(r.hf_acc_peak_g,2),
-        hf_rms_g: fmt(r.hf_acc_rms_g,3),
-        temp_c: fmt(r.temp_c,1),
-        cf_plus: fmt(r.cfplus,2),
-        disp_rms_um: fmt(r.ov_disp_rms_um,2)
-      },
-      tendencias: {
-        vel_rms: trendData('Vel_RMS'),
-        hf_peak: trendData('HF_Peak'),
-        acc_peak: trendData('Acc_Peak'),
-        temp: trendData('Temp')
-      },
-      anomalias_detectadas: anoms,
-      historial_reciente: hist,
-      umbrales: { vel_rms: thresholds.Vel_RMS, acc_peak: thresholds.Acc_Peak, hf_peak: thresholds.HF_Peak, temp: thresholds.Temp, cfplus: thresholds.CFPlus }
-    };
-  });
+  if (!rodamientos.length) return null;
 
   const langInstructions = {
     es: 'Responde en español. Usa terminología técnica de mantenimiento predictivo.',
@@ -4844,62 +4872,77 @@ function buildAIPayload(){
   const prompt = `Sos un experto en mantenimiento predictivo industrial y análisis de vibraciones (ISO 10816, ISO 20816, ISO 13373).
 ${langInstructions[lang]}
 
-Analizá los datos de vibración medidos con ${getInstrumentLabel()}. Para cada equipo ya se incluye un pre-diagnóstico local con modos de falla detectados (campo "modos_falla_detectados"), índice de salud (0-100) y tendencias por parámetro. Tu análisis debe PROFUNDIZAR en esos hallazgos, correlacionarlos entre sí, y agregar contexto técnico que el algoritmo local no puede inferir.
+═══════════════════════════════════════════════════════════
+⚠️ GRANULARIDAD DE LA ENTRADA — LEER CON ATENCIÓN
+═══════════════════════════════════════════════════════════
+Recibís ${rodamientos.length} RODAMIENTOS, no puntos sueltos.
+Cada rodamiento tiene 1 a 3 EJES medidos (Horizontal / Vertical / Axial) sobre
+el MISMO soporte físico. Los ejes X/Y/Z de un mismo código (ej. MLX/MLY/MLZ)
+son mediciones del mismo rodamiento desde tres direcciones distintas.
 
-INSTRUCCIONES:
-- Si el equipo tiene múltiples modos de falla simultáneos, analizá la interacción entre ellos (ej: desalineación que genera sobrecarga en rodamiento).
-- Para tendencias crecientes (slope > 0 con R² > 0.5), estimá el riesgo de falla a corto plazo.
-- Para equipos tipo Bomba/Compresor/Soplador con HF elevado y CF+ alto, evalúa cavitación como causa raíz.
-- Priorizá acciones por riesgo de parada de planta, no solo por severidad de vibración.
+REGLAS DE ANÁLISIS CRUZADO (obligatorias):
+1. UNA entrada por rodamiento, NO por eje. No repitas "rodamiento dañado" tres
+   veces porque HF está alto en X, Y y Z — eso es UNA sola falla con tres
+   confirmaciones.
+2. Una falla detectada en ≥2 ejes del mismo rodamiento está CONFIRMADA → alta
+   prioridad. Una falla en 1 solo eje está A CONFIRMAR → pedir re-medición.
+3. La "pista_direccional" orienta el diagnóstico: axial dominante → sospecha
+   de desalineación angular o empuje axial; radial simétrico → desbalanceo.
+4. Un rodamiento con 3 ejes comprometidos es más grave que uno con 1 eje
+   crítico, aunque el índice de salud consolidado sea parecido.
+5. El campo "modos_falla_detectados" ya trae el flag "confirmado" calculado
+   por el motor local — usalo como base, no lo recalculés a ciegas.
+6. Priorizá acciones por riesgo de parada de planta, no solo por severidad.
+7. NO renombres "rodamientos" a "equipos" ni "puntos_medicion" en tu respuesta.
+8. "resumen_ejecutivo" debe ser un STRING, no un objeto ni una lista.
+9. "plan_de_accion" trae UNA entrada por rodamiento que lo necesite, no una por eje.
 
-DATOS DE EQUIPOS (${equipos.length} puntos de medición):
-${JSON.stringify(equipos, null, 2)}
+DATOS DE RODAMIENTOS (${rodamientos.length} rodamientos):
+${JSON.stringify(rodamientos, null, 2)}
 
 UMBRALES CONFIGURADOS:
 - Vel. RMS: ${thresholds.Vel_RMS} mm/s  |  Acc. Peak: ${thresholds.Acc_Peak} g
 - HF Peak: ${thresholds.HF_Peak} g  |  Temperatura: ${thresholds.Temp} °C  |  CF+: ${thresholds.CFPlus}
 
-Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta (sin texto antes ni después, sin backticks):
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
+(sin texto antes ni después, sin backticks, sin claves inventadas):
 {
-  "resumen_ejecutivo": "string — 2-3 oraciones resumiendo el estado general de la flota y los riesgos principales",
-  "fecha_informe": "string — fecha actual",
-  "total_puntos_analizados": number,
-  "distribucion_estado": {
-    "normal": number,
-    "elevado": number,
-    "alerta": number,
-    "critico": number
-  },
+  "resumen_ejecutivo": "string — 2-4 oraciones sobre el estado global y riesgos principales",
+  "fecha_informe": "string",
+  "total_rodamientos_analizados": number,
+  "distribucion_estado": { "normal": number, "elevado": number, "alerta": number, "critico": number },
   "indice_salud_flota": number,
-  "equipos": [
+  "rodamientos": [
     {
       "equipo": "string",
-      "punto": "string",
+      "rodamiento": "string — ej. 'Motor LL'",
+      "codigo_rodamiento": "string — ej. 'ML'",
       "estado": "string",
       "indice_salud": number,
       "prioridad": number,
-      "hallazgos": ["string — hallazgo técnico específico con valores numéricos"],
-      "causa_probable": "string — causa raíz más probable con fundamento técnico",
-      "interaccion_fallas": "string — si hay múltiples modos, cómo se relacionan entre sí (omitir si solo hay uno)",
-      "recomendaciones": ["string — acción concreta con detalle técnico"],
+      "ejes_evaluados": number,
+      "hallazgos_cruzados": [
+        "string — hallazgo que menciona en qué ejes se confirmó y con qué valores"
+      ],
+      "causa_probable": "string — causa raíz con fundamento técnico",
+      "modos_falla_confirmados": [
+        { "codigo": "string", "label": "string", "severidad": "string", "ejes_afectados": number, "total_ejes": number }
+      ],
+      "recomendaciones": ["string — acción concreta a nivel rodamiento"],
       "plazo_accion": "INMEDIATO|7 DÍAS|30 DÍAS|RUTINA",
       "riesgo_falla": "ALTO|MEDIO|BAJO"
     }
   ],
   "plan_de_accion": [
-    {
-      "prioridad": number,
-      "equipo": "string",
-      "accion": "string",
-      "plazo": "string",
-      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones"
-    }
+    { "prioridad": number, "rodamiento": "string", "equipo": "string",
+      "accion": "string", "plazo": "string",
+      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones" }
   ],
-  "conclusiones": "string — párrafo con conclusiones generales y recomendaciones estratégicas",
-  "proxima_inspeccion": "string — recomendación sobre cuándo hacer la próxima ronda de mediciones"
+  "conclusiones": "string — párrafo estratégico",
+  "proxima_inspeccion": "string"
 }`;
 
-  return { prompt, lang, equipos };
+  return { prompt, lang, rodamientos };
 }
 
 // ── Flujo manual (sin API key) ─────────────────────────────
@@ -4923,7 +4966,7 @@ function copiarPromptManual(){
   const finish = (ok) => {
     st.style.color = ok ? 'var(--good, #10c98a)' : 'var(--warning, #f0b429)';
     st.textContent = ok
-      ? `✅ Prompt copiado al portapapeles (${payload.equipos.length} punto(s)). Pegalo en tu IA web.`
+      ? `✅ Prompt copiado al portapapeles (${payload.rodamientos.length} rodamiento(s)). Pegalo en tu IA web.`
       : '⚠️ No se pudo copiar automáticamente — seleccioná el texto de abajo y copiá con Ctrl+C.';
   };
   if(navigator.clipboard && navigator.clipboard.writeText){
@@ -4937,6 +4980,194 @@ function copiarPromptManual(){
 // Toma lo que el usuario pegó desde la IA web y lo procesa igual que
 // generateAIReport() procesa la respuesta de la API: limpia backticks,
 // extrae el bloque JSON y lo parsea, y renderiza con renderAIReport().
+// Normaliza respuestas de IA que no siguen el schema canónico. Cubre 3 formas:
+//   A) Canónica nueva:  { rodamientos:[...], resumen_ejecutivo:string, plan_de_accion:[...] }
+//   B) Canónica vieja:  { equipos:[...], resumen_ejecutivo:string, ... }
+//   C) Alternativa:     { puntos_medicion:[...], resumen_ejecutivo:{diagnostico_general},
+//                         acciones_recomendadas:[...], analisis_tecnico:{...} }
+// Devuelve siempre la forma (A). Si no reconoce ninguna, devuelve el objeto crudo.
+function normalizarReporteIA(raw){
+  if (!raw || typeof raw !== 'object') return raw;
+
+  // (A) ya canónico
+  if (Array.isArray(raw.rodamientos) && raw.rodamientos.length &&
+      typeof raw.resumen_ejecutivo === 'string') return raw;
+
+  // (B) canónico viejo — renombrar equipos → rodamientos
+  if (Array.isArray(raw.equipos) && raw.equipos.length &&
+      typeof raw.resumen_ejecutivo === 'string'){
+    return {...raw, rodamientos: raw.equipos};
+  }
+
+  // (C) alternativa por puntos
+  if (Array.isArray(raw.puntos_medicion) && raw.puntos_medicion.length){
+    return _normalizarDesdePuntos(raw);
+  }
+
+  return raw;
+}
+
+function _normalizarDesdePuntos(raw){
+  const equipoNombre = String(raw.equipo || 'Equipo').split('(')[0].trim();
+  const mecanismo = (raw.analisis_tecnico && raw.analisis_tecnico.mecanismo_falla) || '';
+  const detalles  = Array.isArray(raw.analisis_tecnico && raw.analisis_tecnico.detalles)
+    ? raw.analisis_tecnico.detalles.join(' ') : '';
+
+  const nivelDe = (est) => {
+    const e = String(est||'').toLowerCase();
+    if (e.includes('crít') || e.includes('extremo')) return 'critical';
+    if (e.includes('alert')) return 'warning';
+    if (e.includes('elev')) return 'elevated';
+    return 'good';
+  };
+  const prioDe  = (r) => {
+    const x = String(r||'').toLowerCase();
+    if (x.includes('extremo') || x.includes('crít') || x.includes('alto')) return 1;
+    if (x.includes('medio')) return 2;
+    return 3;
+  };
+  const plazoDe = (n) => n === 'critical' ? 'INMEDIATO' : n === 'warning' ? '7 DÍAS' : n === 'elevated' ? '30 DÍAS' : 'RUTINA';
+  const riesgoDe = (n) => n === 'critical' ? 'ALTO' : n === 'warning' ? 'MEDIO' : 'BAJO';
+
+  // Agrupar puntos_medicion por rodamiento (primeras 2 letras del código)
+  const porRodamiento = new Map();
+  for (const p of raw.puntos_medicion){
+    const cod = String(p.codigo||'').trim().toUpperCase();
+    const loc = cod.slice(0,2) || 'NA';
+    if (!porRodamiento.has(loc)) porRodamiento.set(loc, []);
+    porRodamiento.get(loc).push(p);
+  }
+
+  const rodamientos = [];
+  for (const [locCode, pts] of porRodamiento.entries()){
+    // Mapear cada punto a un eje
+    const ejeDe = (cod) => {
+      const last = cod.slice(-1);
+      return last === 'X' ? 'Horizontal' : last === 'Y' ? 'Vertical' : last === 'Z' ? 'Axial' : last;
+    };
+    const ejes = pts.map(p => {
+      const nivel = nivelDe(p.estado || p.riesgo);
+      return {
+        eje: ejeDe(String(p.codigo||'')),
+        codigo: p.codigo || '',
+        nivel,
+        indice_salud: nivel === 'critical' ? 20 : nivel === 'warning' ? 50 : nivel === 'elevated' ? 78 : 100,
+        ultima_lectura: {
+          vel_rms_mms: null,
+          hf_peak_g:   typeof p.hf_peak_g === 'number' ? p.hf_peak_g : null,
+          cf_plus:     typeof p.cf_plus === 'number' ? p.cf_plus : null,
+          acc_peak_g:  null,
+          temp_c:      null
+        },
+        tendencia_vel_rms: /creci/i.test(p.tendencia||'')
+          ? {slope: null, r2: null}
+          : null,
+        modos_falla_eje: []
+      };
+    });
+
+    // Consolidar nivel: el peor de los ejes
+    const rank = {good:0, elevated:1, warning:2, critical:3};
+    const peor = ejes.reduce((a,b)=> rank[b.nivel] > rank[a.nivel] ? b : a, ejes[0]);
+    const nivelConsolidado = peor.nivel;
+    const saludConsolidada = Math.round(ejes.reduce((s,e)=>s+e.indice_salud,0) / ejes.length);
+
+    // Buscar la acción recomendada que mencione alguno de los códigos del rodamiento
+    const recomendaciones = [];
+    let plazo = plazoDe(nivelConsolidado);
+    if (Array.isArray(raw.acciones_recomendadas)){
+      for (const acc of raw.acciones_recomendadas){
+        const target = String(acc.equipo_afectado||'');
+        const hit = pts.some(p => new RegExp('\\b' + String(p.codigo||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b').test(target));
+        if (hit){
+          if (acc.accion) recomendaciones.push(acc.accion);
+          if (acc.plazo && plazo === 'RUTINA') plazo = String(acc.plazo).toUpperCase();
+        }
+      }
+    }
+
+    // Hallazgos cruzados: resumir HF y CF+ por eje
+    const hallazgos = ejes.map(e => {
+      const v = e.ultima_lectura;
+      const partes = [];
+      if (typeof v.hf_peak_g === 'number') partes.push(`HF Peak ${v.hf_peak_g} g`);
+      if (typeof v.cf_plus  === 'number') partes.push(`CF+ ${v.cf_plus}`);
+      return partes.length ? `${e.eje} (${e.codigo}): ${partes.join(', ')}` : null;
+    }).filter(Boolean);
+
+    rodamientos.push({
+      equipo: equipoNombre,
+      rodamiento: _labelRodamientoDesdeCodigo(locCode),
+      codigo_rodamiento: locCode,
+      estado: peor.estado || (nivelConsolidado === 'critical' ? 'Crítico' : 'Normal'),
+      indice_salud: saludConsolidada,
+      prioridad: prioDe(peor.riesgo),
+      ejes_evaluados: ejes.length,
+      hallazgos_cruzados: hallazgos.length ? hallazgos : ['Sin hallazgos detallados'],
+      causa_probable: mecanismo,
+      interaccion_fallas: detalles,
+      modos_falla_confirmados: [],
+      recomendaciones: recomendaciones.length ? recomendaciones : ['Ver plan de acción'],
+      plazo_accion: plazo,
+      riesgo_falla: riesgoDe(nivelConsolidado)
+    });
+  }
+
+  // Distribución y salud de flota
+  const distribucion = {normal:0, elevado:0, alerta:0, critico:0};
+  for (const r of rodamientos){
+    const n = nivelDe(r.estado);
+    if (n === 'good') distribucion.normal++;
+    else if (n === 'elevated') distribucion.elevado++;
+    else if (n === 'warning') distribucion.alerta++;
+    else distribucion.critico++;
+  }
+  const saludFlota = rodamientos.length
+    ? Math.round(rodamientos.reduce((s,r)=>s+r.indice_salud,0) / rodamientos.length)
+    : 0;
+
+  // Resumen ejecutivo
+  const re = raw.resumen_ejecutivo;
+  let resumenTxt = '';
+  if (typeof re === 'string') resumenTxt = re;
+  else if (re && typeof re === 'object'){
+    if (re.diagnostico_general) resumenTxt += re.diagnostico_general;
+    if (re.criticidad_global)   resumenTxt += (resumenTxt?' ':'') + 'Criticidad global: ' + re.criticidad_global + '.';
+  }
+  if (!resumenTxt) resumenTxt = 'Sin resumen ejecutivo provisto por la IA.';
+
+  // Plan de acción
+  const plan = Array.isArray(raw.acciones_recomendadas) ? raw.acciones_recomendadas.map((a,i)=>({
+    prioridad: a.prioridad || (i+1),
+    equipo:    a.equipo_afectado || '',
+    rodamiento: '',
+    accion:    a.accion || '',
+    plazo:     a.plazo || '',
+    responsable: a.responsable || ''
+  })) : [];
+
+  return {
+    resumen_ejecutivo: resumenTxt,
+    fecha_informe: raw.fecha_informe || new Date().toLocaleDateString('es-PY'),
+    total_rodamientos_analizados: rodamientos.length,
+    distribucion_estado: distribucion,
+    indice_salud_flota: saludFlota,
+    rodamientos,
+    plan_de_accion: plan,
+    conclusiones: mecanismo || '',
+    proxima_inspeccion: '',
+    _normalizado: true,
+    _normativa: raw.normativa || ''
+  };
+}
+
+// Usa POINT_LABELS si el código existe; sino devuelve un fallback legible.
+function _labelRodamientoDesdeCodigo(locCode){
+  const sample = Object.keys(POINT_LABELS).find(k => k.startsWith(locCode));
+  if (!sample) return locCode;
+  return POINT_LABELS[sample].split(' – ')[0];
+}
+
 function procesarRespuestaManual(){
   const raw = document.getElementById('aiManualResponse').value.trim();
   if(!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
@@ -4944,10 +5175,10 @@ function procesarRespuestaManual(){
     let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if(jsonMatch) cleaned = jsonMatch[0];
-    const report = JSON.parse(cleaned);
+    const report = normalizarReporteIA(JSON.parse(cleaned));
     lastAIReport = report;
     document.getElementById('aiEmptyState').style.display = 'none';
-    renderAIReport(report);
+    mostrarReporteIA(report);
   }catch(err){
     alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
       '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
@@ -5051,7 +5282,7 @@ async function generateAIReport(){
   setAiProgress(`Enviando datos a ${cfg.name}…`);
 
   try {
-    setAiProgress('Analizando ' + payload.equipos.length + ' puntos de medición…');
+    setAiProgress('Analizando ' + payload.rodamientos.length + ' rodamientos…');
 
     let rawText = '';
     if(currentProvider === 'gemini'){
@@ -5074,9 +5305,9 @@ async function generateAIReport(){
     // Some models add extra text before/after JSON — try to extract JSON block
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if(jsonMatch) cleaned = jsonMatch[0];
-    const report = JSON.parse(cleaned);
+    const report = normalizarReporteIA(JSON.parse(cleaned));
     lastAIReport = report;
-    renderAIReport(report);
+    mostrarReporteIA(report);
 
   } catch(err){
     const hint = getProviderErrorHint(currentProvider, err.message);
@@ -5102,6 +5333,28 @@ function setAiProgress(txt){
   document.getElementById('aiProgressTxt').textContent = txt;
 }
 
+let _vistaIA = 'tecnica';
+let _lastReport = null;
+
+function setVistaIA(vista){
+  _vistaIA = vista;
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', vista === 'tecnica');
+  if (bE) bE.classList.toggle('active', vista === 'ejecutiva');
+  if (_lastReport) mostrarReporteIA(_lastReport);
+}
+
+function mostrarReporteIA(r){
+  _lastReport = r;
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', _vistaIA === 'tecnica');
+  if (bE) bE.classList.toggle('active', _vistaIA === 'ejecutiva');
+  if (_vistaIA === 'ejecutiva') renderAIReportEjecutivo(r);
+  else renderAIReport(r);
+}
+
 function renderAIReport(r){
   document.getElementById('aiReportOutput').style.display = 'block';
 
@@ -5112,7 +5365,7 @@ function renderAIReport(r){
   document.getElementById('aiSummaryCards').innerHTML = `
     <div class="ai-sum-card">
       <div class="ai-sum-card-icon">🏭</div>
-      <div><div class="ai-sum-card-val" style="color:var(--accent)">${r.total_puntos_analizados || (r.equipos||[]).length}</div><div class="ai-sum-card-lbl">Puntos analizados</div></div>
+      <div><div class="ai-sum-card-val" style="color:var(--accent)">${r.total_rodamientos_analizados || r.total_puntos_analizados || (r.rodamientos||r.equipos||[]).length}</div><div class="ai-sum-card-lbl">Rodamientos analizados</div></div>
     </div>
     <div class="ai-sum-card">
       <div class="ai-sum-card-icon">💪</div>
@@ -5147,7 +5400,7 @@ function renderAIReport(r){
   }
 
   // ── Equipment cards (sorted by priority) ──
-  const equips = (r.equipos || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
+  const equips = (r.rodamientos || r.equipos || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
   if(equips.length){
     html += `<div class="section-title">🔍 Análisis por Equipo</div>`;
     equips.forEach(eq => {
@@ -5159,7 +5412,7 @@ function renderAIReport(r){
       html += `<div class="ai-equip-card">
         <div class="ai-equip-card-header">
           <div>
-            <div class="ai-equip-name">${escHtml(eq.equipo||'')} <span class="mpoint-badge">${escHtml(eq.punto||'')}</span></div>
+            <div class="ai-equip-name">${escHtml(eq.equipo||'')} <span class="mpoint-badge">${escHtml(eq.rodamiento||eq.punto||'')}</span>${eq.ejes_evaluados ? `<span style="font-size:.65rem;color:var(--muted);margin-left:6px;">(${eq.ejes_evaluados} ejes)</span>` : ''}</div>
             <div class="ai-equip-meta">${riesgoIcon} Riesgo: ${escHtml(eq.riesgo_falla||'—')} &nbsp;|&nbsp; Plazo: <strong>${escHtml(eq.plazo_accion||'—')}</strong></div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -5170,8 +5423,8 @@ function renderAIReport(r){
         <div class="ai-equip-card-body">
           ${eq.causa_probable ? `<div class="ai-finding ${lvl}"><strong>Causa probable:</strong> ${escHtml(eq.causa_probable)}</div>` : ''}
           ${eq.interaccion_fallas ? `<div class="ai-finding elevated" style="border-left-color:#a78bfa;"><strong>⚡ Interacción de fallas:</strong> ${escHtml(eq.interaccion_fallas)}</div>` : ''}
-          ${(eq.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
-            ${eq.hallazgos.map(h=>`<div class="ai-finding ${lvl}">${escHtml(h)}</div>`).join('')}` : ''}
+          ${(eq.hallazgos_cruzados||eq.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
+            ${(eq.hallazgos_cruzados||eq.hallazgos).map(h=>`<div class="ai-finding ${lvl}">${escHtml(h)}</div>`).join('')}` : ''}
           ${(eq.recomendaciones||[]).length ? `<div class="ai-section-label">Recomendaciones</div>
             <ul class="ai-rec-list">${eq.recomendaciones.map(rec=>`<li>${escHtml(rec)}</li>`).join('')}</ul>` : ''}
         </div>
@@ -5191,7 +5444,7 @@ function renderAIReport(r){
           const pc = `ai-prio-${Math.min(p.prioridad||4,4)}`;
           return `<tr>
             <td><span class="ai-prio-badge ${pc}">P${p.prioridad||i+1}</span></td>
-            <td style="font-weight:700;color:#fff;">${escHtml(p.equipo||'')}</td>
+            <td style="font-weight:700;color:#fff;">${escHtml(p.equipo||'')}${p.rodamiento ? ` <span style="font-weight:400;color:var(--muted);">(${escHtml(p.rodamiento)})</span>` : ''}</td>
             <td>${escHtml(p.accion||'')}</td>
             <td style="white-space:nowrap;">${escHtml(p.plazo||'')}</td>
             <td style="font-size:.8rem;color:var(--muted);">${escHtml(p.responsable||'')}</td>
@@ -5211,10 +5464,278 @@ function renderAIReport(r){
     </div>`;
   }
 
+  if (r._normalizado){
+    html += `<div style="margin-top:16px;padding:10px 14px;background:rgba(240,180,41,.08);border:1px solid rgba(240,180,41,.25);border-left:4px solid var(--elevated);border-radius:8px;font-size:.8rem;color:var(--text);">
+      ⚠️ La IA devolvió un schema distinto al esperado — los campos se mapearon automáticamente. Verificá que los datos clave estén correctos.
+    </div>`;
+  }
+
   document.getElementById('aiReportSections').innerHTML = html;
 
   // JSON viewer
   document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function renderAIReportEjecutivo(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  document.getElementById('aiEmptyState').style.display = 'none';
+
+  const dist  = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_rodamientos_analizados || 0;
+  const salud = r.indice_salud_flota || 0;
+  const saludColor = salud < 40 ? 'var(--critical)' : salud < 70 ? 'var(--warning)' : salud < 85 ? 'var(--elevated)' : 'var(--good)';
+
+  const topEquipos = (r.rodamientos || r.equipos || []).slice()
+    .sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0, 6);
+  const planTop = (r.plan_de_accion || [])
+    .filter(p => (p.prioridad||99) <= 2).slice(0, 5);
+
+  const segs = [
+    {n:dist.critico, cls:'off-dist-seg-crit'},
+    {n:dist.alerta,  cls:'off-dist-seg-warn'},
+    {n:dist.elevado, cls:'off-dist-seg-elev'},
+    {n:dist.normal,  cls:'off-dist-seg-good'}
+  ];
+
+  let html = '';
+
+  // Header
+  html += `
+  <div style="background:linear-gradient(135deg,#0d1117,#111d30);border:1px solid var(--border2);border-radius:14px;padding:26px 30px;margin-bottom:20px;">
+    <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Informe Ejecutivo · Vibra Pro</div>
+    <div style="font-size:1.6rem;font-weight:800;color:#fff;margin-top:6px;letter-spacing:-.3px;">Estado de la flota</div>
+    <div style="font-size:.86rem;color:var(--muted);margin-top:4px;">${escHtml(r.fecha_informe||'')} · ${total} rodamiento(s) analizados</div>
+  </div>`;
+
+  // KPI row
+  html += `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:18px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:${saludColor};line-height:1;">${salud}%</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Salud flota</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--critical);line-height:1;">${dist.critico}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Críticos</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--warning);line-height:1;">${dist.alerta}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">En alerta</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--elevated);line-height:1;">${dist.elevado}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Elevados</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:var(--good);line-height:1;">${dist.normal}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Normales</div>
+    </div>
+  </div>`;
+
+  // Barra distribución
+  if (total > 0){
+    html += `<div class="off-dist-bar" style="margin-bottom:22px;">${
+      segs.filter(s=>s.n>0).map(s=>`<div class="${s.cls}" style="flex:${s.n}"></div>`).join('')
+    }</div>`;
+  }
+
+  // Resumen ejecutivo
+  if (r.resumen_ejecutivo){
+    html += `
+    <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:10px;">Resumen ejecutivo</div>
+      <div style="font-size:1rem;color:var(--text);line-height:1.7;">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+
+  // Top equipos
+  if (topEquipos.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Top ${topEquipos.length} rodamientos a atender</div>`;
+    html += `<div style="display:grid;gap:10px;margin-bottom:22px;">`;
+    for (const eq of topEquipos){
+      const nivel = (eq.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (eq.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (eq.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const nc = {critical:'var(--critical)',warning:'var(--warning)',elevated:'var(--elevated)',good:'var(--good)'}[nivel];
+      const ic = eq.riesgo_falla === 'ALTO' ? '⛔' : eq.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      const locLabel = eq.rodamiento || eq.punto || '';
+      html += `
+      <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid ${nc};border-radius:10px;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">${escHtml(eq.equipo||'')} <span class="mpoint-badge">${escHtml(locLabel)}</span>${eq.ejes_evaluados ? `<span style="font-size:.7rem;color:var(--muted);margin-left:6px;">(${eq.ejes_evaluados} ejes)</span>` : ''}</div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">${ic} Riesgo ${escHtml(eq.riesgo_falla||'—')} · Plazo: <strong style="color:${nc};">${escHtml(eq.plazo_accion||'—')}</strong></div>
+          </div>
+          <span class="mbadge badge-${nivel}">${escHtml(eq.estado||'')}</span>
+        </div>
+        ${eq.causa_probable ? `<div style="font-size:.85rem;color:var(--text);margin-top:8px;line-height:1.5;">${escHtml(eq.causa_probable)}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Plan de acción
+  if (planTop.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Plan de acción inmediato</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <table class="ai-plan-table" style="margin:0;">
+        <thead><tr><th style="width:50px;">#</th><th>Equipo</th><th>Acción</th><th style="width:100px;">Plazo</th></tr></thead>
+        <tbody>
+          ${planTop.map((p,i)=>`
+            <tr>
+              <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+              <td style="font-weight:700;color:#fff;">${escHtml(p.equipo||'')}${p.rodamiento ? ` <span style="font-weight:400;color:var(--muted);">(${escHtml(p.rodamiento)})</span>` : ''}</td>
+              <td style="font-size:.88rem;">${escHtml(p.accion||'')}</td>
+              <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // Próximo paso
+  if (r.proxima_inspeccion || r.conclusiones){
+    html += `
+    <div style="background:rgba(16,201,138,.06);border:1px solid rgba(16,201,138,.2);border-left:4px solid var(--good);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--good);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:8px;">Próximo paso</div>
+      ${r.proxima_inspeccion ? `<div style="font-size:1rem;color:var(--text);line-height:1.6;margin-bottom:${r.conclusiones?'10px':'0'};">${escHtml(r.proxima_inspeccion)}</div>` : ''}
+      ${r.conclusiones ? `<div style="font-size:.88rem;color:var(--muted);line-height:1.6;">${escHtml(r.conclusiones)}</div>` : ''}
+    </div>`;
+  }
+
+  if (r._normalizado){
+    html += `<div style="font-size:.75rem;color:var(--muted);padding:10px 14px;background:rgba(240,180,41,.05);border:1px solid rgba(240,180,41,.15);border-radius:8px;">
+      ⚠️ La IA devolvió un schema distinto al esperado — los datos se normalizaron automáticamente.
+    </div>`;
+  }
+
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiSummaryCards').innerHTML = '';
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function imprimirInformeEjecutivo(){
+  const r = _lastReport;
+  if (!r){ alert('Generá un informe primero.'); return; }
+  const dist = r.distribucion_estado || {normal:0, elevado:0, alerta:0, critico:0};
+  const salud = r.indice_salud_flota || 0;
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_rodamientos_analizados || 0;
+  const saludColorHex = salud < 40 ? '#dc2626' : salud < 70 ? '#ea580c' : salud < 85 ? '#d97706' : '#16a34a';
+
+  const topEquipos = (r.rodamientos || r.equipos || []).slice()
+    .sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0,6);
+  const planTop = (r.plan_de_accion||[]).filter(p=>(p.prioridad||99)<=2).slice(0,5);
+  const fecha = new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Informe Ejecutivo — Vibra Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;font-size:12px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{max-width:840px;margin:0 auto;padding:32px 40px;}
+  .hdr{background:linear-gradient(135deg,#0b1628,#162e50);color:#fff;padding:26px 32px;border-radius:12px;margin-bottom:22px;}
+  .hdr-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#93c5fd;font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.3px;}
+  .hdr-meta{font-size:11px;color:#93c5fd;margin-top:6px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+  .kpi{padding:14px 8px;border-radius:10px;text-align:center;background:#f8fafc;border:1px solid #e5e7eb;}
+  .kpi-n{font-size:26px;font-weight:800;font-family:'Courier New',monospace;line-height:1;}
+  .kpi-l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:6px;font-weight:700;}
+  .sec-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#1e40af;font-weight:800;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+  .box{padding:16px 20px;border-radius:10px;margin-bottom:14px;border-left:4px solid #3b82f6;background:#eff6ff;}
+  .box.good{border-left-color:#16a34a;background:#f0fdf4;}
+  .eq{padding:12px 16px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;border-left:4px solid #dc2626;margin-bottom:8px;}
+  .eq-name{font-weight:800;color:#111827;}
+  .eq-meta{font-size:10px;color:#6b7280;margin-top:3px;}
+  .eq-cause{font-size:11.5px;color:#374151;margin-top:6px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;}
+  td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+  .badge.critical{background:#fff1f2;color:#991b1b;border:1px solid #fecaca;}
+  .badge.warning{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;}
+  .badge.elevated{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+  .badge.good{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+  .prio{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;}
+  .prio-1{background:#fee2e2;color:#991b1b;}
+  .prio-2{background:#ffedd5;color:#9a3412;}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
+  @page{margin:14mm;size:A4;}
+</style></head><body><div class="page">
+
+  <div class="hdr">
+    <div class="hdr-sub">Informe Ejecutivo · Vibra Pro</div>
+    <div class="hdr-title">Estado de la flota</div>
+    <div class="hdr-meta">${escHtml(fecha)} · ${total} rodamiento(s) analizados</div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-n" style="color:${saludColorHex};">${salud}%</div><div class="kpi-l">Salud flota</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#dc2626;">${dist.critico}</div><div class="kpi-l">Críticos</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#ea580c;">${dist.alerta}</div><div class="kpi-l">En alerta</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#d97706;">${dist.elevado}</div><div class="kpi-l">Elevados</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#16a34a;">${dist.normal}</div><div class="kpi-l">Normales</div></div>
+  </div>
+
+  ${r.resumen_ejecutivo ? `
+    <div class="sec-title">Resumen ejecutivo</div>
+    <div class="box">${escHtml(String(r.resumen_ejecutivo))}</div>
+  ` : ''}
+
+  ${topEquipos.length ? `
+    <div class="sec-title">Top ${topEquipos.length} rodamientos a atender</div>
+    ${topEquipos.map(eq=>{
+      const nivel = (eq.estado||'').toLowerCase().includes('crít') ? 'critical'
+                  : (eq.estado||'').toLowerCase().includes('alert') ? 'warning'
+                  : (eq.estado||'').toLowerCase().includes('elev') ? 'elevated' : 'good';
+      const locLabel = eq.rodamiento || eq.punto || '';
+      return `<div class="eq" style="border-left-color:${
+        nivel==='critical'?'#dc2626':nivel==='warning'?'#ea580c':nivel==='elevated'?'#d97706':'#16a34a'
+      };">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div><span class="eq-name">${escHtml(eq.equipo||'')} · ${escHtml(locLabel)}</span></div>
+          <span class="badge ${nivel}">${escHtml(eq.estado||'')}</span>
+        </div>
+        <div class="eq-meta">Riesgo ${escHtml(eq.riesgo_falla||'—')} · Plazo: <strong>${escHtml(eq.plazo_accion||'—')}</strong></div>
+        ${eq.causa_probable ? `<div class="eq-cause">${escHtml(eq.causa_probable)}</div>` : ''}
+      </div>`;
+    }).join('')}
+  ` : ''}
+
+  ${planTop.length ? `
+    <div class="sec-title">Plan de acción inmediato</div>
+    <table>
+      <thead><tr><th style="width:44px;">#</th><th>Equipo</th><th>Acción</th><th style="width:90px;">Plazo</th></tr></thead>
+      <tbody>${planTop.map((p,i)=>`
+        <tr>
+          <td><span class="prio prio-${Math.min(p.prioridad||4,2)}">P${p.prioridad||i+1}</span></td>
+          <td style="font-weight:700;">${escHtml(p.equipo||'')}${p.rodamiento ? ` · ${escHtml(p.rodamiento)}` : ''}</td>
+          <td>${escHtml(p.accion||'')}</td>
+          <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+        </tr>`).join('')}</tbody>
+    </table>
+  ` : ''}
+
+  ${(r.proxima_inspeccion || r.conclusiones) ? `
+    <div class="sec-title">Próximo paso</div>
+    <div class="box good">
+      ${r.proxima_inspeccion ? `<div style="font-weight:600;margin-bottom:${r.conclusiones?'8px':'0'};">${escHtml(r.proxima_inspeccion)}</div>` : ''}
+      ${r.conclusiones ? `<div style="color:#4b5563;">${escHtml(r.conclusiones)}</div>` : ''}
+    </div>
+  ` : ''}
+
+  <div class="footer">
+    <span>MANTEC – Vibra Pro · Motor de diagnóstico predictivo</span>
+    <span>Generado: ${escHtml(new Date().toLocaleString('es-PY'))}</span>
+  </div>
+
+</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1200');
+  if (!win){ alert('El navegador bloqueó la ventana emergente.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', ()=>setTimeout(()=>win.print(), 500));
 }
 
 function toggleJsonView(){
@@ -5261,7 +5782,7 @@ async function guardarEnLaNube(){
     return;
   }
 
-  const equipos = lastAIReport.equipos || [];
+  const equipos = lastAIReport.rodamientos || lastAIReport.equipos || [];
   if(!equipos.length){
     statusEl.textContent = '⚠️ El informe no trae equipos individuales para guardar.';
     return;
@@ -5270,14 +5791,14 @@ async function guardarEnLaNube(){
   btn.disabled = true;
   let ok = 0, fail = 0;
   for(const eq of equipos){
-    const tag = eq.equipo || eq.punto;
+    const tag = eq.equipo || eq.rodamiento || eq.punto;
     if(!tag) { fail++; continue; }
     try{
       await SatSync.guardarAnalisis({
         modulo: 'vibra_pro',
         equipo_tag: tag,
         severidad: mapEstadoASeveridad(eq.estado),
-        resumen: eq.causa_probable || (eq.hallazgos && eq.hallazgos[0]) || eq.estado || '',
+        resumen: eq.causa_probable || (eq.hallazgos_cruzados && eq.hallazgos_cruzados[0]) || (eq.hallazgos && eq.hallazgos[0]) || eq.estado || '',
         datos: eq
       });
       ok++;
@@ -5289,8 +5810,8 @@ async function guardarEnLaNube(){
   btn.disabled = false;
   statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
   statusEl.textContent = fail
-    ? `☁️ Guardados ${ok} de ${equipos.length} equipos (${fail} con error — ver consola).`
-    : `☁️ ${ok} equipo(s) guardados en la nube correctamente.`;
+    ? `☁️ Guardados ${ok} de ${equipos.length} rodamiento(s) (${fail} con error — ver consola).`
+    : `☁️ ${ok} rodamiento(s) guardados en la nube correctamente.`;
 }
 
 // Sube TODAS las mediciones crudas de VibraPro al hub (tabla mediciones).
