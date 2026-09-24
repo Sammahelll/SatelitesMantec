@@ -449,6 +449,36 @@
   </div>
 </div>
 
+<!-- modal duplicar equipo -->
+<div class="modal-bg" id="duplicarModal">
+  <div class="modal">
+    <h3>Duplicar equipo</h3>
+    <p style="font-size:13px; color:var(--muted); margin-top:-6px;" id="duplicarOrigenMsg"></p>
+    <label>TAG del equipo nuevo</label>
+    <input id="duplicarTagNuevo" type="text" placeholder="ej: MOT-205">
+    <div class="note">Se copian nombre, tipo, ubicación, marca, modelo, criticidad, estado, notas y la ficha técnica (RPM, potencia, voltaje, etc.). El N° de serie y el historial de análisis <b>no</b> se copian: son propios de cada equipo físico.</div>
+    <div class="row">
+      <button class="ghost" id="btnDuplicarCancel">Cancelar</button>
+      <button class="primary" id="btnDuplicarConfirmar">Duplicar equipo</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal borrar equipo (definitivo) -->
+<div class="modal-bg" id="borrarModal">
+  <div class="modal">
+    <h3 style="color:var(--crit);">Borrar equipo definitivamente</h3>
+    <p style="font-size:13px; color:var(--muted); margin-top:-6px;" id="borrarOrigenMsg"></p>
+    <div class="note" style="border-color:var(--crit); color:var(--crit);">Esta acción es <b>irreversible</b>: se borra el equipo junto con todo su historial de análisis, mediciones, capturas de campo pendientes y fichas técnicas. No se puede deshacer. Si solo querés que deje de verse pero conservar el historial, usá <b>Archivar</b> en su lugar.</div>
+    <label>Escribí el TAG del equipo para confirmar</label>
+    <input id="borrarTagConfirm" type="text" placeholder="">
+    <div class="row">
+      <button class="ghost" id="btnBorrarCancel">Cancelar</button>
+      <button class="primary" id="btnBorrarConfirmar" style="background:var(--crit);" disabled>Borrar definitivamente</button>
+    </div>
+  </div>
+</div>
+
 <!-- modal confirmación genérica -->
 <div class="modal-bg" id="confirmModal">
   <div class="modal">
@@ -1204,7 +1234,9 @@ function renderEquiposTable(){
           <button class="ghost small" onclick="abrirDetalleEquipo('${e.id}')">Ver</button>
           <button class="ghost small" onclick="abrirInforme('${e.id}')">Informe</button>
           <button class="ghost small" onclick="abrirEditarEquipo('${e.id}')">Editar</button>
+          <button class="ghost small" onclick="abrirDuplicarEquipo('${e.id}')">Duplicar</button>
           <button class="ghost small ${e.activo ? 'danger' : ''}" onclick="confirmarArchivar('${e.id}', ${e.activo})">${e.activo ? 'Archivar' : 'Reactivar'}</button>
+          <button class="ghost small danger" onclick="abrirBorrarEquipo('${e.id}')">Borrar</button>
         </td>
       </tr>`;
     }).join('')}
@@ -1371,6 +1403,31 @@ async function abrirEditarEquipo(id){
       }
     }
   }
+}
+
+let duplicandoEquipoId = null;
+function abrirDuplicarEquipo(id){
+  const eq = equiposCache.find(e => e.id === id);
+  if (!eq) return;
+  duplicandoEquipoId = id;
+  document.getElementById('duplicarOrigenMsg').innerHTML = `Copia de <span class="tag-mono">${eq.tag}</span> — solo tenés que poner el TAG nuevo.`;
+  document.getElementById('duplicarTagNuevo').value = '';
+  document.getElementById('duplicarModal').classList.add('show');
+  setTimeout(() => document.getElementById('duplicarTagNuevo').focus(), 50);
+}
+
+let borrandoEquipoId = null;
+function abrirBorrarEquipo(id){
+  const eq = equiposCache.find(e => e.id === id);
+  if (!eq) return;
+  borrandoEquipoId = id;
+  document.getElementById('borrarOrigenMsg').innerHTML = `Vas a borrar <span class="tag-mono">${eq.tag}</span> junto con todo su historial de análisis, mediciones y capturas de campo.`;
+  const input = document.getElementById('borrarTagConfirm');
+  input.value = '';
+  input.placeholder = eq.tag;
+  document.getElementById('btnBorrarConfirmar').disabled = true;
+  document.getElementById('borrarModal').classList.add('show');
+  setTimeout(() => input.focus(), 50);
 }
 
 let confirmCallback = null;
@@ -1633,6 +1690,52 @@ document.getElementById('btnAddEquipo').onclick = async () => {
     showToast('No se pudo crear el equipo: ' + e.message, 'error');
   }
 };
+document.getElementById('btnDuplicarCancel').onclick = () => document.getElementById('duplicarModal').classList.remove('show');
+async function confirmarDuplicarEquipo(){
+  if (!duplicandoEquipoId) return;
+  const tagNuevo = document.getElementById('duplicarTagNuevo').value.trim();
+  if (!tagNuevo){ showToast('El TAG es obligatorio.', 'error'); return; }
+  if (!SatSync.estaConfigurado()){ showToast('Conectá Supabase primero.', 'error'); return; }
+  try{
+    const { equipo, avisoSpecs } = await SatSync.duplicarEquipo(duplicandoEquipoId, tagNuevo);
+    document.getElementById('duplicarModal').classList.remove('show');
+    showToast(avisoSpecs ? `${equipo.tag} creado. ${avisoSpecs}` : `${equipo.tag} creado a partir del equipo original.`, avisoSpecs ? 'error' : 'success');
+    await cargarEquiposCache();
+    renderEquiposTable();
+  }catch(e){
+    showToast('No se pudo duplicar: ' + e.message, 'error');
+  }
+}
+document.getElementById('btnDuplicarConfirmar').onclick = confirmarDuplicarEquipo;
+document.getElementById('duplicarTagNuevo').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') confirmarDuplicarEquipo(); });
+document.getElementById('btnBorrarCancel').onclick = () => document.getElementById('borrarModal').classList.remove('show');
+document.getElementById('borrarTagConfirm').addEventListener('input', () => {
+  const eq = equiposCache.find(e => e.id === borrandoEquipoId);
+  const val = document.getElementById('borrarTagConfirm').value.trim();
+  document.getElementById('btnBorrarConfirmar').disabled = !(eq && val === eq.tag);
+});
+async function confirmarBorrarEquipo(){
+  const eq = equiposCache.find(e => e.id === borrandoEquipoId);
+  if (!eq) return;
+  const val = document.getElementById('borrarTagConfirm').value.trim();
+  if (val !== eq.tag) return;
+  if (!SatSync.estaConfigurado()){ showToast('Conectá Supabase primero.', 'error'); return; }
+  const btn = document.getElementById('btnBorrarConfirmar');
+  btn.disabled = true;
+  try{
+    await SatSync.borrarEquipoDefinitivo(borrandoEquipoId);
+    document.getElementById('borrarModal').classList.remove('show');
+    showToast(`${eq.tag} borrado definitivamente.`, 'success');
+    borrandoEquipoId = null;
+    await cargarEquiposCache();
+    renderEquiposTable();
+  }catch(e){
+    showToast('No se pudo borrar el equipo: ' + e.message, 'error');
+    btn.disabled = false;
+  }
+}
+document.getElementById('btnBorrarConfirmar').onclick = confirmarBorrarEquipo;
+document.getElementById('borrarTagConfirm').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !document.getElementById('btnBorrarConfirmar').disabled) confirmarBorrarEquipo(); });
 document.getElementById('eqBusqueda').oninput = renderEquiposTable;
 document.getElementById('eqMostrarArchivados').onchange = async () => { await cargarEquiposCache(); renderEquiposTable(); };
 document.getElementById('btnRefreshEquipos').onclick = async () => { await cargarEquiposCache(); renderEquiposTable(); };
