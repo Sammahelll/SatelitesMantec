@@ -351,6 +351,7 @@ header{
 <div class="upload-bar">
   <label class="file-label">📂 Importar Excel/CSV<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)"></label>
   <button class="btn-small" style="border-color:var(--accent);color:var(--accent2);" onclick="openManualEntry()">✍️ Cargar medición manual</button>
+  <button class="btn-small" style="border-color:var(--good);color:var(--good);" onclick="abrirCapturasPendientes()">📥 Capturas de campo <span id="capturasBadge" class="hidden" style="margin-left:4px;">0</span></button>
   <button class="btn-small" onclick="downloadTemplate()">⬇️ Descargar plantilla</button>
   <button class="btn-small" onclick="exportCSV()">⬇️ Exportar historial CSV</button>
   <span class="load-status" id="loadStatus"></span>
@@ -596,6 +597,22 @@ header{
         <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveManualReading()">💾 Guardar medición</button>
         <button class="btn-small" onclick="closeManualEntry()">Cancelar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAPTURAS DE CAMPO -->
+<div class="modal-overlay" id="capturasOverlay" onclick="if(event.target===this)cerrarCapturasPendientes()">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">📥 Capturas pendientes de campo</div>
+        <div class="modal-sub">Cargadas desde el Hub de Campo — sin diagnóstico todavía</div>
+      </div>
+      <button class="modal-close" onclick="cerrarCapturasPendientes()">✕</button>
+    </div>
+    <div class="modal-body" id="capturasLista">
+      <div class="empty-state"><div class="ei">📡</div>Buscando capturas pendientes…</div>
     </div>
   </div>
 </div>
@@ -1748,6 +1765,7 @@ function onManualCompChange(){
 }
 function nowLocalInput(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
 function openManualEntry(preId){
+  _capturaActual = null;   // una captura a medio copiar y cancelada no debe marcarse al guardar otra medición
   const sel = document.getElementById('me_compSel');
   const nombresLocales = new Set([...compsRegistry.values()].map(c => (c.name||'').toUpperCase()));
 
@@ -1853,6 +1871,13 @@ function saveManualReading(){
   closeManualEntry();
   renderAll();
   publicarAnalisisComp(compId).catch(() => {});
+  if (_capturaActual){
+    const capId = _capturaActual.id;
+    _capturaActual = null;
+    if (typeof SatSync !== 'undefined' && SatSync.estaConfigurado()){
+      SatSync.marcarCapturaProcesada(capId).then(actualizarBadgeCapturas).catch(err => console.warn('[SatSync] no se pudo marcar la captura como procesada', err));
+    }
+  }
   const status = document.getElementById('loadStatus');
   if (status){
     status.className = 'load-status ok';
@@ -2902,10 +2927,140 @@ function initIATab(){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  12d. CAPTURAS DE CAMPO — pendiente
+//  12d. CAPTURAS DE CAMPO (Hub de Campo → copiar a formulario)
 // ═══════════════════════════════════════════════════════════
-function abrirCapturasPendientes(){ alert('Capturas de campo: se conectan en una etapa posterior.'); }
-function cerrarCapturasPendientes(){ const o = document.getElementById('capturasOverlay'); if (o) o.classList.remove('open'); }
+async function abrirCapturasPendientes(){
+  const overlay = document.getElementById('capturasOverlay');
+  const lista = document.getElementById('capturasLista');
+  overlay.classList.add('open');
+  lista.innerHTML = `<div class="empty-state"><div class="ei">📡</div>Buscando capturas pendientes…</div>`;
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div>Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.</div>`;
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'compresor_pro' });
+  }catch(err){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div>No se pudo leer capturas_campo: ${escHtml(err.message)}</div>`;
+    return;
+  }
+  renderCapturasBadge();
+  if (!_capturasPendientes.length){
+    lista.innerHTML = `<div class="empty-state"><div class="ei">✅</div>No hay capturas pendientes desde el Hub de Campo.</div>`;
+    return;
+  }
+  lista.innerHTML = _capturasPendientes.map((c,i)=>{
+    const d = c.datos || {};
+    const tag = c.equipos?.tag || '(sin tag)';
+    const tipoLbl = TIPO_LBL[d.tipoComp] || d.tipoComp || '—';
+    const resumen = tipoLbl + ' · ' + (d.fecha || '');
+    return `<div class="fld" style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;">${escHtml(tag)}</div>
+        <div style="font-size:.75rem;color:var(--muted);">${escHtml(resumen)}</div>
+      </div>
+      <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="copiarCapturaAFormulario(${i})">📋 Copiar a formulario</button>
+    </div>`;
+  }).join('');
+}
+function cerrarCapturasPendientes(){ document.getElementById('capturasOverlay').classList.remove('open'); }
+function renderCapturasBadge(){
+  const b = document.getElementById('capturasBadge');
+  if (!b) return;
+  b.textContent = _capturasPendientes.length;
+  b.classList.toggle('hidden', _capturasPendientes.length === 0);
+}
+async function actualizarBadgeCapturas(){
+  const badge = document.getElementById('capturasBadge');
+  if(!badge) return;
+  if(typeof SatSync === 'undefined' || !SatSync.init() || typeof SatSync.listarCapturasPendientes !== 'function'){
+    badge.classList.add('hidden');
+    return;
+  }
+  try{
+    _capturasPendientes = await SatSync.listarCapturasPendientes({ modulo: 'compresor_pro' });
+    renderCapturasBadge();
+  }catch(err){
+    console.warn('[SatSync] no se pudo chequear capturas pendientes', err);
+    badge.classList.add('hidden');
+  }
+}
+
+// Copia los datos crudos del hub al formulario manual y lo abre.
+// El técnico revisa, completa lo que falte (FLA si no está en la ficha)
+// y confirma con "Guardar medición". Recién ahí se marca la captura como
+// procesada (ver saveManualReading).
+function copiarCapturaAFormulario(i){
+  const captura = _capturasPendientes[i];
+  if (!captura) return;
+  const d = captura.datos || {};
+  const tag = captura.equipos?.tag || '';
+  if (!tag) return;
+  const tipoHub = d.tipoComp || 'tornillo';
+
+  // Localizar o crear la ficha local del compresor con el TAG del hub.
+  // Va ANTES de openManualEntry para que el combo de compresores ya la incluya.
+  let compId = null;
+  for (const [id, c] of compsRegistry.entries()){
+    if ((c.name||'').toLowerCase() === tag.toLowerCase()){ compId = id; break; }
+  }
+  if (!compId){
+    compId = crearFichaDesdeHub(tag);
+    saveState();
+  }
+  const comp = compsRegistry.get(compId);
+
+  // Tipo: se respeta el del hub, pero no se re-tipa en silencio una ficha que
+  // ya tiene mediciones (saveEditComp pide confirmación para eso).
+  if (comp.tipoComp !== tipoHub){
+    const nLect = readingsData.get(compId)?.dates.length || 0;
+    if (nLect > 0){
+      alert(`La captura de ${tag} viene como "${TIPO_LBL[tipoHub]||tipoHub}" pero la ficha local es "${TIPO_LBL[comp.tipoComp]||comp.tipoComp}" y ya tiene ${nLect} medición(es).\n\nSi el tipo correcto es el del hub, cambialo primero con ✏️ Editar; si no, corregí el tipo en el Hub de Campo.`);
+      return;
+    }
+    comp.tipoComp = tipoHub;
+    saveState();
+  }
+
+  cerrarCapturasPendientes();
+  openManualEntry(compId); // resetea el form, arma los selects, selecciona la ficha y lo abre
+
+  // Fecha del hub si vino
+  if (d.fecha){
+    const f = new Date(String(d.fecha).length <= 10 ? d.fecha + 'T12:00:00' : d.fecha);
+    if (!isNaN(f)){ f.setMinutes(f.getMinutes() - f.getTimezoneOffset()); document.getElementById('me_fecha').value = f.toISOString().slice(0,16); }
+  }
+
+  // Copia los campos crudos al formulario correspondiente al tipo
+  const set = (id, v) => { if (v !== undefined && v !== null && v !== '') { const el = document.getElementById(id); if (el) el.value = v; } };
+  if (tipoHub === 'tornillo'){
+    set('me_P_desc', d.P_desc);   set('me_T_desc', d.T_desc);   set('me_T_inyeccion', d.T_inyeccion);
+    set('me_P_aceite', d.P_aceite); set('me_dP_sep', d.dP_sep);
+    set('me_dP_filAire', d.dP_filAire); set('me_dP_filAceite', d.dP_filAceite);
+    set('me_I_motor', d.I_motor); set('me_T_amb', d.T_amb);
+  } else if (tipoHub === 'anillo'){
+    set('me_P_succ', d.P_succ); set('me_P_desc', d.P_desc); set('me_T_desc', d.T_desc);
+    set('me_T_acido_in', d.T_acido_in); set('me_T_acido_out', d.T_acido_out);
+    set('me_Conc_H2SO4', d.Conc_H2SO4); set('me_Caudal_acido', d.Caudal_acido);
+    set('me_I_motor', d.I_motor);
+  } else {
+    set('me_P_succ', d.P_succ); set('me_T_succ', d.T_succ);
+    set('me_P_desc', d.P_desc); set('me_T_desc', d.T_desc);
+    set('me_T_aceite', d.T_aceite); set('me_P_aceite', d.P_aceite);
+    set('me_I_motor', d.I_motor);
+    if (d.NivelAceite) set('me_NivelAceite', d.NivelAceite);
+  }
+  set('me_Dias_parado', d.Dias_parado);
+  set('me_obs', d.obs);
+
+  _capturaActual = captura;   // después de openManualEntry, que la resetea
+  renderManualPreview();
+  const status = document.getElementById('loadStatus');
+  if (status){
+    status.className = 'load-status ok';
+    status.textContent = `📋 Datos de ${tag} copiados — revisá y confirmá con "Guardar medición".`;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 //  13. INIT
@@ -2914,7 +3069,10 @@ loadState();
 populateCompTipoSelects();
 renderAll();
 nubeEstado(navigator.onLine ? 'bajando' : 'offline');
-iniciarNube().then(() => { sincronizarEquiposHub(true); });
+iniciarNube().then(() => {
+  sincronizarEquiposHub(true);
+  actualizarBadgeCapturas();
+});
 </script>
 </body>
 </html>
