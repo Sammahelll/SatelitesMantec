@@ -365,12 +365,14 @@
           <option value="motor_pro">Motor Pro</option>
           <option value="tablero_pro">Tablero Pro</option>
           <option value="bomba_pro">Bomba Pro</option>
+          <option value="compresor_pro">Compresor Pro</option>
           <option value="vibra_pro">Vibra Pro</option>
           <option value="thermovision">ThermoVision</option>
           <option value="refrigeracion">Refrigeración</option>
           <option value="alineacion">Alineación</option>
           <option value="motor_pro_intervencion">Motor Pro · Intervención</option>
           <option value="refrigeracion_intervencion">Refrigeración · Intervención</option>
+          <option value="compresor_pro_informe_ia">Compresor Pro · Informe IA</option>
         </select>
         <input id="anBusqueda" type="search" placeholder="Buscar en resumen o TAG…">
         <div class="spacer"></div>
@@ -497,6 +499,7 @@ const MODULOS = [
   {key:'motor_pro',    icon:'⚙️', name:'Motor Pro',      short:'MOT', desc:'Análisis predictivo de motores eléctricos.', color:'#3b82f6', href:'./motor_pro.html'},
   {key:'tablero_pro',  icon:'🧯', name:'Tablero Pro',     short:'TAB', desc:'Análisis predictivo de tableros eléctricos.', color:'#f0b429', href:'./tablero_pro.html'},
   {key:'bomba_pro',    icon:'💧', name:'Bomba Pro',       short:'BOM', desc:'Análisis hidráulico y de sellos.', color:'#0891b2', href:'./bomba_pro.html'},
+  {key:'compresor_pro', icon:'🌀', name:'Compresor Pro',  short:'COM', desc:'Tornillo, anillo líquido y reciprocante.', color:'#8b5cf6', href:'./compresor_pro.html'},
   {key:'vibra_pro',    icon:'📈', name:'Vibra Pro',       short:'VIB', desc:'Análisis de vibración con IA.', color:'#10c98a', href:'./vibra_pro.html'},
   {key:'thermovision', icon:'🌡️', name:'ThermoVision',    short:'TER', desc:'Termografía con IA.', color:'#ef4444', href:'./thermovision.html'},
   {key:'refrigeracion', icon:'🧊', name:'Refrigeración Pro', short:'REF', desc:'Análisis predictivo de climatización industrial.', color:'#06b6d4', href:'./refrigeracion_pro.html'},
@@ -517,7 +520,8 @@ const MODULOS_AUX_LABELS = {
   bomba_pro_informe_ia: 'Bomba Pro · Informe IA',
   tablero_pro_informe_ia: 'Tablero Pro · Informe IA',
   vibra_pro_informe_ia: 'Vibra Pro · Informe IA',
-  refrigeracion_informe_ia: 'Refrigeración · Informe IA'
+  refrigeracion_informe_ia: 'Refrigeración · Informe IA',
+  compresor_pro_informe_ia: 'Compresor Pro · Informe IA'
 };
 // intervencion:0 explícito — es un evento histórico, no un resultado de
 // ensayo, así que nunca debe pesar más que ok/atencion/critico al calcular
