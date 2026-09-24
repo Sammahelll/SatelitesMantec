@@ -1,0 +1,2920 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANTEC – Compresor Pro V2.0 · Tornillo, Anillo líquido y Reciprocante</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./sat-sync.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #07090f;
+  --surface: #0d1117;
+  --card: #111827;
+  --card2: #141d2e;
+  --border: #1e2d45;
+  --border2: #263548;
+  --text: #cdd9f0;
+  --muted: #5e7a9a;
+  --good: #10c98a;
+  --elevated: #f0b429;
+  --warning: #f97316;
+  --critical: #ef4444;
+  --good-bg: rgba(16,201,138,.12);
+  --elevated-bg: rgba(240,180,41,.12);
+  --warning-bg: rgba(249,115,22,.12);
+  --critical-bg: rgba(239,68,68,.12);
+  --accent: #8b5cf6;
+  --accent2: #a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;}
+code,.mono{font-family:'Share Tech Mono',monospace;}
+button,select,input,textarea{font-family:'Rajdhani',sans-serif;}
+
+header{
+  background:linear-gradient(135deg,#0d1117 0%,#1a1030 100%);
+  border-bottom:1px solid var(--border);
+  padding:16px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);
+}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:38px;height:38px;background:var(--accent);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;}
+.logo-title{font-size:1.4rem;font-weight:700;letter-spacing:1px;color:#fff;}
+.logo-sub{font-size:.7rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:20px;}
+.hstat{text-align:center;}
+.hstat-val{font-size:1.3rem;font-weight:700;}
+.hstat-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+
+.upload-bar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:12px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.file-label{
+  background:var(--accent);color:#fff;padding:7px 20px;border-radius:30px;
+  cursor:pointer;font-weight:600;font-size:.9rem;transition:background .2s;
+}
+.file-label:hover{background:#7c3aed;}
+.file-label input{display:none;}
+.load-status{font-size:.85rem;color:var(--muted);}
+.load-status.ok{color:var(--good);}
+.load-status.err{color:var(--critical);}
+.btn-small{
+  background:var(--card);border:1px solid var(--border2);color:var(--text);
+  padding:5px 14px;border-radius:20px;font-size:.83rem;cursor:pointer;transition:all .2s;
+}
+.btn-small:hover{border-color:var(--accent);color:var(--accent2);}
+.btn-small.danger:hover{border-color:var(--critical);color:var(--critical);}
+.btn-small.active{border-color:var(--accent);color:var(--accent2);background:rgba(139,92,246,.12);}
+
+.tabs{display:flex;gap:2px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;overflow-x:auto;}
+.tab-btn{
+  padding:12px 22px;background:transparent;border:none;cursor:pointer;
+  font-weight:600;font-size:1rem;white-space:nowrap;
+  color:var(--muted);transition:.2s;border-bottom:3px solid transparent;
+}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent);}
+.tab-content{display:none;padding:24px;max-width:1500px;margin:0 auto;}
+.tab-content.active{display:block;}
+
+.summary-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+.sum-card{
+  background:var(--card);border-radius:10px;padding:14px 18px;
+  border:1px solid var(--border);position:relative;overflow:hidden;
+  display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .2s;
+}
+.sum-card:hover{border-color:var(--border2);}
+.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.sum-card.good::before{background:var(--good);}
+.sum-card.elevated::before{background:var(--elevated);}
+.sum-card.warning::before{background:var(--warning);}
+.sum-card.critical::before{background:var(--critical);}
+.sum-icon{font-size:1.5rem;}
+.sum-num{font-size:1.8rem;font-weight:700;}
+.sum-lbl{font-size:.78rem;color:var(--muted);margin-top:2px;}
+
+.toolbar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+.filter-btn{
+  background:var(--card);border:1px solid var(--border);color:var(--muted);
+  padding:5px 14px;border-radius:20px;font-size:.88rem;cursor:pointer;transition:all .2s;
+}
+.filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent2);background:rgba(139,92,246,.1);}
+.filter-btn.f-good.active{border-color:var(--good);color:var(--good);background:var(--good-bg);}
+.filter-btn.f-elevated.active{border-color:var(--elevated);color:var(--elevated);background:var(--elevated-bg);}
+.filter-btn.f-warning.active{border-color:var(--warning);color:var(--warning);background:var(--warning-bg);}
+.filter-btn.f-critical.active{border-color:var(--critical);color:var(--critical);background:var(--critical-bg);}
+.search-box{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:5px 14px;border-radius:20px;font-size:.92rem;outline:none;min-width:200px;
+}
+.search-box:focus{border-color:var(--accent);}
+.sort-sel{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:5px 14px;border-radius:20px;font-size:.88rem;outline:none;cursor:pointer;
+}
+.sep{flex:1;}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;}
+.mcard{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  cursor:pointer;transition:all .2s;overflow:hidden;position:relative;
+}
+.mcard:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4);}
+.mcard-header{
+  padding:12px 16px 9px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+.mname{font-size:.98rem;font-weight:700;color:#fff;letter-spacing:.5px;}
+.mpoint{font-size:.73rem;color:var(--muted);margin-top:1px;}
+.mbadge{
+  font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;
+  text-transform:uppercase;letter-spacing:1px;white-space:nowrap;
+}
+.badge-good{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.badge-elevated{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.badge-warning{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.badge-critical{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);animation:pulse-border .8s ease-in-out infinite alternate;}
+@keyframes pulse-border{from{border-color:rgba(239,68,68,.3);}to{border-color:rgba(239,68,68,.8);}}
+
+.mcard-body{padding:12px 16px;display:flex;gap:12px;align-items:center;}
+.health-ring-wrap{flex-shrink:0;}
+.health-ring{transform:rotate(-90deg);}
+.health-ring circle{fill:none;stroke-width:4;}
+.health-num{font-size:1rem;font-weight:700;}
+.mmetrics{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;}
+.mm-item{display:flex;flex-direction:column;}
+.mm-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.mm-val{font-size:.86rem;font-weight:700;font-family:'Share Tech Mono';}
+.mm-val.good{color:var(--good);}
+.mm-val.elevated{color:var(--elevated);}
+.mm-val.warning{color:var(--warning);}
+.mm-val.critical{color:var(--critical);}
+.mm-val.nd{color:var(--muted);font-style:italic;font-weight:400;font-family:'Rajdhani',sans-serif;}
+.mcard-footer{padding:7px 16px;border-top:1px solid var(--border);font-size:.7rem;color:var(--muted);display:flex;justify-content:space-between;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-state .ei{font-size:3rem;margin-bottom:12px;}
+
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(3,5,10,.75);
+  z-index:1000;backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:40px 16px;
+}
+.modal-overlay.open{display:flex;}
+.modal-box{
+  background:var(--surface);border:1px solid var(--border2);border-radius:16px;
+  max-width:960px;width:100%;overflow:hidden;
+}
+.modal-head{
+  padding:18px 26px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(135deg,#0d1117 0%,#1a1030 100%);
+}
+.modal-title{font-size:1.2rem;font-weight:700;color:#fff;}
+.modal-sub{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:22px 26px;}
+.modal-section-title{font-size:.72rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:20px 0 10px;}
+.modal-section-title:first-child{margin-top:0;}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+.mstat{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 12px;}
+.mstat-lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.mstat-val{font-size:1.15rem;font-weight:700;font-family:'Share Tech Mono';margin-top:2px;}
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;height:260px;}
+.diag-box{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:9px;padding:12px 16px;margin-bottom:8px;}
+.diag-box.warning{border-left-color:var(--warning);}
+.diag-box.critical{border-left-color:var(--critical);}
+.diag-box.elevated{border-left-color:var(--elevated);}
+.diag-box.good{border-left-color:var(--good);}
+.diag-title{font-weight:700;font-size:.9rem;margin-bottom:3px;}
+.diag-action{font-size:.82rem;color:var(--muted);line-height:1.5;}
+.rtable{width:100%;border-collapse:collapse;}
+.rtable th{text-align:left;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;border-bottom:1px solid var(--border2);}
+.rtable td{padding:6px 10px;border-bottom:1px solid var(--border);font-size:.82rem;font-family:'Share Tech Mono';}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:18px;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.fld .hint{font-size:.68rem;color:var(--muted);font-style:italic;text-transform:none;letter-spacing:0;}
+.fld input,.fld select,.fld textarea{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:8px;font-size:.92rem;outline:none;
+}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--accent);}
+.fld textarea{resize:vertical;font-family:inherit;}
+.panel-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+.panel-box-title{font-weight:700;color:#fff;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+.th-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.th-item-lbl{font-size:.78rem;font-weight:700;color:#fff;margin-bottom:8px;}
+.th-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:.78rem;}
+.th-row label{flex:1;color:var(--muted);}
+.th-row input{width:78px;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:5px;font-family:'Share Tech Mono';font-size:.8rem;}
+
+.fleet-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:20px;}
+.fleet-box-title{font-size:.85rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.fleet-text{font-size:.95rem;line-height:1.6;}
+.section-divider{border:none;border-top:1px solid var(--border);margin:26px 0 16px;position:relative;}
+.section-divider[data-label]::after{
+  content:attr(data-label);position:absolute;top:-11px;left:0;background:var(--bg);
+  padding:0 10px;font-size:.72rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;font-weight:700;
+}
+.plan-table{width:100%;border-collapse:collapse;}
+.plan-table th{text-align:left;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border2);}
+.plan-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:.84rem;}
+.prio-badge{font-family:'Share Tech Mono';font-weight:700;padding:2px 8px;border-radius:5px;font-size:.75rem;}
+.prio-critical{background:var(--critical-bg);color:var(--critical);}
+.prio-warning{background:var(--warning-bg);color:var(--warning);}
+.prio-elevated{background:var(--elevated-bg);color:var(--elevated);}
+.action-bar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+.note-box{margin-top:16px;padding:12px 18px;background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.15);border-radius:10px;font-size:.8rem;color:var(--muted);line-height:1.5;}
+
+.hidden{display:none !important;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:5px;}
+
+@media (max-width: 680px){
+  header{padding:12px 16px;flex-wrap:wrap;gap:10px;}
+  .logo-title{font-size:1.1rem;}
+  .logo-sub{font-size:.62rem;letter-spacing:1px;}
+  .logo-icon{width:32px;height:32px;font-size:16px;border-radius:8px;}
+  .header-right{gap:14px;width:100%;justify-content:space-between;}
+  .hstat-val{font-size:1.05rem;}
+  .hstat-lbl{font-size:.58rem;}
+  .upload-bar{padding:10px 16px;gap:8px;}
+  .file-label{padding:6px 14px;font-size:.82rem;}
+  .btn-small{padding:6px 12px;font-size:.8rem;}
+  .load-status{width:100%;order:1;}
+  .tabs{padding:0 10px;}
+  .tab-btn{padding:10px 14px;font-size:.88rem;}
+  .tab-content{padding:14px;}
+  .summary-bar{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .sum-card{padding:12px 14px;}
+  .sum-num{font-size:1.5rem;}
+  .toolbar{gap:6px;}
+  .search-box{min-width:0;flex:1 1 100%;order:1;}
+  .sort-sel{flex:1;}
+  .grid{grid-template-columns:1fr;}
+  .modal-overlay{padding:0;align-items:stretch;}
+  .modal-box{max-width:100%;width:100%;min-height:100vh;border-radius:0;}
+  .modal-head{padding:14px 16px;}
+  .modal-body{padding:16px;}
+  .form-grid{grid-template-columns:1fr;}
+  .th-grid{grid-template-columns:1fr;}
+  .mgrid{grid-template-columns:repeat(2,1fr);}
+  .rtable, .plan-table{border:none;}
+  .rtable thead, .plan-table thead{display:none;}
+  .rtable tbody tr, .plan-table tbody tr{display:block;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:8px 10px;}
+  .rtable td, .plan-table td{display:flex;justify-content:space-between;align-items:center;gap:10px;border:none;padding:5px 0;font-size:.82rem;white-space:normal;}
+  .rtable td::before, .plan-table td::before{content:attr(data-label);color:var(--muted);text-transform:uppercase;font-size:.65rem;letter-spacing:.5px;flex-shrink:0;}
+}
+
+/* ── INFORME IA ── */
+.ai-scope-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:18px;}
+.ai-scope-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+.ai-scope-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.ai-radio-lbl{display:flex;align-items:center;gap:6px;font-size:.9rem;cursor:pointer;color:var(--text);}
+.ai-radio-lbl input[type=radio]{accent-color:var(--accent);cursor:pointer;}
+.btn-ai-generate{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;border:none;padding:12px 30px;border-radius:10px;cursor:pointer;font-weight:700;font-size:1.05rem;letter-spacing:.5px;transition:all .2s;box-shadow:0 4px 20px rgba(139,92,246,.3);}
+.btn-ai-generate:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(139,92,246,.5);}
+.btn-ai-generate:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.ai-summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:22px;}
+.ai-sum-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px;}
+.ai-sum-card-icon{font-size:1.8rem;}
+.ai-sum-card-val{font-size:1.7rem;font-weight:700;font-family:'Share Tech Mono';}
+.ai-sum-card-lbl{font-size:.72rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
+.ai-equip-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;}
+.ai-equip-card-header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.ai-equip-name{font-size:1rem;font-weight:700;color:#fff;}
+.ai-equip-meta{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.ai-equip-card-body{padding:16px 20px;}
+.ai-finding{background:var(--card2);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:.87rem;color:var(--text);border-left:3px solid var(--border2);line-height:1.6;}
+.ai-finding.critical{border-left-color:var(--critical);}
+.ai-finding.warning{border-left-color:var(--warning);}
+.ai-finding.elevated{border-left-color:var(--elevated);}
+.ai-finding.good{border-left-color:var(--good);}
+.ai-rec-list{list-style:none;padding:0;margin:0;}
+.ai-rec-list li{padding:6px 0 6px 22px;border-bottom:1px solid var(--border);font-size:.86rem;color:var(--text);position:relative;}
+.ai-rec-list li::before{content:'→';position:absolute;left:4px;color:var(--accent2);}
+.ai-rec-list li:last-child{border-bottom:none;}
+.ai-section-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:12px 0 6px;}
+.ai-fleet-box{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2);border-radius:12px;padding:18px 22px;margin-bottom:20px;}
+.ai-fleet-box-title{font-size:.72rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.ai-fleet-text{font-size:.92rem;color:var(--text);line-height:1.7;}
+.ai-plan-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px;}
+.ai-plan-table th{background:var(--card2);padding:9px 12px;text-align:left;font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);}
+.ai-plan-table td{padding:9px 12px;border-bottom:1px solid rgba(30,45,69,.5);color:var(--text);}
+.ai-prio-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.ai-prio-1{background:var(--critical-bg);color:var(--critical);border:1px solid rgba(239,68,68,.3);}
+.ai-prio-2{background:var(--warning-bg);color:var(--warning);border:1px solid rgba(249,115,22,.3);}
+.ai-prio-3{background:var(--elevated-bg);color:var(--elevated);border:1px solid rgba(240,180,41,.3);}
+.ai-prio-4{background:var(--good-bg);color:var(--good);border:1px solid rgba(16,201,138,.3);}
+.ai-json-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;}
+.ai-json-pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'Share Tech Mono';font-size:.78rem;color:#a8c5e8;overflow-x:auto;max-height:500px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.ai-step-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:14px;}
+.ai-step-title{font-size:.88rem;font-weight:700;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.ai-step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:.75rem;font-weight:800;}
+.ai-step-hint{font-size:.8rem;color:var(--muted);margin:0 0 10px;line-height:1.5;}
+.ai-prompt-box,.ai-response-box{width:100%;min-height:140px;font-family:'Share Tech Mono',monospace;font-size:.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;resize:vertical;}
+.ai-response-box{min-height:120px;font-size:.78rem;}
+.ai-status{font-size:.8rem;color:var(--muted);margin-left:8px;}
+#btnVistaTecnica.active,#btnVistaEjecutiva.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌀</div>
+    <div>
+      <div class="logo-title">COMPRESOR PRO</div>
+      <div class="logo-sub">MANTEC · Compresores (tornillo · anillo líquido · reciprocante)</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="hstat"><div class="hstat-val" id="hsEquipos">0</div><div class="hstat-lbl">Compresores</div></div>
+    <div class="hstat"><div class="hstat-val" id="hsLecturas">0</div><div class="hstat-lbl">Lecturas</div></div>
+    <div class="hstat"><div class="hstat-val" id="hsSalud" style="color:var(--good);">—</div><div class="hstat-lbl">Salud Flota</div></div>
+    <span id="nubeEstado" style="font-size:.78rem;color:var(--muted);margin-left:10px;"></span>
+    <button class="btn-small" id="btnRecargarNube" onclick="recargarDesdeNube()" style="margin-left:6px;">🔄 Recargar</button>
+  </div>
+</header>
+
+<div class="upload-bar">
+  <label class="file-label">📂 Importar Excel/CSV<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)"></label>
+  <button class="btn-small" style="border-color:var(--accent);color:var(--accent2);" onclick="openManualEntry()">✍️ Cargar medición manual</button>
+  <button class="btn-small" onclick="downloadTemplate()">⬇️ Descargar plantilla</button>
+  <button class="btn-small" onclick="exportCSV()">⬇️ Exportar historial CSV</button>
+  <span class="load-status" id="loadStatus"></span>
+  <div class="sep"></div>
+  <button class="btn-small danger" onclick="clearAllData()">🗑️ Borrar todos los datos</button>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+  <button class="tab-btn" data-tab="equipos" onclick="switchTab('equipos')">🌀 Compresores</button>
+  <button class="tab-btn" data-tab="config" onclick="switchTab('config')">⚙️ Umbrales</button>
+  <button class="tab-btn" data-tab="informe" onclick="switchTab('informe')">📋 Informe</button>
+  <button class="tab-btn" data-tab="ia" onclick="switchTab('ia')">🤖 Informe IA</button>
+</div>
+
+<!-- DASHBOARD -->
+<div class="tab-content active" id="tab-dashboard">
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="toolbar">
+    <button class="filter-btn active" data-f="all" onclick="setStatusFilter('all')">Todos</button>
+    <button class="filter-btn f-good" data-f="good" onclick="setStatusFilter('good')">🟢 Normal</button>
+    <button class="filter-btn f-elevated" data-f="elevated" onclick="setStatusFilter('elevated')">🟡 Elevado</button>
+    <button class="filter-btn f-warning" data-f="warning" onclick="setStatusFilter('warning')">🟠 Alerta</button>
+    <button class="filter-btn f-critical" data-f="critical" onclick="setStatusFilter('critical')">🔴 Crítico</button>
+    <input class="search-box" id="searchBox" placeholder="🔎 Buscar compresor o TAG…" oninput="renderGrid()">
+    <select class="sort-sel" id="sortSel" onchange="renderGrid()">
+      <option value="health_asc">Salud (peor primero)</option>
+      <option value="name_asc">Nombre A-Z</option>
+      <option value="date_desc">Última medición</option>
+    </select>
+    <div class="sep"></div>
+  </div>
+  <div class="grid" id="cardGrid"></div>
+</div>
+
+<!-- EQUIPOS -->
+<div class="tab-content" id="tab-equipos">
+  <div class="panel-box">
+    <div class="panel-box-title">➕ Registrar compresor</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn-small" onclick="sincronizarEquiposHub().then(()=>{renderEquiposList();alert('Catálogo del hub actualizado ('+equiposHub.size+' equipos).');})">🔄 Sincronizar equipos del hub</button>
+      <button class="btn-small" onclick="importarCompresoresDelHub()">⬇️ Importar compresores del hub</button>
+      <span style="font-size:.8rem;color:var(--muted);">trae del catálogo compartido solo los que parezcan compresores</span>
+    </div>
+    <datalist id="hubTagsDatalist"></datalist>
+    <div class="form-grid">
+      <div class="fld"><label>TAG del compresor</label><input id="newCompTag" list="hubTagsDatalist" placeholder="Ej: U1050A"></div>
+      <div class="fld"><label>Tipo de compresor</label><select id="newCompTipo"></select></div>
+      <div class="fld"><label>Marca / modelo</label><input id="newCompModelo" placeholder="Ej: DENAIR, DEVI, Kirloskar KCX"></div>
+      <div class="fld"><label>Ubicación</label><input id="newCompUbic" placeholder="Ej: Sala de compresores"></div>
+    </div>
+    <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="createComp()">Crear compresor</button>
+  </div>
+  <div id="equiposRegistryList"></div>
+</div>
+
+<!-- CONFIG -->
+<div class="tab-content" id="tab-config">
+  <div class="panel-box">
+    <div class="panel-box-title">⚙️ Umbrales del motor de diagnóstico (editables)</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">
+      Umbrales separados por tipo de compresor. Carga del motor: hasta 100 % FLA es normal (en alternancia trabaja al 50–100 %); la alerta es por sobrecarga real. Días sin arranque: [45, 60, 90] por la rotación quincenal. Ajustalos si tu equipo trae otros setpoints de fábrica.
+    </p>
+    <div id="thresholdGrid"></div>
+    <button class="btn-small" style="margin-top:14px;background:var(--accent);color:#fff;border:none;" onclick="saveThresholdsFromUI()">💾 Guardar umbrales</button>
+    <button class="btn-small" style="margin-top:14px;" onclick="resetThresholds()">↺ Restaurar por defecto</button>
+  </div>
+</div>
+
+<!-- INFORME OFFLINE -->
+<div class="tab-content" id="tab-informe">
+  <div class="action-bar">
+    <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="generateOfflineReport()">🔄 Generar informe</button>
+    <button class="btn-small" onclick="copyReport()">📋 Copiar como texto</button>
+    <button class="btn-small" id="btnGuardarNube" onclick="guardarEnLaNube()">☁️ Guardar en la nube</button>
+  </div>
+  <div id="nubeStatus" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;"></div>
+  <div id="reportSections"><div class="empty-state"><div class="ei">📋</div>Generá el informe para ver el diagnóstico consolidado de la flota de compresores.</div></div>
+</div>
+
+<!-- INFORME IA -->
+<div class="tab-content" id="tab-ia">
+  <div class="ai-scope-section">
+    <div class="ai-scope-title">¿Qué querés analizar?</div>
+    <div class="ai-scope-row">
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="all" checked>
+        <span>Toda la flota (<span id="aiFleetCount">0</span> compresores)</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="critical">
+        <span>Solo críticos/alerta</span></label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiScope" value="single">
+        <span>Un compresor:</span></label>
+      <select id="aiEquipSelect" class="sort-sel" style="min-width:220px;">
+        <option value="">— seleccionar —</option>
+      </select>
+    </div>
+    <div class="ai-scope-row" style="margin-top:10px;">
+      <span style="font-size:.82rem;color:var(--muted);">Idioma del informe:</span>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="es" checked> Español</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="en"> English</label>
+      <label class="ai-radio-lbl"><input type="radio" name="aiLang" value="pt"> Português</label>
+    </div>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">1</span>Copiá el prompt para pegar en tu IA</div>
+    <p class="ai-step-hint">Usá la IA web que prefieras (ChatGPT, Claude.ai, Gemini, Copilot…). El prompt incluye el diagnóstico ya calculado por Compresor Pro y el formato JSON que espera el procesador.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn-ai-generate" onclick="copiarPromptManual()">📋 Copiar prompt para pegar en IA web</button>
+      <span id="manualPromptStatus" class="ai-status"></span>
+    </div>
+    <textarea id="aiManualPromptBox" readonly class="ai-prompt-box" style="display:none;"></textarea>
+  </div>
+
+  <div class="ai-step-box">
+    <div class="ai-step-title"><span class="ai-step-num">2</span>Pegá la respuesta de la IA</div>
+    <p class="ai-step-hint">Pegá la respuesta completa (el JSON). Se limpian los backticks de markdown automáticamente.</p>
+    <textarea id="aiManualResponse" class="ai-response-box" placeholder="Pegá acá la respuesta completa de la IA…"></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-ai-generate" onclick="procesarRespuestaManual()">✅ Procesar respuesta</button>
+      <button class="btn-small" onclick="document.getElementById('aiManualResponse').value='';">Limpiar</button>
+    </div>
+  </div>
+
+  <div id="aiReportOutput" style="display:none;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-small active" id="btnVistaTecnica" onclick="setVistaIA('tecnica')">🔧 Vista técnica</button>
+      <button class="btn-small" id="btnVistaEjecutiva" onclick="setVistaIA('ejecutiva')">📊 Vista ejecutiva</button>
+      <span style="flex:1;"></span>
+      <button class="btn-small" onclick="imprimirInformeEjecutivo()">🖨️ Imprimir / PDF</button>
+    </div>
+    <div id="aiSummaryCards" class="ai-summary-cards"></div>
+    <div id="aiReportSections"></div>
+    <div class="ai-json-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="ai-scope-title" style="margin-bottom:0;">📄 JSON del informe</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-small" onclick="toggleJsonView()">Mostrar/Ocultar</button>
+          <button class="btn-small" onclick="downloadJSON()">⬇ Descargar</button>
+          <button class="btn-small" onclick="copyJSON()">📋 Copiar</button>
+          <button class="btn-small" id="btnGuardarNubeIA" onclick="guardarIAEnLaNube()">☁️ Guardar en la nube</button>
+        </div>
+      </div>
+      <div id="iaNubeStatus" style="font-size:.78rem;color:var(--muted);margin-top:6px;"></div>
+      <pre id="aiJsonViewer" class="ai-json-pre" style="display:none;"></pre>
+    </div>
+  </div>
+
+  <div id="aiEmptyState" class="empty-state">
+    <div class="ei">🤖</div>
+    Elegí el alcance, copiá el prompt, pegalo en tu IA web, y traé la respuesta acá.
+  </div>
+</div>
+
+<!-- MODAL EDITAR COMPRESOR -->
+<div class="modal-overlay" id="editOverlay" onclick="if(event.target===this)closeEditComp()">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="editTitle">Editar compresor</div>
+        <div class="modal-sub">Los cambios se sincronizan a la nube automáticamente</div>
+      </div>
+      <button class="modal-close" onclick="closeEditComp()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="fld">
+          <label>TAG</label>
+          <input id="editTag" disabled>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">El TAG no se puede cambiar: los módulos lo usan para sincronizar. Si necesitás cambiarlo, archivá este equipo en el hub y creá uno nuevo.</div>
+        </div>
+        <div class="fld">
+          <label>Tipo de compresor</label>
+          <select id="editTipo" onchange="onEditTipoChange()"></select>
+        </div>
+        <div class="fld">
+          <label>Marca / modelo</label>
+          <input id="editModelo" placeholder="Ej: DENAIR DVA-55">
+        </div>
+        <div class="fld">
+          <label>Ubicación</label>
+          <input id="editUbicacion" placeholder="Ej: Sala de compresores">
+        </div>
+        <div class="fld">
+          <label>FLA del motor (A)</label>
+          <input type="number" step="0.1" id="editFla" placeholder="Corriente a plena carga de la placa">
+          <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Necesario para calcular el % de carga del motor.</div>
+        </div>
+        <div class="fld hidden" id="editRefrigeranteWrap">
+          <label>Refrigerante</label>
+          <select id="editRefrigerante"></select>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Define la tabla P-T para el sobrecalentamiento.</div>
+        </div>
+        <div class="fld hidden" id="editPNominalWrap">
+          <label>Presión nominal de trabajo (bar)</label>
+          <input type="number" step="0.1" id="editPNominal" placeholder="Ej: 8">
+          <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Punto de operación esperado del tornillo.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveEditComp()">💾 Guardar cambios</button>
+        <button class="btn-small" onclick="closeEditComp()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CARGA MANUAL -->
+<div class="modal-overlay" id="manualOverlay" onclick="if(event.target===this)closeManualEntry()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">✍️ Cargar medición manual</div>
+        <div class="modal-sub" id="me_sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeManualEntry()">✕</button>
+    </div>
+    <div class="modal-body" id="manualBody">
+      <div class="form-grid">
+        <div class="fld">
+          <label>Compresor</label>
+          <select id="me_compSel" onchange="onManualCompChange()"></select>
+        </div>
+        <div class="fld">
+          <label>Fecha y hora de la medición</label>
+          <input type="datetime-local" id="me_fecha">
+        </div>
+        <div class="fld hidden" id="me_newCompWrap">
+          <label>TAG del compresor nuevo</label>
+          <input id="me_newCompTag" list="hubTagsDatalist" placeholder="Ej: U1050A">
+        </div>
+        <div class="fld hidden" id="me_newCompTipoWrap">
+          <label>Tipo de compresor</label>
+          <select id="me_newCompTipo" onchange="renderManualCamposPorTipo()"></select>
+        </div>
+      </div>
+      <div class="modal-section-title">Parámetros</div>
+      <div id="me_camposTipo"></div>
+      <div class="modal-section-title">Observaciones</div>
+      <div class="fld"><textarea id="me_obs" rows="2" placeholder="Opcional"></textarea></div>
+      <div class="modal-section-title">Diagnóstico en vivo</div>
+      <div id="me_preview"></div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveManualReading()">💾 Guardar medición</button>
+        <button class="btn-small" onclick="closeManualEntry()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE -->
+<div class="modal-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-sub" id="modalSub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  1. CONSTANTES
+// ═══════════════════════════════════════════════════════════
+const TIPOS_COMP = [
+  {key:'tornillo',     label:'Tornillo (inyectado en aceite)', icon:'⚙️'},
+  {key:'anillo',       label:'Anillo líquido (H₂SO₄)',         icon:'💧'},
+  {key:'reciprocante', label:'Reciprocante de freón',          icon:'🔩'}
+];
+const REFRIGERANTES_FREON = ['R-22','R-134a','R-404A','R-407C','R-410A','R-502','Otro'];
+const TIPO_LBL = Object.fromEntries(TIPOS_COMP.map(t => [t.key, t.label]));
+const TIPO_ICON = Object.fromEntries(TIPOS_COMP.map(t => [t.key, t.icon]));
+
+const STATUS        = ['good','elevated','warning','critical'];
+const STATUS_LABELS = ['Normal','Elevado','Alerta','Crítico'];
+const STATUS_COLORS = ['#10c98a','#f0b429','#f97316','#ef4444'];
+
+// Umbrales por defecto — dispatch por tipo de compresor.
+// El índice 0/1/2 en cada array es [elevado, alerta, crítico] en el sentido natural
+// de la magnitud (mayor = peor para T, ΔP, carga; menor = peor para concentración,
+// presión de aceite relativa, días desde arranque, ΔT ácido).
+const DEFAULT_THRESHOLDS = {
+  tornillo: {
+    tDescarga:    [90, 100, 110],
+    tInyeccion:   [85, 95, 105],
+    dPsep:        [0.8, 1.2, 1.6],
+    dPfilAire:    [0.05, 0.08, 0.12],
+    dPfilAceite:  [1.2, 1.8, 2.5],
+    pAceiteRel:   [1.5, 1.0, 0.5],      // inverso — bar sobre P_descarga
+    cargaMotor:   [100, 110, 120],      // % FLA — al 100% es normal, no alerta
+    diasParado:   [45, 60, 90]          // inverso (días) — rotación de 15d, ciclo de 60d
+  },
+  anillo: {
+    concH2SO4:    [95, 93, 90],         // inverso — %; <93% ya es corrosión para el cloro húmedo
+    tAcidoIn:     [30, 35, 40],
+    dTacido:      [10, 6, 3],           // inverso — ΔT entre ácido in y out; bajo = no intercambia
+    tDescarga:    [80, 100, 120],
+    ratioPres:    [3.0, 4.0, 5.0],
+    cargaMotor:   [100, 110, 120],
+    diasParado:   [45, 60, 90]
+  },
+  reciprocante: {
+    tDescarga:    [110, 125, 140],      // manual Kirloskar KCX: límite absoluto 140°C
+    tAceite:      [60, 65, 70],         // manual Kirloskar: referencia 70°C
+    pAceiteRel:   [1.5, 1.0, 0.5],      // inverso — kg/cm² sobre P_succión (manual: 1.5-3)
+    sobrecal:     [15, 25, 35],         // °C sobre T_sat de succión
+    pDescarga:    [18, 20, 21],         // bar — manual KCX: máx 21 para R-22
+    cargaMotor:   [100, 110, 120],
+    diasParado:   [45, 60, 90]
+  }
+};
+const THRESHOLD_META = {
+  tornillo: {
+    tDescarga:   {label:'Temperatura de descarga', unit:'°C', inverse:false},
+    tInyeccion:  {label:'Temp. inyección de aceite', unit:'°C', inverse:false},
+    dPsep:       {label:'ΔP separador aire/aceite', unit:'bar', inverse:false},
+    dPfilAire:   {label:'ΔP filtro de aire', unit:'bar', inverse:false},
+    dPfilAceite: {label:'ΔP filtro de aceite', unit:'bar', inverse:false},
+    pAceiteRel:  {label:'Presión de aceite (sobre descarga)', unit:'bar', inverse:true},
+    cargaMotor:  {label:'Carga del motor', unit:'% FLA', inverse:false},
+    diasParado:  {label:'Días sin arranque (standby)', unit:'días', inverse:true}
+  },
+  anillo: {
+    concH2SO4:   {label:'Concentración H₂SO₄', unit:'%', inverse:true},
+    tAcidoIn:    {label:'Temp. ácido a la entrada', unit:'°C', inverse:false},
+    dTacido:     {label:'ΔT ácido (in → out)', unit:'°C', inverse:true},
+    tDescarga:   {label:'Temp. descarga cloro', unit:'°C', inverse:false},
+    ratioPres:   {label:'Relación de compresión', unit:'', inverse:false},
+    cargaMotor:  {label:'Carga del motor', unit:'% FLA', inverse:false},
+    diasParado:  {label:'Días sin arranque (standby)', unit:'días', inverse:true}
+  },
+  reciprocante: {
+    tDescarga:   {label:'Temperatura de descarga', unit:'°C', inverse:false},
+    tAceite:     {label:'Temp. de aceite en cárter', unit:'°C', inverse:false},
+    pAceiteRel:  {label:'Presión de aceite (sobre succión)', unit:'kg/cm²', inverse:true},
+    sobrecal:    {label:'Sobrecalentamiento en succión', unit:'°C', inverse:false},
+    pDescarga:   {label:'Presión de descarga', unit:'bar', inverse:false},
+    cargaMotor:  {label:'Carga del motor', unit:'% FLA', inverse:false},
+    diasParado:  {label:'Días sin arranque (standby)', unit:'días', inverse:true}
+  }
+};
+// Para el diagnóstico en vivo: clave de sub-nivel → campo del resultado del motor
+const VALOR_DE_SUB = {
+  tornillo:     {tDescarga:'tDesc', tInyeccion:'tIny', dPsep:'dPsep', dPfilAire:'dPfilAire', dPfilAceite:'dPfilAce', pAceiteRel:'pAceRel', cargaMotor:'carga', diasParado:'diasParado'},
+  anillo:       {concH2SO4:'conc', tAcidoIn:'tAcIn', dTacido:'dT', tDescarga:'tDesc', ratioPres:'ratio', cargaMotor:'carga', diasParado:'diasParado'},
+  reciprocante: {tDescarga:'tDesc', tAceite:'tAce', pAceiteRel:'pAceRel', sobrecal:'sobrecal', pDescarga:'pDesc', cargaMotor:'carga', diasParado:'diasParado'}
+};
+
+// Tablas P-T para calcular sobrecalentamiento en el Kirloskar.
+// Solo incluyo las más probables para un reciprocante de freón; si el refrigerante
+// no está acá, el motor de diagnóstico simplemente no evalúa el sobrecalentamiento
+// (lo reporta como "sin datos" en vez de inventarlo).
+const PT_TABLES = {
+  'R-22': [
+    [-40,0.04],[-30,0.16],[-20,0.45],[-10,0.95],[0,1.64],[5,2.09],[10,2.61],[15,3.21],
+    [20,3.90],[25,4.68],[30,5.55],[35,6.53],[40,7.63],[45,8.85],[50,10.21],[55,11.71],
+    [60,13.37],[65,15.20],[70,17.21]
+  ],
+  'R-134a': [
+    [-40,0.05],[-30,0.18],[-20,0.55],[-10,1.09],[0,1.94],[5,2.49],[10,3.15],[15,3.97],
+    [20,4.95],[25,5.85],[30,6.70],[35,7.85],[40,9.10],[45,10.60],[50,12.20],[55,13.90],
+    [60,15.80],[65,18.30],[70,20.10]
+  ],
+  'R-404A': [
+    [-40,0.34],[-30,0.79],[-20,1.48],[-10,2.36],[0,3.46],[5,4.11],[10,4.85],[15,5.68],
+    [20,6.62],[25,7.67],[30,8.85],[35,10.16],[40,11.62],[45,13.24],[50,15.03],[55,17.01],
+    [60,19.20],[65,21.60]
+  ],
+  'R-407C': [
+    [-40,0.19],[-30,0.55],[-20,1.13],[-10,1.94],[0,2.99],[5,3.64],[10,4.40],[15,5.28],
+    [20,6.30],[25,7.47],[30,8.81],[35,10.32],[40,12.02],[45,13.92],[50,16.04],[55,18.40],
+    [60,21.02],[65,23.90]
+  ],
+  'R-410A': [
+    [-40,0.74],[-30,1.22],[-20,1.99],[-10,2.99],[0,4.30],[5,5.20],[10,6.16],[15,7.26],
+    [20,8.49],[25,9.87],[30,11.42],[35,13.15],[40,15.07],[45,17.20],[50,19.54],[55,22.12],
+    [60,24.95],[65,28.04]
+  ]
+};
+function interpTempFromPressure(table, pBar){
+  if (!table || pBar===undefined || pBar===null || isNaN(pBar)) return NaN;
+  const n = table.length;
+  if (pBar <= table[0][1]) return table[0][0];
+  if (pBar >= table[n-1][1]) return table[n-1][0];
+  for (let i=0;i<n-1;i++){
+    const [t0,p0] = table[i], [t1,p1] = table[i+1];
+    if (pBar>=p0 && pBar<=p1){
+      const frac = (p1===p0) ? 0 : (pBar-p0)/(p1-p0);
+      return t0 + frac*(t1-t0);
+    }
+  }
+  return NaN;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  2. ESTADO
+// ═══════════════════════════════════════════════════════════
+let compsRegistry  = new Map();
+let readingsData   = new Map();
+let equiposHub     = new Map();
+let _capturasPendientes = [];
+let _capturaActual = null;
+let thresholds     = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
+let statusFilter   = 'all';
+let currentKey     = null;
+let detailChart    = null;
+
+// ═══════════════════════════════════════════════════════════
+//  3. PERSISTENCIA
+// ═══════════════════════════════════════════════════════════
+const SCHEMA_VERSION = 2;   // 2 = umbrales por tipo de compresor (v1 era plano, solo tornillo)
+let thresholdsMigrated = false;
+
+const PARAMS_TEXTO = ['NivelAceite'];
+function normalizarParams(params){
+  const out = {};
+  for (const [k, arr] of Object.entries(params || {})){
+    const esTexto = PARAMS_TEXTO.includes(k);
+    out[k] = (arr || []).map(v => esTexto ? (typeof v === 'string' ? v : '') : (typeof v === 'number' && isFinite(v) ? v : NaN));
+  }
+  return out;
+}
+
+const MODULO = 'compresor_pro';
+const CACHE_KEY = 'compresor_pro_cfg';
+let _sucia = false, _cfgSucia = false, _pend = [], _migrar = false;
+let _ver = 0, _subiendo = false, _tSubida = null, _ultimaBajada = 0;
+let _hashes = new Map();
+let _equipoIds = new Map();
+const isN = v => typeof v === 'number' && isFinite(v);
+const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
+
+function loadState() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    const storedVersion = c.schemaVersion || 1;
+    if (c.thresholds && storedVersion >= SCHEMA_VERSION) {
+      for (const tipo of Object.keys(DEFAULT_THRESHOLDS)){
+        if (c.thresholds[tipo]) thresholds[tipo] = {...DEFAULT_THRESHOLDS[tipo], ...c.thresholds[tipo]};
+      }
+    } else if (c.thresholds) {
+      thresholdsMigrated = true;   // formato viejo (plano): se descarta y quedan los defaults por tipo
+    }
+    if (c.compsRegistry) for (const [k,v] of Object.entries(c.compsRegistry)) compsRegistry.set(k,v);
+    if (c.readingsData) {
+      for (const [k,v] of Object.entries(c.readingsData)) {
+        readingsData.set(k, { dates: v.dates.map(d => new Date(d)), params: normalizarParams(v.params), obs: v.obs || [] });
+      }
+    }
+    if (c.nube){ _sucia = !!c.nube.sucia; _cfgSucia = !!c.nube.cfgSucia; _pend = c.nube.pend || []; }
+    else if (compsRegistry.size || readingsData.size){ _sucia = true; _migrar = true; }
+    if (thresholdsMigrated){ _cfgSucia = true; saveState(); }
+  } catch(e){ console.warn('loadState error', e); }
+}
+function escribirCache() {
+  const rdSerial = {};
+  for (const [k,v] of readingsData.entries()) {
+    rdSerial[k] = { dates: v.dates.map(d=>d.toISOString()), params: v.params, obs: v.obs || [] };
+  }
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      schemaVersion: SCHEMA_VERSION, thresholds,
+      compsRegistry: Object.fromEntries(compsRegistry), readingsData: rdSerial,
+      nube: {sucia:_sucia, cfgSucia:_cfgSucia, pend:_pend}
+    }));
+  } catch(e){ console.warn('[caché] no se pudo escribir en el navegador; los datos siguen yendo a la nube', e); }
+}
+function saveState() { _sucia = true; _ver++; escribirCache(); programarSubida(); }
+
+function fichaNube(id){
+  const c = compsRegistry.get(id); if (!c) return null;
+  return { tag:c.name,
+    tipo: null,
+    ubicacion: c.ubicacion || null,
+    criticidad: null,
+    ficha: Object.assign({}, c) };
+}
+function filaMedicion(id, i){
+  const e = readingsData.get(id), datos = {};
+  for (const [pk, arr] of Object.entries(e.params)){
+    const v = arr[i];
+    datos[pk] = PARAMS_TEXTO.includes(pk) ? ((typeof v === 'string' && v) ? v : null) : (isN(v) ? v : null);
+  }
+  return { fecha: keyOfDate(e.dates[i]) + 'Z', datos, obs: (e.obs && e.obs[i]) || '' };
+}
+function configNube(){ return { schemaVersion: SCHEMA_VERSION, thresholds }; }
+
+function nubeEstado(est, msg){
+  const el = document.getElementById('nubeEstado'); if (!el) return;
+  const T = {
+    ok:['☁️ Sincronizado','#10c98a'], subiendo:['☁️ Guardando…','#f0b429'], pendiente:['☁️ Cambios por guardar…','#f0b429'],
+    bajando:['☁️ Cargando…','#f0b429'], offline:['⚠️ Sin conexión: se guarda en este equipo y sube al reconectar','#f97316'],
+    error:['⚠️ No se pudo sincronizar','#ef4444']
+  }[est] || ['',''];
+  el.textContent = T[0] + (msg ? ' — ' + msg : ''); el.style.color = T[1]; el.title = msg || '';
+}
+const nubeLista = () => typeof SatSync !== 'undefined' && (SatSync.estaConfigurado() || SatSync.init());
+function programarSubida(){
+  nubeEstado('pendiente');
+  clearTimeout(_tSubida);
+  _tSubida = setTimeout(() => subirCambios(), 1500);
+}
+
+async function subirCambios(opts = {}){
+  if (_subiendo){ programarSubida(); return false; }
+  if (!nubeLista()){ nubeEstado('offline'); return false; }
+  _subiendo = true; nubeEstado('subiendo');
+  const ver0 = _ver;
+  try{
+    while (_pend.length){
+      const p = _pend[0];
+      if (p.t === 'rename'){
+        const eq = await SatSync.renombrarEquipo(p.from, p.to);
+        if (eq) _equipoIds.set(p.to, eq.id);
+        _equipoIds.delete(p.from);
+      } else if (p.t === 'med'){
+        const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+        if (eq) await SatSync.borrarMedicion(MODULO, eq.id, p.fecha);
+      } else if (p.t === 'comp'){
+        const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+        if (eq) await SatSync.quitarModuloDeEquipo(MODULO, eq.id);
+      }
+      _pend.shift(); escribirCache();
+    }
+    const fichas = [], hf = [];
+    for (const id of compsRegistry.keys()){
+      const f = fichaNube(id), h = JSON.stringify(f);
+      if (_hashes.get('f:' + f.tag) !== h || !_equipoIds.has(f.tag)){ fichas.push(f); hf.push(['f:' + f.tag, h]); }
+    }
+    if (fichas.length){
+      const filas = await SatSync.guardarFichas(MODULO, fichas, {noPisar: !!opts.migracion});
+      filas.forEach(e => { _equipoIds.set(e.tag, e.id); equiposHub.set(e.tag, {tag:e.tag, nombre:e.nombre, tipo:e.tipo}); });
+      actualizarDatalistHub();
+      hf.forEach(([k,h]) => _hashes.set(k, h));
+    }
+    const meds = [], hm = [];
+    for (const [id, e] of readingsData.entries()){
+      const tag = getCompName(id), eqId = _equipoIds.get(tag); if (!eqId) continue;
+      for (let i = 0; i < e.dates.length; i++){
+        const r = filaMedicion(id, i), h = JSON.stringify([r.datos, r.obs]), k = 'm:' + tag + '|' + r.fecha;
+        if (_hashes.get(k) !== h){ meds.push({equipo_id:eqId, ...r}); hm.push([k,h]); }
+      }
+    }
+    if (meds.length){ await SatSync.guardarMediciones(MODULO, meds); hm.forEach(([k,h]) => _hashes.set(k, h)); }
+    if (_cfgSucia){ await SatSync.guardarConfigApp(MODULO, configNube()); _cfgSucia = false; }
+
+    if (_ver === ver0){ _sucia = false; nubeEstado('ok'); } else programarSubida();
+    escribirCache();
+    return true;
+  }catch(err){
+    console.error('[SatSync] error subiendo cambios', err);
+    nubeEstado('error', err.message || String(err));
+    clearTimeout(_tSubida); _tSubida = setTimeout(() => subirCambios(), 30000);
+    return false;
+  }finally{ _subiendo = false; }
+}
+
+async function bajarTodo(){
+  nubeEstado('bajando');
+  const [equipos, meds, cfg] = await Promise.all([
+    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO)
+  ]);
+  const reg = new Map(), lect = new Map(), tagDe = new Map(), ids = new Map();
+  const esTipoComp = t => TIPOS_COMP.some(x => x.label === t) || /compresor|tornillo|anillo|reciproc/i.test(t || '');
+  for (const e of equipos){
+    const f = e.ficha && e.ficha[MODULO];
+    if (f && f.eliminada) continue;
+    if (!f && !esTipoComp(e.tipo)) continue;
+    reg.set(e.tag, fichaDefault(e.tag, Object.assign({}, f || {}, {
+      name: e.tag,
+      ubicacion: e.ubicacion != null ? e.ubicacion : ((f && f.ubicacion) || '')
+    })));
+    tagDe.set(e.id, e.tag); ids.set(e.tag, e.id);
+  }
+  const porTag = new Map();
+  for (const m of meds){
+    const tag = tagDe.get(m.equipo_id); if (!tag) continue;
+    if (!porTag.has(tag)) porTag.set(tag, []);
+    porTag.get(tag).push(m);
+  }
+  for (const [tag, filas] of porTag.entries()){
+    const claves = new Set(); filas.forEach(m => Object.keys(m.datos || {}).forEach(k => claves.add(k)));
+    const params = {}; claves.forEach(k => params[k] = []);
+    const dates = [], obs = [];
+    for (const m of filas){
+      dates.push(new Date(m.fecha)); obs.push(m.obs || '');
+      claves.forEach(k => params[k].push((m.datos || {})[k] ?? null));
+    }
+    lect.set(tag, {dates, params: normalizarParams(params), obs});
+  }
+
+  compsRegistry = reg; readingsData = lect; _equipoIds = ids; _hashes = new Map();
+  for (const id of reg.keys()) _hashes.set('f:' + id, JSON.stringify(fichaNube(id)));
+  for (const [id, e] of lect.entries()) for (let i = 0; i < e.dates.length; i++){
+    const r = filaMedicion(id, i); _hashes.set('m:' + id + '|' + r.fecha, JSON.stringify([r.datos, r.obs]));
+  }
+  if (cfg && cfg.thresholds && (cfg.schemaVersion || 1) >= SCHEMA_VERSION){
+    for (const tipo of Object.keys(DEFAULT_THRESHOLDS)){
+      if (cfg.thresholds[tipo]) thresholds[tipo] = {...DEFAULT_THRESHOLDS[tipo], ...cfg.thresholds[tipo]};
+    }
+  }
+  _ultimaBajada = Date.now(); _sucia = false; _cfgSucia = false;
+  escribirCache(); nubeEstado('ok');
+}
+
+async function iniciarNube(){
+  if (!nubeLista()){ nubeEstado('offline'); return; }
+  try{
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios({migracion: _migrar});
+      if (!ok) return;
+      _migrar = false;
+    }
+    await bajarTodo();
+    renderAll();
+  }catch(err){
+    console.error('[SatSync] error cargando desde la nube', err);
+    nubeEstado('error', err.message || String(err));
+  }
+}
+async function recargarDesdeNube(){
+  const btn = document.getElementById('btnRecargarNube');
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  try{
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios();
+      if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
+    }
+    await bajarTodo();
+    renderAll();
+    nubeEstado('ok', 'recargado ' + new Date().toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}));
+  }catch(err){
+    nubeEstado('error', err.message || String(err));
+    alert('No se pudo recargar: ' + (err.message || err));
+  }finally{ if (btn) btn.disabled = false; }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden){ if (_sucia || _cfgSucia || _pend.length) subirCambios(); return; }
+  if (!_sucia && !_cfgSucia && !_pend.length && !_subiendo && Date.now() - _ultimaBajada > 60000 && !document.querySelector('[id$="Overlay"].open') && nubeLista()){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar', err); }
+  }
+});
+window.addEventListener('online', async () => {
+  if (_sucia || _cfgSucia || _pend.length){
+    const ok = await subirCambios();
+    if (!ok) return;
+  }
+  if (!document.hidden && !document.querySelector('[id$="Overlay"].open')){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar al reconectar', err); }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  4. HELPERS
+// ═══════════════════════════════════════════════════════════
+function genId(){ return 'C'+Date.now().toString(36).toUpperCase().slice(-5)+Math.random().toString(36).slice(-3).toUpperCase(); }
+function escHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escJs(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function fmt(v,d=1){ return (v===undefined||v===null||isNaN(v)) ? '—' : Number(v).toFixed(d); }
+function fmtDate(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function fmtDateTime(d){ if(!(d instanceof Date)||isNaN(d)) return '—'; return d.toLocaleString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function getCompName(id){ return compsRegistry.get(id)?.name || id; }
+function levelOf(value, band, inverse){
+  if (value===undefined||value===null||isNaN(value)) return -1;
+  if (!inverse){
+    if (value <= band[0]) return 0;
+    if (value <= band[1]) return 1;
+    if (value <= band[2]) return 2;
+    return 3;
+  } else {
+    if (value >= band[0]) return 0;
+    if (value >= band[1]) return 1;
+    if (value >= band[2]) return 2;
+    return 3;
+  }
+}
+function fichaDefault(name, extra){
+  return Object.assign({
+    name, tipoComp:'tornillo', modelo:'', ubicacion:'',
+    pNominalBar: 8, flaMotor: 0, horasAceite: 4000,
+    caudalNominal_m3h: 0,
+    refrigeranteFreon: 'R-22'
+  }, extra || {});
+}
+function getTipoDe(id){ return compsRegistry.get(id)?.tipoComp || 'tornillo'; }
+function getThresholdsFor(id){ return thresholds[getTipoDe(id)] || thresholds.tornillo; }
+
+// ═══════════════════════════════════════════════════════════
+//  5. MOTORES DE DIAGNÓSTICO (uno por tipo)
+// ═══════════════════════════════════════════════════════════
+
+// ── TORNILLO DENAIR — inyectado en aceite ──
+function evalTornillo(comp, params, n){
+  const g = k => { const a = params[k]; const v = a ? a[n] : undefined; return isN(v) ? v : NaN; };
+  const T = thresholds.tornillo;
+  const pDesc = g('P_desc'), tDesc = g('T_desc'), tIny = g('T_inyeccion'), pAce = g('P_aceite');
+  const I = g('I_motor'), tAmb = g('T_amb');
+  const dPsep = g('dP_sep'), dPfilAire = g('dP_filAire'), dPfilAce = g('dP_filAceite');
+  const diasParado = g('Dias_parado');
+  const fla = comp.flaMotor || 0;
+  const carga = (fla > 0 && isN(I)) ? (I/fla*100) : NaN;
+  const pAceRel = (isN(pAce) && isN(pDesc)) ? (pAce - pDesc) : NaN;
+
+  const subs = {
+    tDescarga:   levelOf(tDesc, T.tDescarga, false),
+    tInyeccion:  levelOf(tIny, T.tInyeccion, false),
+    dPsep:       levelOf(dPsep, T.dPsep, false),
+    dPfilAire:   levelOf(dPfilAire, T.dPfilAire, false),
+    dPfilAceite: levelOf(dPfilAce, T.dPfilAceite, false),
+    pAceiteRel:  levelOf(pAceRel, T.pAceiteRel, true),
+    cargaMotor:  levelOf(carga, T.cargaMotor, false),
+    diasParado:  levelOf(diasParado, T.diasParado, true)
+  };
+  let overall = -1;
+  for (const k in subs) if (subs[k] > overall) overall = subs[k];
+
+  const motivos = {};
+  motivos.tDescarga   = !isN(tDesc) ? 'Falta la temperatura de descarga.' : '';
+  motivos.tInyeccion  = !isN(tIny) ? 'Falta la temperatura de inyección de aceite.' : '';
+  motivos.dPsep       = !isN(dPsep) ? 'Sin manómetro diferencial en el separador.' : '';
+  motivos.dPfilAire   = !isN(dPfilAire) ? 'Sin manómetro diferencial en el filtro de aire.' : '';
+  motivos.dPfilAceite = !isN(dPfilAce) ? 'Sin manómetro diferencial en el filtro de aceite.' : '';
+  motivos.pAceiteRel  = !isN(pAce) ? 'Falta la presión de aceite.' : (!isN(pDesc) ? 'Falta la presión de descarga.' : '');
+  motivos.cargaMotor  = !isN(I) ? 'Falta la corriente del motor.' : (fla <= 0 ? 'Cargá el FLA del motor en la ficha.' : '');
+  motivos.diasParado  = !isN(diasParado) ? 'Falta el dato de días sin arranque (si aplica).' : '';
+
+  return { subs, overall, motivos,
+    pDesc, tDesc, tIny, pAce, pAceRel, I, carga, tAmb,
+    dPsep, dPfilAire, dPfilAce, diasParado };
+}
+
+// ── ANILLO LÍQUIDO DEVI — cloro + H₂SO₄ ──
+function evalAnillo(comp, params, n){
+  const g = k => { const a = params[k]; const v = a ? a[n] : undefined; return isN(v) ? v : NaN; };
+  const T = thresholds.anillo;
+  const pSucc = g('P_succ'), pDesc = g('P_desc');
+  const tDesc = g('T_desc');
+  const tAcIn = g('T_acido_in'), tAcOut = g('T_acido_out');
+  const conc = g('Conc_H2SO4');
+  const I = g('I_motor');
+  const diasParado = g('Dias_parado');
+  const fla = comp.flaMotor || 0;
+  const carga = (fla > 0 && isN(I)) ? (I/fla*100) : NaN;
+  const dT = (isN(tAcOut) && isN(tAcIn)) ? (tAcOut - tAcIn) : NaN;
+  const ratio = (isN(pDesc) && isN(pSucc) && pSucc > 0) ? (pDesc / pSucc) : NaN;
+
+  const subs = {
+    concH2SO4:  levelOf(conc, T.concH2SO4, true),
+    tAcidoIn:   levelOf(tAcIn, T.tAcidoIn, false),
+    dTacido:    levelOf(dT, T.dTacido, true),
+    tDescarga:  levelOf(tDesc, T.tDescarga, false),
+    ratioPres:  levelOf(ratio, T.ratioPres, false),
+    cargaMotor: levelOf(carga, T.cargaMotor, false),
+    diasParado: levelOf(diasParado, T.diasParado, true)
+  };
+  let overall = -1;
+  for (const k in subs) if (subs[k] > overall) overall = subs[k];
+
+  const motivos = {};
+  motivos.concH2SO4 = !isN(conc) ? 'Falta la concentración de H₂SO₄ (titulación de laboratorio).' : '';
+  motivos.tAcidoIn  = !isN(tAcIn) ? 'Falta la temperatura del ácido a la entrada.' : '';
+  motivos.dTacido   = !isN(tAcIn) ? 'Requiere temperatura de ácido a la entrada.' : (!isN(tAcOut) ? 'Falta la temperatura del ácido a la salida.' : '');
+  motivos.tDescarga = !isN(tDesc) ? 'Falta la temperatura de descarga del cloro.' : '';
+  motivos.ratioPres = !isN(pSucc) ? 'Falta la presión de succión.' : (!isN(pDesc) ? 'Falta la presión de descarga.' : (pSucc <= 0 ? 'Presión de succión inválida.' : ''));
+  motivos.cargaMotor = !isN(I) ? 'Falta la corriente del motor.' : (fla <= 0 ? 'Cargá el FLA del motor en la ficha.' : '');
+  motivos.diasParado = !isN(diasParado) ? 'Falta el dato de días sin arranque (si aplica).' : '';
+
+  return { subs, overall, motivos,
+    pSucc, pDesc, tDesc, tAcIn, tAcOut, conc, I, carga, dT, ratio, diasParado };
+}
+
+// ── RECIPROCANTE KIRLOSKAR — freón, una etapa ──
+function evalReciprocante(comp, params, n){
+  const g = k => { const a = params[k]; const v = a ? a[n] : undefined; return isN(v) ? v : NaN; };
+  const T = thresholds.reciprocante;
+  const pSucc = g('P_succ'), tSucc = g('T_succ'), pDesc = g('P_desc'), tDesc = g('T_desc');
+  const tAce = g('T_aceite'), pAce = g('P_aceite');
+  const nivelAce = (params.NivelAceite && typeof params.NivelAceite[n] === 'string') ? params.NivelAceite[n] : '';
+  const I = g('I_motor');
+  const diasParado = g('Dias_parado');
+  const fla = comp.flaMotor || 0;
+  const carga = (fla > 0 && isN(I)) ? (I/fla*100) : NaN;
+  const pAceRel = (isN(pAce) && isN(pSucc)) ? (pAce - pSucc) : NaN;
+
+  // Sobrecalentamiento: T_succ − T_sat a P_succ. Solo si el refrigerante está en la tabla P-T.
+  const refr = comp.refrigeranteFreon || 'R-22';
+  const tabla = PT_TABLES[refr];
+  let sobrecal = NaN;
+  if (tabla && isN(pSucc) && isN(tSucc)){
+    const tSat = interpTempFromPressure(tabla, pSucc);
+    if (isN(tSat)) sobrecal = tSucc - tSat;
+  }
+
+  const subs = {
+    tDescarga:  levelOf(tDesc, T.tDescarga, false),
+    tAceite:    levelOf(tAce, T.tAceite, false),
+    pAceiteRel: levelOf(pAceRel, T.pAceiteRel, true),
+    sobrecal:   levelOf(sobrecal, T.sobrecal, false),
+    pDescarga:  levelOf(pDesc, T.pDescarga, false),
+    cargaMotor: levelOf(carga, T.cargaMotor, false),
+    diasParado: levelOf(diasParado, T.diasParado, true)
+  };
+  let overall = -1;
+  for (const k in subs) if (subs[k] > overall) overall = subs[k];
+
+  const motivos = {};
+  motivos.tDescarga  = !isN(tDesc) ? 'Falta la temperatura de descarga.' : '';
+  motivos.tAceite    = !isN(tAce) ? 'Falta la temperatura de aceite.' : '';
+  motivos.pAceiteRel = !isN(pAce) ? 'Falta la presión de aceite.' : (!isN(pSucc) ? 'Falta la presión de succión.' : '');
+  motivos.sobrecal   = !tabla ? `Sin tabla P-T para ${refr} — no se puede calcular sobrecalentamiento.` :
+                       (!isN(pSucc) ? 'Requiere presión de succión.' : (!isN(tSucc) ? 'Requiere temperatura de succión.' : ''));
+  motivos.pDescarga  = !isN(pDesc) ? 'Falta la presión de descarga.' : '';
+  motivos.cargaMotor = !isN(I) ? 'Falta la corriente del motor.' : (fla <= 0 ? 'Cargá el FLA del motor en la ficha.' : '');
+  motivos.diasParado = !isN(diasParado) ? 'Falta el dato de días sin arranque (si aplica).' : '';
+
+  return { subs, overall, motivos,
+    pSucc, tSucc, pDesc, tDesc, tAce, pAce, pAceRel, nivelAce, I, carga, sobrecal, refr, diasParado };
+}
+
+// ── Dispatcher ──
+function evalReading(id, params, n){
+  const comp = compsRegistry.get(id) || {};
+  const tipo = comp.tipoComp || 'tornillo';
+  if (tipo === 'anillo')       return {...evalAnillo(comp, params, n), tipo};
+  if (tipo === 'reciprocante') return {...evalReciprocante(comp, params, n), tipo};
+  return {...evalTornillo(comp, params, n), tipo};
+}
+function diagnoseComp(id){
+  const d = readingsData.get(id);
+  if (!d || !d.dates.length) return null;
+  const n = d.dates.length - 1;
+  const ev = evalReading(id, d.params, n);
+  return { ...ev, date: d.dates[n], comp: compsRegistry.get(id) };
+}
+function healthScoreFromLevel(overall, subs){
+  if (overall < 0) return null;
+  const base = [100, 78, 50, 20][overall];
+  const worseCount = Object.values(subs).filter(s=>s===overall).length;
+  return Math.max(3, base - (worseCount-1)*4);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  6. DIAGNÓSTICO TEXTUAL — un mensaje por sub-nivel en alerta
+// ═══════════════════════════════════════════════════════════
+function sevOf(l){ return l===3?'critical':l===2?'warning':'elevated'; }
+function diagnosisMessagesTornillo(d){
+  const msgs = []; const push = (s,t,a) => msgs.push({sev:s,title:t,action:a});
+
+  if (d.subs.tDescarga >= 1){
+    push(sevOf(d.subs.tDescarga), '🌡️ Temperatura de descarga elevada',
+      `${fmt(d.tDesc,1)}°C. El aceite inyectado empieza a degradarse rápido por encima de 100°C (formación de barnices y lodos). Causas típicas: enfriador de aceite sucio, termostato de inyección trabado, temperatura ambiente alta o presión de trabajo superior a la nominal. Revisar el circuito de enfriamiento antes de que el aceite se degrade.`);
+  }
+  if (d.subs.tInyeccion >= 1){
+    push(sevOf(d.subs.tInyeccion), '🌡️ Temp. de inyección de aceite elevada',
+      `${fmt(d.tIny,1)}°C. La inyección de aceite frío es lo que mantiene baja la T de descarga. Si la inyección entra caliente, la descarga se dispara. Revisar el enfriador de aceite (aire/agua según diseño) y su limpieza.`);
+  }
+  if (d.subs.pAceiteRel >= 2){
+    push(sevOf(d.subs.pAceiteRel), '🔧 Presión de aceite insuficiente',
+      `${fmt(d.pAceRel,2)} bar sobre la descarga. Debe ser al menos 1.5 bar para garantizar lubricación en los rotores. Causas: filtro de aceite saturado, bomba de aceite desgastada, válvula de regulación trabada, nivel bajo.`);
+  } else if (d.subs.pAceiteRel === 1){
+    push('elevated', '🔧 Presión de aceite cerca del mínimo', `${fmt(d.pAceRel,2)} bar sobre descarga. Monitorear; si sigue bajando, planificar cambio de filtro.`);
+  }
+  if (d.subs.dPsep >= 1){
+    push(sevOf(d.subs.dPsep), '🔧 ΔP del separador aire/aceite elevado',
+      `${fmt(d.dPsep,2)} bar. El elemento separador está saturado y el aceite está pasando al circuito de aire. Programar cambio del elemento — si supera 1.2 bar ya está fuera de especificación.`);
+  }
+  if (d.subs.dPfilAire >= 1){
+    push(sevOf(d.subs.dPfilAire), '🔧 Filtro de aire restringido',
+      `${fmt(d.dPfilAire,3)} bar. El compresor está trabajando contra mayor succión de la debida. Cambiar el filtro.`);
+  }
+  if (d.subs.dPfilAceite >= 1){
+    push(sevOf(d.subs.dPfilAceite), '🔧 Filtro de aceite restringido',
+      `${fmt(d.dPfilAce,2)} bar. Restricción en la línea de lubricación. Cambiar el filtro y verificar que la presión de aceite se recupere.`);
+  }
+  if (d.subs.cargaMotor >= 2){
+    push(sevOf(d.subs.cargaMotor), '⚡ Motor sobrecargado',
+      `${fmt(d.carga,0)}% del FLA. En una configuración en alternancia (1 solo compresor trabajando) la carga normal es 50-100% — superar el 110% indica sobrecarga real. Revisar presión de trabajo contra diseño, obstrucción en descarga o problema eléctrico.`);
+  }
+  if (d.subs.diasParado >= 1){
+    push(sevOf(d.subs.diasParado), '🕰️ Standby sin arrancar demasiado tiempo',
+      `${fmt(d.diasParado,0)} días sin arranque. Con rotación quincenal entre 4 equipos, el ciclo normal es de 60 días. Pasado ese punto crecen las chances de no arranque en demanda: aceite asentado en el cárter, sellos resecos, batería de arranque descargada. Verificar rutina de rotación y hacer arranque de prueba.`);
+  }
+  if (!msgs.length) push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros evaluados dentro de rango normal.');
+  return msgs;
+}
+function diagnosisMessagesAnillo(d){
+  const msgs = []; const push = (s,t,a) => msgs.push({sev:s,title:t,action:a});
+
+  if (d.subs.concH2SO4 >= 2){
+    push(sevOf(d.subs.concH2SO4), '🧪 Concentración de H₂SO₄ baja — CRÍTICO',
+      `${fmt(d.conc,1)}% de H₂SO₄. El ácido actúa simultáneamente como sello y como desecante del cloro. Por debajo de 93% el cloro queda húmedo y el HCl formado ataca acero al carbono, hierro fundido y sellos aguas abajo. Si la concentración sigue bajando, el daño puede alcanzar cañerías, válvulas y equipos de proceso. Revisar aporte de agua al anillo (purga del sello, condensación) y concentrar o renovar el ácido.`);
+  } else if (d.subs.concH2SO4 === 1){
+    push('elevated', '🧪 Concentración de H₂SO₄ cerca del límite', `${fmt(d.conc,1)}%. Programar renovación/concentración antes de la próxima ronda.`);
+  }
+  if (d.subs.tAcidoIn >= 1){
+    push(sevOf(d.subs.tAcidoIn), '🌡️ Temp. del ácido a la entrada alta',
+      `${fmt(d.tAcIn,1)}°C. El ácido se enfría antes de inyectarlo para maximizar su absorción de humedad y calor. Si entra caliente, el compresor no puede secar ni enfriar el cloro. Revisar el intercambiador de ácido y su caudal.`);
+  }
+  if (d.subs.dTacido >= 1){
+    push(sevOf(d.subs.dTacido), '🌡️ ΔT del ácido bajo',
+      `ΔT de ${fmt(d.dT,1)}°C entre entrada y salida. Con intercambio normal esperás 10-20°C. Si ΔT es menor, el ácido no está absorbiendo calor — puede ser caudal bajo, o el intercambiador de calor está sucio.`);
+  }
+  if (d.subs.tDescarga >= 1){
+    push(sevOf(d.subs.tDescarga), '🌡️ Temp. de descarga del cloro elevada',
+      `${fmt(d.tDesc,1)}°C. El cloro húmedo se vuelve mucho más corrosivo por encima de 100°C. Revisar caudal y temperatura del ácido, y relación de compresión.`);
+  }
+  if (d.subs.ratioPres >= 1){
+    push(sevOf(d.subs.ratioPres), '🔧 Relación de compresión alta',
+      `${fmt(d.ratio,2)}. Puede indicar obstrucción en descarga, aumento de presión en el sistema aguas abajo, o succión baja por problema de proceso.`);
+  }
+  if (d.subs.cargaMotor >= 2){
+    push(sevOf(d.subs.cargaMotor), '⚡ Motor sobrecargado', `${fmt(d.carga,0)}% del FLA. Revisar arrastre excesivo de líquido (caudal de ácido alto), obstrucción o problema eléctrico.`);
+  }
+  if (d.subs.diasParado >= 1){
+    push(sevOf(d.subs.diasParado), '🕰️ Standby sin arrancar demasiado tiempo',
+      `${fmt(d.diasParado,0)} días sin arranque. Para un compresor que manipula cloro húmedo, dejarlo parado mucho tiempo favorece la corrosión de los componentes internos. Verificar rutina de rotación.`);
+  }
+  if (!msgs.length) push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros evaluados dentro de rango normal.');
+  return msgs;
+}
+function diagnosisMessagesReciprocante(d){
+  const msgs = []; const push = (s,t,a) => msgs.push({sev:s,title:t,action:a});
+
+  if (d.subs.tDescarga >= 1){
+    push(sevOf(d.subs.tDescarga), '🌡️ Temperatura de descarga elevada',
+      `${fmt(d.tDesc,1)}°C. El manual Kirloskar da 140°C como límite absoluto. Por encima de 125°C el aceite empieza a carbonizarse en las válvulas, y las válvulas de descarga son lo primero que falla. Causas: condensador sucio, sobrecarga de refrigerante, sobrecalentamiento de succión excesivo, válvula de descarga pasando.`);
+  }
+  if (d.subs.tAceite >= 1){
+    push(sevOf(d.subs.tAceite), '🌡️ Temp. de aceite elevada',
+      `${fmt(d.tAce,1)}°C. El manual Kirloskar da 70°C como referencia. Por encima, el aceite pierde viscosidad y aumenta el desgaste de cojinetes y anillos. Revisar refrigeración del cárter y presión de aceite.`);
+  }
+  if (d.subs.pAceiteRel >= 2){
+    push(sevOf(d.subs.pAceiteRel), '🔧 Presión de aceite insuficiente',
+      `${fmt(d.pAceRel,2)} kg/cm² sobre la succión. El manual Kirloskar indica 1.5-3 kg/cm². Causas: bomba de aceite desgastada, nivel bajo, aceite diluido por refrigerante, filtro de aceite saturado. NO operar hasta corregir.`);
+  } else if (d.subs.pAceiteRel === 1){
+    push('elevated', '🔧 Presión de aceite cerca del mínimo', `${fmt(d.pAceRel,2)} kg/cm². Monitorear y planificar intervención.`);
+  }
+  if (d.subs.sobrecal >= 1){
+    push(sevOf(d.subs.sobrecal), '♨️ Sobrecalentamiento en succión elevado',
+      `Sobrecalentamiento de ${fmt(d.sobrecal,1)}°C sobre la temperatura de saturación a la presión de succión. Sobrecalentamiento alto indica evaporador subalimentado (falta de refrigerante, válvula de expansión cerrada de más, restricción en línea de líquido). El gas caliente que entra al compresor dispara la temperatura de descarga y carboniza el aceite en las válvulas.`);
+  }
+  if (d.subs.pDescarga >= 2){
+    push(sevOf(d.subs.pDescarga), '🔧 Presión de descarga alta',
+      `${fmt(d.pDesc,2)} bar. El manual Kirloskar da 21 bar como máximo para R-22. Causas: condensador sucio, ventilador fallando, exceso de carga de refrigerante, aire incondensable en el circuito.`);
+  } else if (d.subs.pDescarga === 1){
+    push('elevated', '🔧 Presión de descarga cerca del límite', `${fmt(d.pDesc,2)} bar. Revisar condensación.`);
+  }
+  if (d.subs.cargaMotor >= 2){
+    push(sevOf(d.subs.cargaMotor), '⚡ Motor sobrecargado', `${fmt(d.carga,0)}% del FLA. Revisar relación de compresión, rodamiento agarrotado o problema eléctrico.`);
+  }
+  if (d.nivelAce && d.nivelAce !== 'ok'){
+    const map = { bajo:'🔧 Nivel de aceite bajo — completar antes de operar.', alto:'🔧 Nivel de aceite alto — puede indicar arrastre de refrigerante líquido al cárter, verificar carga.' };
+    push(d.nivelAce === 'bajo' ? 'warning' : 'elevated', `Nivel de aceite: ${d.nivelAce}`, map[d.nivelAce] || '');
+  }
+  if (d.subs.diasParado >= 1){
+    push(sevOf(d.subs.diasParado), '🕰️ Standby sin arrancar demasiado tiempo',
+      `${fmt(d.diasParado,0)} días sin arranque. Con rotación quincenal entre 2 equipos, el ciclo normal es de 30 días. Verificar rutina de rotación y hacer arranque de prueba.`);
+  }
+  if (!msgs.length) push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros evaluados dentro de rango normal.');
+  return msgs;
+}
+function diagnosisMessages(d){
+  if (!d) return [];
+  if (d.tipo === 'anillo') return diagnosisMessagesAnillo(d);
+  if (d.tipo === 'reciprocante') return diagnosisMessagesReciprocante(d);
+  return diagnosisMessagesTornillo(d);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  7. RENDER — dashboard
+// ═══════════════════════════════════════════════════════════
+function renderAll(){
+  renderHeaderStats();
+  renderSummaryBar();
+  renderGrid();
+  renderEquiposList();
+  renderThresholdGrid();
+  populateCompTipoSelects();
+}
+function fleetHealth(){
+  let sum=0,count=0;
+  for (const id of readingsData.keys()){
+    const diag = diagnoseComp(id);
+    if (!diag || diag.overall < 0) continue;
+    const hs = healthScoreFromLevel(diag.overall, diag.subs);
+    if (hs!==null){ sum+=hs; count++; }
+  }
+  return count ? Math.round(sum/count) : null;
+}
+function renderHeaderStats(){
+  document.getElementById('hsEquipos').textContent = compsRegistry.size;
+  let total = 0; for (const d of readingsData.values()) total += d.dates.length;
+  document.getElementById('hsLecturas').textContent = total;
+  const fh = fleetHealth();
+  const el = document.getElementById('hsSalud');
+  el.textContent = fh===null ? '—' : fh+'%';
+  el.style.color = fh===null ? 'var(--muted)' : fh>=85?'var(--good)':fh>=60?'var(--elevated)':fh>=35?'var(--warning)':'var(--critical)';
+}
+function statusDistribution(){
+  const dist = {good:0, elevated:0, warning:0, critical:0};
+  for (const id of readingsData.keys()){
+    const diag = diagnoseComp(id);
+    if (!diag || diag.overall < 0) continue;
+    dist[STATUS[diag.overall]]++;
+  }
+  return dist;
+}
+function renderSummaryBar(){
+  const dist = statusDistribution();
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="sum-card good" onclick="setStatusFilter('good')"><div class="sum-icon">🟢</div><div><div class="sum-num">${dist.good}</div><div class="sum-lbl">Normal</div></div></div>
+    <div class="sum-card elevated" onclick="setStatusFilter('elevated')"><div class="sum-icon">🟡</div><div><div class="sum-num">${dist.elevated}</div><div class="sum-lbl">Elevado</div></div></div>
+    <div class="sum-card warning" onclick="setStatusFilter('warning')"><div class="sum-icon">🟠</div><div><div class="sum-num">${dist.warning}</div><div class="sum-lbl">Alerta</div></div></div>
+    <div class="sum-card critical" onclick="setStatusFilter('critical')"><div class="sum-icon">🔴</div><div><div class="sum-num">${dist.critical}</div><div class="sum-lbl">Crítico</div></div></div>
+  `;
+}
+function healthRingSVG(health, level){
+  const color = level<0 ? 'var(--muted)' : STATUS_COLORS[level];
+  const r = 20, c = 2*Math.PI*r;
+  const pct = health===null ? 0 : health/100;
+  const dash = c*pct;
+  return `<div style="position:relative;width:52px;height:52px;">
+    <svg class="health-ring" width="52" height="52" viewBox="0 0 52 52">
+      <circle cx="26" cy="26" r="${r}" stroke="var(--border2)"></circle>
+      <circle cx="26" cy="26" r="${r}" stroke="${color}" stroke-dasharray="${dash} ${c}" stroke-linecap="round"></circle>
+    </svg>
+    <div class="health-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${color};">${health===null?'—':health+'%'}</div>
+  </div>`;
+}
+// métricas que se muestran en la card, según tipo
+function metricasCard(diag){
+  if (diag.tipo === 'anillo'){
+    return [
+      {l:'Conc. H₂SO₄', v: isN(diag.conc) ? fmt(diag.conc,1)+' %' : null, lvl: diag.subs.concH2SO4},
+      {l:'T. desc. cloro', v: isN(diag.tDesc) ? fmt(diag.tDesc,0)+' °C' : null, lvl: diag.subs.tDescarga},
+      {l:'T. ácido in', v: isN(diag.tAcIn) ? fmt(diag.tAcIn,0)+' °C' : null, lvl: diag.subs.tAcidoIn},
+      {l:'ΔT ácido', v: isN(diag.dT) ? fmt(diag.dT,1)+' °C' : null, lvl: diag.subs.dTacido},
+      {l:'Ratio', v: isN(diag.ratio) ? fmt(diag.ratio,2) : null, lvl: diag.subs.ratioPres},
+      {l:'Días parado', v: isN(diag.diasParado) ? fmt(diag.diasParado,0) : null, lvl: diag.subs.diasParado}
+    ];
+  }
+  if (diag.tipo === 'reciprocante'){
+    return [
+      {l:'T. descarga', v: isN(diag.tDesc) ? fmt(diag.tDesc,0)+' °C' : null, lvl: diag.subs.tDescarga},
+      {l:'T. aceite', v: isN(diag.tAce) ? fmt(diag.tAce,0)+' °C' : null, lvl: diag.subs.tAceite},
+      {l:'P. aceite rel.', v: isN(diag.pAceRel) ? fmt(diag.pAceRel,2)+' kg/cm²' : null, lvl: diag.subs.pAceiteRel},
+      {l:'Sobrecal.', v: isN(diag.sobrecal) ? fmt(diag.sobrecal,1)+' °C' : null, lvl: diag.subs.sobrecal},
+      {l:'P. descarga', v: isN(diag.pDesc) ? fmt(diag.pDesc,1)+' bar' : null, lvl: diag.subs.pDescarga},
+      {l:'Carga motor', v: isN(diag.carga) ? fmt(diag.carga,0)+' %' : null, lvl: diag.subs.cargaMotor}
+    ];
+  }
+  // tornillo
+  return [
+    {l:'T. descarga', v: isN(diag.tDesc) ? fmt(diag.tDesc,0)+' °C' : null, lvl: diag.subs.tDescarga},
+    {l:'T. inyección', v: isN(diag.tIny) ? fmt(diag.tIny,0)+' °C' : null, lvl: diag.subs.tInyeccion},
+    {l:'P. aceite rel.', v: isN(diag.pAceRel) ? fmt(diag.pAceRel,2)+' bar' : null, lvl: diag.subs.pAceiteRel},
+    {l:'ΔP separador', v: isN(diag.dPsep) ? fmt(diag.dPsep,2)+' bar' : null, lvl: diag.subs.dPsep},
+    {l:'Carga motor', v: isN(diag.carga) ? fmt(diag.carga,0)+' %' : null, lvl: diag.subs.cargaMotor},
+    {l:'Días parado', v: isN(diag.diasParado) ? fmt(diag.diasParado,0) : null, lvl: diag.subs.diasParado}
+  ];
+}
+function renderGrid(){
+  const grid = document.getElementById('cardGrid');
+  const search = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  const sortMode = document.getElementById('sortSel')?.value || 'health_asc';
+
+  // Agrupar por tipo
+  const porTipo = {tornillo:[], anillo:[], reciprocante:[]};
+  for (const id of compsRegistry.keys()){
+    const comp = compsRegistry.get(id) || {};
+    const tipo = porTipo[comp.tipoComp] ? comp.tipoComp : 'tornillo';
+    const diag = readingsData.has(id) ? diagnoseComp(id) : null;
+    if (statusFilter !== 'all'){
+      if (!diag || diag.overall < 0 || STATUS[diag.overall] !== statusFilter) continue;
+    }
+    const name = (comp.name||'').toLowerCase();
+    if (search && !name.includes(search) && !(comp.modelo||'').toLowerCase().includes(search)) continue;
+    const health = diag ? healthScoreFromLevel(diag.overall, diag.subs) : null;
+    porTipo[tipo].push({id, comp, diag, health});
+  }
+
+  const sortFn = (a,b) => {
+    if (sortMode==='health_asc') return (a.health??999)-(b.health??999);
+    if (sortMode==='name_asc')   return (a.comp.name||'').localeCompare(b.comp.name||'');
+    if (sortMode==='date_desc'){
+      const da = a.diag ? a.diag.date.getTime() : 0;
+      const db = b.diag ? b.diag.date.getTime() : 0;
+      return db - da;
+    }
+    return 0;
+  };
+  Object.values(porTipo).forEach(arr => arr.sort(sortFn));
+
+  let html = '';
+  for (const t of TIPOS_COMP){
+    const items = porTipo[t.key];
+    if (!items.length) continue;
+    html += `<div style="grid-column:1/-1; display:flex; align-items:center; gap:10px; margin:8px 0 4px;">
+      <span style="font-size:1.05rem; font-weight:700; color:#fff;">${t.icon} ${escHtml(t.label)}</span>
+      <span style="font-size:.78rem; color:var(--muted);">${items.length} equipo(s)</span>
+    </div>`;
+    html += items.map(({id, comp, diag, health}) => {
+      const level = diag ? diag.overall : -2;
+      const badgeClass = level<0 ? '' : `badge-${STATUS[level]}`;
+      const badgeLabel = level===-2 ? 'Sin lecturas' : level<0 ? 'Sin datos' : STATUS_LABELS[level];
+      const metrics = diag ? metricasCard(diag) : [];
+      const metHtml = metrics.map(m => `
+        <div class="mm-item">
+          <div class="mm-lbl">${escHtml(m.l)}</div>
+          <div class="mm-val ${m.v==null?'nd':(m.lvl>=0?STATUS[m.lvl]:'')}">${m.v==null?'Sin datos':escHtml(m.v)}</div>
+        </div>`).join('');
+      return `
+      <div class="mcard" onclick="openDetail('${escJs(id)}')">
+        <div class="mcard-header">
+          <div>
+            <div class="mname">${escHtml(comp.name||id)}</div>
+            <div class="mpoint">${escHtml(comp.modelo||'')}</div>
+            <div class="mpoint-badge">${escHtml(comp.ubicacion||'')}</div>
+          </div>
+          <span class="mbadge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <div class="mcard-body">
+          <div class="health-ring-wrap">${healthRingSVG(health, level)}</div>
+          <div class="mmetrics" style="grid-template-columns:1fr 1fr;">${metHtml}</div>
+        </div>
+        <div class="mcard-footer">
+          <span>${diag ? 'Última: '+fmtDate(diag.date) : 'Sin lecturas'}</span>
+          <span>${readingsData.get(id)?.dates.length||0} lectura(s)</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  if (!html) grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="ei">🌀</div>${compsRegistry.size?'Sin resultados para el filtro actual.':'Sin compresores registrados. Importalos del hub o creá uno en "Compresores".'}</div>`;
+  else grid.innerHTML = html;
+}
+function renderEquiposList(){
+  const el = document.getElementById('equiposRegistryList');
+  if (!compsRegistry.size){
+    el.innerHTML = `<div class="empty-state"><div class="ei">🌀</div>Sin compresores registrados todavía.</div>`;
+    return;
+  }
+  el.innerHTML = Array.from(compsRegistry.entries()).map(([id, c]) => `
+    <div class="panel-box">
+      <div class="panel-box-title"><span>${TIPO_ICON[c.tipoComp]||'🌀'} ${escHtml(c.name)} <span style="color:var(--muted);font-weight:400;font-size:.8rem;">— ${escHtml(c.modelo||'')} · ${escHtml(TIPO_LBL[c.tipoComp]||'')}${c.ubicacion?' · '+escHtml(c.ubicacion):''}${c.flaMotor?' · FLA '+c.flaMotor+'A':''}</span></span>
+        <span style="display:flex;gap:6px;">
+          <button class="btn-small" onclick="openManualEntry('${escJs(id)}')">＋ Medición</button>
+          <button class="btn-small" onclick="editComp('${escJs(id)}')">✏️ Editar</button>
+          <button class="btn-small danger" onclick="deleteComp('${escJs(id)}')">Eliminar</button>
+        </span>
+      </div>
+      <div style="font-size:.82rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
+        ${c.pNominalBar?`<span>P nominal: <strong style="color:var(--text);">${c.pNominalBar} bar</strong></span>`:''}
+        ${c.tipoComp==='reciprocante'&&c.refrigeranteFreon?`<span>Refrigerante: <strong style="color:var(--text);">${escHtml(c.refrigeranteFreon)}</strong></span>`:''}
+        <span>${readingsData.get(id)?.dates.length||0} lectura(s)</span>
+      </div>
+    </div>`).join('');
+}
+function renderThresholdGrid(){
+  const el = document.getElementById('thresholdGrid');
+  el.innerHTML = TIPOS_COMP.map(t => {
+    const meta = THRESHOLD_META[t.key];
+    const band = thresholds[t.key];
+    return `<div class="panel-box" style="margin-bottom:14px;">
+      <div class="panel-box-title">${t.icon} ${escHtml(t.label)}</div>
+      <div class="th-grid">
+        ${Object.keys(meta).map(key => {
+          const m = meta[key], b = band[key];
+          const labels = m.inverse ? ['Normal (≥)','Elevado (≥)','Alerta (≥)'] : ['Normal (≤)','Elevado (≤)','Alerta (≤)'];
+          return `<div class="th-item">
+            <div class="th-item-lbl">${m.label}${m.unit?' ('+m.unit+')':''}</div>
+            ${b.map((v,i)=>`<div class="th-row"><label>${labels[i]}</label><input type="number" step="0.01" id="th_${t.key}_${key}_${i}" value="${v}"></div>`).join('')}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function populateCompTipoSelects(){
+  const sel = document.getElementById('newCompTipo');
+  if (sel && !sel.dataset.filled){
+    sel.innerHTML = TIPOS_COMP.map(t => `<option value="${t.key}">${t.icon} ${t.label}</option>`).join('');
+    sel.dataset.filled = '1';
+  }
+}
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+tab));
+  if (tab === 'ia') initIATab();
+}
+function setStatusFilter(f){
+  statusFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active', b.dataset.f===f));
+  switchTab('dashboard');
+  renderGrid();
+}
+function actualizarDatalistHub(){
+  const dl = document.getElementById('hubTagsDatalist');
+  if (dl) dl.innerHTML = [...equiposHub.values()].map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+}
+async function sincronizarEquiposHub(silencioso){
+  if(typeof SatSync === 'undefined' || !SatSync.init()){
+    if(!silencioso) alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return false;
+  }
+  try{
+    const rows = await SatSync.listarEquipos();
+    equiposHub = new Map(rows.map(e => [e.tag, e]));
+    actualizarDatalistHub();
+    return true;
+  }catch(err){
+    console.error('[SatSync] error sincronizando equipos', err);
+    if(!silencioso) alert('No se pudo leer el catálogo de equipos del hub: ' + err.message);
+    return false;
+  }
+}
+
+// ── Detección de compresores en el catálogo compartido ──
+// Matchea tipo/tag/nombre contra patrones típicos de compresor para no traer
+// motores, bombas, tableros, etc. El regex cubre las marcas que están en
+// planta (DENAIR, DEVI, Kirloskar) más los términos genéricos.
+const RE_COMPRESOR = /compresor|comp\b|tornillo|screw|denair|anillo|l[ií]quido|devi|kirloskar|reciproc|pist[oó]n|piston|aire comprimido|cloro/i;
+
+function pareceCompresor(e){
+  const blob = `${e.tipo||''} ${e.tag||''} ${e.nombre||''}`;
+  return RE_COMPRESOR.test(blob);
+}
+
+// Infiere el tipo específico a partir del texto del hub. Devuelve el tipo
+// o null si no puede decidir — en ese caso queda en 'tornillo' como default
+// razonable para aire y se avisa para que el usuario lo corrija.
+function inferirTipoCompresor(e){
+  const blob = `${e.tipo||''} ${e.tag||''} ${e.nombre||''}`.toLowerCase();
+  if (/anillo|l[ií]quido|cloro|devi|h2so4|sulfúrico|sulfurico/.test(blob)) return 'anillo';
+  if (/reciproc|pist[oó]n|piston|kirloskar|fre[oó]n|r-?22|r-?134/.test(blob))  return 'reciprocante';
+  if (/tornillo|screw|denair|aire/.test(blob))                                  return 'tornillo';
+  return null;
+}
+
+function yaExisteComp(tag){
+  const t = String(tag||'').trim().toLowerCase();
+  for (const c of compsRegistry.values()){
+    if (String(c.name||'').trim().toLowerCase() === t) return true;
+  }
+  return false;
+}
+
+// Trae del hub todos los equipos que parezcan compresores y todavía no
+// tengan ficha local.
+async function importarCompresoresDelHub(){
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    alert('Conectá Supabase primero (configuralo desde el hub — index.html).');
+    return;
+  }
+  try{
+    const rows = await SatSync.listarEquipos();
+    equiposHub = new Map(rows.map(e => [e.tag, e]));
+    actualizarDatalistHub();
+  }catch(err){
+    alert('No se pudo leer el catálogo del hub: ' + err.message);
+    return;
+  }
+
+  let importados = 0, sinTipo = [];
+  for (const e of equiposHub.values()){
+    if (!e || !e.tag) continue;
+    if (yaExisteComp(e.tag)) continue;
+    if (!pareceCompresor(e)) continue;
+
+    const tipoInferido = inferirTipoCompresor(e);
+    const id = genId();
+    compsRegistry.set(id, fichaDefault(e.tag, {
+      tipoComp: tipoInferido || 'tornillo',
+      ubicacion: e.ubicacion || '',
+      modelo: ''   // el hub no tiene campo modelo — se completa desde ✏️ Editar
+    }));
+    if (!tipoInferido) sinTipo.push(e.tag);
+    importados++;
+  }
+
+  if (importados){
+    saveState();
+    renderAll();
+    const aviso = sinTipo.length
+      ? `\n\n⚠️ ${sinTipo.length} quedaron como "tornillo" por defecto — revisá el tipo real (✏️ Editar): ${sinTipo.join(', ')}.`
+      : '';
+    alert(`Importados ${importados} compresor(es) del hub.${aviso}\n\nCompletá marca/modelo y FLA desde ✏️ Editar en la pestaña Compresores.`);
+  } else {
+    alert('No hay compresores nuevos para importar. Si esperabas ver alguno, verificá que su tipo en Supabase contenga "compresor" o el TAG tenga un patrón reconocible.');
+  }
+}
+
+// Crea la ficha local a partir de un equipo del hub cuando el usuario
+// lo elige en el form de carga manual, sin pasar por la importación masiva.
+function crearFichaDesdeHub(hubTag){
+  const hubEq = equiposHub.get(hubTag) || {};
+  const tipoInferido = inferirTipoCompresor(hubEq) || 'tornillo';
+  const id = genId();
+  compsRegistry.set(id, fichaDefault(hubTag, {
+    tipoComp: tipoInferido,
+    ubicacion: hubEq.ubicacion || '',
+    modelo: ''   // el hub no tiene campo modelo — se completa desde ✏️ Editar
+  }));
+  return id;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  8. FORMULARIO MANUAL — campos adaptativos por tipo
+// ═══════════════════════════════════════════════════════════
+const CAMPOS_POR_TIPO = {
+  tornillo: [
+    {id:'P_desc',      label:'Presión de descarga', unit:'bar', step:0.1},
+    {id:'T_desc',      label:'Temp. de descarga', unit:'°C', step:0.1},
+    {id:'T_inyeccion', label:'Temp. inyección de aceite', unit:'°C', step:0.1},
+    {id:'P_aceite',    label:'Presión de aceite', unit:'bar', step:0.1},
+    {id:'dP_sep',      label:'ΔP separador (opcional)', unit:'bar', step:0.01},
+    {id:'dP_filAire',  label:'ΔP filtro de aire (opcional)', unit:'bar', step:0.01},
+    {id:'dP_filAceite',label:'ΔP filtro de aceite (opcional)', unit:'bar', step:0.01},
+    {id:'I_motor',     label:'Corriente del motor', unit:'A', step:0.1},
+    {id:'T_amb',       label:'Temp. ambiente', unit:'°C', step:0.1},
+    {id:'Dias_parado', label:'Días sin arranque (si es standby)', unit:'días', step:1}
+  ],
+  anillo: [
+    {id:'P_succ',      label:'Presión de succión', unit:'bar', step:0.01},
+    {id:'P_desc',      label:'Presión de descarga', unit:'bar', step:0.01},
+    {id:'T_desc',      label:'Temp. descarga del cloro', unit:'°C', step:0.1},
+    {id:'T_acido_in',  label:'Temp. ácido a la entrada', unit:'°C', step:0.1},
+    {id:'T_acido_out', label:'Temp. ácido a la salida', unit:'°C', step:0.1},
+    {id:'Conc_H2SO4',  label:'Concentración H₂SO₄ (laboratorio)', unit:'%', step:0.1},
+    {id:'Caudal_acido',label:'Caudal de ácido (opcional)', unit:'m³/h', step:0.1},
+    {id:'I_motor',     label:'Corriente del motor', unit:'A', step:0.1},
+    {id:'Dias_parado', label:'Días sin arranque (si es standby)', unit:'días', step:1}
+  ],
+  reciprocante: [
+    {id:'P_succ',      label:'Presión de succión', unit:'bar', step:0.01},
+    {id:'T_succ',      label:'Temp. de succión', unit:'°C', step:0.1},
+    {id:'P_desc',      label:'Presión de descarga', unit:'bar', step:0.01},
+    {id:'T_desc',      label:'Temp. de descarga', unit:'°C', step:0.1},
+    {id:'T_aceite',    label:'Temp. de aceite en cárter', unit:'°C', step:0.1},
+    {id:'P_aceite',    label:'Presión de aceite', unit:'kg/cm²', step:0.01},
+    {id:'I_motor',     label:'Corriente del motor', unit:'A', step:0.1},
+    {id:'Dias_parado', label:'Días sin arranque (si es standby)', unit:'días', step:1},
+    {id:'NivelAceite', label:'Nivel de aceite (mirilla)', type:'select',
+      options:[{v:'',l:'—'},{v:'ok',l:'OK (entre ¼ y ¾)'},{v:'bajo',l:'Bajo (< ¼)'},{v:'alto',l:'Alto (> ¾)'}]}
+  ]
+};
+
+// Tipo y ficha efectivos según lo elegido en el combo del formulario
+// (__new = compresor nuevo, __hub:TAG = equipo del catálogo aún sin ficha local, otro = id local)
+function seleccionManual(){
+  const val = document.getElementById('me_compSel').value;
+  if (val === '__new'){
+    const tipo = document.getElementById('me_newCompTipo').value;
+    return { val, tipo, comp: fichaDefault('(nuevo)', {tipoComp: tipo}) };
+  }
+  if (val.startsWith('__hub:')){
+    const hubTag = val.slice('__hub:'.length);
+    const tipo = inferirTipoCompresor(equiposHub.get(hubTag) || {}) || 'tornillo';
+    return { val, tipo, comp: fichaDefault(hubTag, {tipoComp: tipo}) };
+  }
+  return { val, tipo: getTipoDe(val), comp: compsRegistry.get(val) || fichaDefault(val) };
+}
+
+function renderManualCamposPorTipo(){
+  const {tipo} = seleccionManual();
+  const campos = CAMPOS_POR_TIPO[tipo] || [];
+  document.getElementById('me_camposTipo').innerHTML = `<div class="form-grid">
+    ${campos.map(c => {
+      if (c.type === 'select'){
+        return `<div class="fld"><label>${escHtml(c.label)}</label>
+          <select id="me_${c.id}">${c.options.map(o=>`<option value="${escHtml(o.v)}">${escHtml(o.l)}</option>`).join('')}</select>
+        </div>`;
+      }
+      return `<div class="fld"><label>${escHtml(c.label)}${c.unit?' ('+c.unit+')':''}</label>
+        <input type="number" step="${c.step||0.1}" id="me_${c.id}">
+      </div>`;
+    }).join('')}
+  </div>`;
+  document.querySelectorAll('#me_camposTipo input, #me_camposTipo select').forEach(el => {
+    el.addEventListener('input', renderManualPreview);
+    el.addEventListener('change', renderManualPreview);
+  });
+  document.getElementById('me_sub').textContent = (TIPO_ICON[tipo]||'') + ' ' + (TIPO_LBL[tipo]||'');
+  renderManualPreview();
+}
+function onManualCompChange(){
+  const isNew = document.getElementById('me_compSel').value === '__new';
+  // "__hub:..." NO es "nuevo" para el usuario — es un equipo existente del catálogo
+  document.getElementById('me_newCompWrap').classList.toggle('hidden', !isNew);
+  document.getElementById('me_newCompTipoWrap').classList.toggle('hidden', !isNew);
+  renderManualCamposPorTipo();
+}
+function nowLocalInput(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+function openManualEntry(preId){
+  const sel = document.getElementById('me_compSel');
+  const nombresLocales = new Set([...compsRegistry.values()].map(c => (c.name||'').toUpperCase()));
+
+  let html = `<option value="__new">➕ Crear nuevo compresor…</option>`;
+  // 1) compresores locales
+  html += Array.from(compsRegistry.entries())
+    .map(([id,c]) => `<option value="${escHtml(id)}">${escHtml(c.name)}</option>`).join('');
+  // 2) equipos del hub que parezcan compresores y aún no tengan ficha local
+  const delHub = [...equiposHub.values()].filter(e =>
+    e && e.tag
+    && !nombresLocales.has(e.tag.toUpperCase())
+    && pareceCompresor(e)
+  );
+  if (delHub.length){
+    html += delHub.map(e => {
+      const tipoHint = inferirTipoCompresor(e) || 'tornillo';
+      return `<option value="__hub:${escHtml(e.tag)}">☁ ${escHtml(e.tag)} — ${escHtml(e.tipo||TIPO_LBL[tipoHint])} (del hub)</option>`;
+    }).join('');
+  }
+  sel.innerHTML = html;
+
+  const newSel = document.getElementById('me_newCompTipo');
+  if (!newSel.dataset.filled){ newSel.innerHTML = TIPOS_COMP.map(t=>`<option value="${t.key}">${t.icon} ${t.label}</option>`).join(''); newSel.dataset.filled='1'; }
+  document.getElementById('me_newCompTag').value = '';
+  document.getElementById('me_fecha').value = nowLocalInput();
+  document.getElementById('me_obs').value = '';
+  if (preId && compsRegistry.has(preId)) sel.value = preId;
+  else sel.value = '__new';
+  onManualCompChange();
+  document.getElementById('manualOverlay').classList.add('open');
+}
+function closeManualEntry(){ document.getElementById('manualOverlay').classList.remove('open'); }
+function numOrUndef(id){ const v = document.getElementById(id)?.value; if (v===''||v===undefined) return NaN; const n = parseFloat(v); return isNaN(n)?NaN:n; }
+
+function leerManual(){
+  const {tipo} = seleccionManual();
+  const campos = CAMPOS_POR_TIPO[tipo] || [];
+  const params = {};
+  for (const c of campos){
+    if (c.type === 'select') params[c.id] = document.getElementById('me_'+c.id)?.value || '';
+    else params[c.id] = numOrUndef('me_'+c.id);
+  }
+  return { tipo, params };
+}
+function renderManualPreview(){
+  const box = document.getElementById('me_preview');
+  if (!box) return;
+  const {tipo, params} = leerManual();
+  const tieneDatos = Object.values(params).some(v => isN(v) || (typeof v === 'string' && v));
+  if (!tieneDatos){ box.innerHTML = '<div style="font-size:.8rem;color:var(--muted);">Cargá datos para ver el diagnóstico en vivo.</div>'; return; }
+
+  const {comp} = seleccionManual();
+  const paramsArr = {};
+  for (const [k,v] of Object.entries(params)) paramsArr[k] = [v];
+
+  let ev;
+  if (tipo === 'anillo')            ev = evalAnillo(comp, paramsArr, 0);
+  else if (tipo === 'reciprocante') ev = evalReciprocante(comp, paramsArr, 0);
+  else                              ev = evalTornillo(comp, paramsArr, 0);
+
+  const lvl = ev.overall;
+  const badge = lvl < 0 ? '<span class="mbadge" style="background:var(--card);color:var(--muted);">Sin datos evaluables</span>'
+    : `<span class="mbadge badge-${STATUS[lvl]}">${STATUS_LABELS[lvl]}</span>`;
+  box.innerHTML = `<div style="margin-bottom:8px;">${badge}</div>` +
+    Object.entries(ev.subs).map(([k, l]) => {
+      const meta = THRESHOLD_META[tipo]?.[k];
+      if (!meta) return '';
+      const val = ev[VALOR_DE_SUB[tipo]?.[k]];
+      const txt = (l < 0) ? (ev.motivos[k] || 'Sin datos') : `${isN(val)?fmt(val,2):''} ${meta.unit}`;
+      return `<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);font-size:.85rem;">
+        <span style="color:var(--muted);">${escHtml(meta.label)}</span>
+        <span style="font-family:'Share Tech Mono';color:var(--${l>=0?STATUS[l]:'muted'});">${escHtml(txt)}</span>
+      </div>`;
+    }).join('');
+}
+
+function saveManualReading(){
+  const sel = document.getElementById('me_compSel');
+  const fechaStr = document.getElementById('me_fecha').value;
+  if (!fechaStr){ alert('Ingresá la fecha.'); return; }
+  const fecha = new Date(fechaStr);
+  if (isNaN(fecha)){ alert('Fecha inválida.'); return; }
+
+  let compId = sel.value;
+  if (compId === '__new'){
+    const tag = document.getElementById('me_newCompTag').value.trim();
+    if (!tag){ alert('Ingresá el TAG del compresor nuevo.'); return; }
+    if (yaExisteComp(tag)){ alert('Ya existe un compresor con ese TAG.'); return; }
+    const tipo = document.getElementById('me_newCompTipo').value;
+    compId = genId();
+    compsRegistry.set(compId, fichaDefault(tag, {tipoComp: tipo}));
+    publicarEquipoEnHub(tag, tipo);
+  } else if (compId.startsWith('__hub:')){
+    const hubTag = compId.slice('__hub:'.length);
+    compId = crearFichaDesdeHub(hubTag);   // crea ficha local con el TAG del hub
+  }
+  const {params} = leerManual();
+  const incoming = { dates:[fecha], params: Object.fromEntries(Object.entries(params).map(([k,v])=>[k,[v]])), obs:[document.getElementById('me_obs').value.trim()] };
+  const existing = readingsData.get(compId);
+  readingsData.set(compId, existing ? mergeReadings(existing, incoming) : incoming);
+
+  saveState();
+  closeManualEntry();
+  renderAll();
+  publicarAnalisisComp(compId).catch(() => {});
+  const status = document.getElementById('loadStatus');
+  if (status){
+    status.className = 'load-status ok';
+    status.textContent = `✅ Medición guardada: ${getCompName(compId)}`;
+  }
+}
+function mergeReadings(existing, incoming){
+  const existKeys = new Set(existing.dates.map(keyOfDate));
+  const allDates = [...existing.dates], allObs = [...(existing.obs||[])];
+  const allParams = {};
+  const blank = pk => PARAMS_TEXTO.includes(pk) ? '' : NaN;
+  const paramKeys = new Set([...Object.keys(existing.params), ...Object.keys(incoming.params)]);
+  for (const pk of paramKeys) allParams[pk] = [...(existing.params[pk]||new Array(existing.dates.length).fill(blank(pk)))];
+  for (let i=0;i<incoming.dates.length;i++){
+    if (!existKeys.has(keyOfDate(incoming.dates[i]))){
+      existKeys.add(keyOfDate(incoming.dates[i]));
+      allDates.push(incoming.dates[i]); allObs.push(incoming.obs?.[i] || '');
+      for (const pk of paramKeys) allParams[pk].push(incoming.params[pk]?.[i] ?? blank(pk));
+    }
+  }
+  const idx = allDates.map((_,i)=>i).sort((a,b)=>allDates[a]-allDates[b]);
+  return { dates: idx.map(i=>allDates[i]), obs: idx.map(i=>allObs[i]),
+    params: Object.fromEntries(Object.entries(allParams).map(([k,v])=>[k, idx.map(i=>v[i])])) };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  9. MODAL DETALLE
+// ═══════════════════════════════════════════════════════════
+function openDetail(id){
+  currentKey = id;
+  const d = readingsData.get(id);
+  const comp = compsRegistry.get(id);
+  if (!comp) return;
+  const diag = d && d.dates.length ? diagnoseComp(id) : null;
+
+  document.getElementById('modalTitle').textContent = comp.name || id;
+  document.getElementById('modalSub').textContent = `${TIPO_LBL[comp.tipoComp]||''}${comp.modelo?' · '+comp.modelo:''}${comp.ubicacion?' · '+comp.ubicacion:''}${diag?' · Última: '+fmtDateTime(diag.date):''}`;
+
+  if (!diag){
+    document.getElementById('modalBody').innerHTML = `<div class="empty-state"><div class="ei">🌀</div>Sin mediciones cargadas todavía. Usá "＋ Medición" en la pestaña Compresores para la primera.</div>`;
+    document.getElementById('detailOverlay').classList.add('open');
+    return;
+  }
+
+  const level = diag.overall;
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const msgs = diagnosisMessages(diag);
+
+  const met = metricasCard(diag);
+  const metHtml = met.map(m => `
+    <div class="mstat">
+      <div class="mstat-lbl">${escHtml(m.l)}</div>
+      <div class="mstat-val" style="color:${m.v==null?'var(--muted)':(m.lvl>=0?STATUS_COLORS[m.lvl]:'var(--text)')};font-size:${m.v==null?'0.9rem':'1.15rem'};">
+        ${m.v==null?'Sin datos':escHtml(m.v)}
+      </div>
+    </div>`).join('');
+
+  const diagHtml = msgs.map(m => `
+    <div class="diag-box ${m.sev==='good'?'good':m.sev}">
+      <div class="diag-title">${m.title}</div>
+      <div class="diag-action">${m.action}</div>
+    </div>`).join('');
+
+  const histRows = d.dates.map((dt, i) => {
+    const ev = evalReading(id, d.params, i);
+    const lbl = ev.overall >= 0 ? STATUS_LABELS[ev.overall] : 'Sin datos';
+    const cls = ev.overall >= 0 ? `badge-${STATUS[ev.overall]}` : '';
+    return `<tr>
+      <td data-label="Fecha">${fmtDate(dt)}</td>
+      <td data-label="Estado"><span class="mbadge ${cls}">${lbl}</span></td>
+      <td data-label="Observaciones" style="white-space:normal;">${escHtml((d.obs&&d.obs[i])||'')}</td>
+      <td data-label=""><button class="btn-small danger" onclick="event.stopPropagation();borrarLectura('${escJs(id)}',${i})">Eliminar</button></td>
+    </tr>`;
+  }).reverse().slice(0,15).join('');
+
+  const badgeNivel = level >= 0 ? `<span class="mbadge badge-${STATUS[level]}">${STATUS_LABELS[level]}</span>` : '<span class="mbadge">Sin datos</span>';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-section-title">Estado actual</div>
+    <div class="mgrid">
+      <div class="mstat"><div class="mstat-lbl">Estado</div><div class="mstat-val">${badgeNivel}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Salud</div><div class="mstat-val">${health===null?'—':health+'%'}</div></div>
+      <div class="mstat"><div class="mstat-lbl">FLA motor</div><div class="mstat-val">${comp.flaMotor?comp.flaMotor+' A':'—'}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Refrigerante</div><div class="mstat-val">${comp.tipoComp==='reciprocante'?escHtml(comp.refrigeranteFreon||'—'):'—'}</div></div>
+    </div>
+
+    <div class="modal-section-title">Indicadores</div>
+    <div class="mgrid">${metHtml}</div>
+
+    <div class="modal-section-title">Tendencia</div>
+    <div class="chart-wrap"><canvas id="detailChartCanvas"></canvas></div>
+
+    <div class="modal-section-title">Diagnóstico</div>
+    ${diagHtml}
+
+    <div class="modal-section-title">Historial reciente</div>
+    <div style="overflow-x:auto;">
+      <table class="rtable">
+        <thead><tr><th>Fecha</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead>
+        <tbody>${histRows}</tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+  setTimeout(() => drawDetailChart(id), 40);
+}
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.remove('open');
+  if (detailChart){ detailChart.destroy(); detailChart = null; }
+}
+
+function drawDetailChart(id){
+  const d = readingsData.get(id);
+  const comp = compsRegistry.get(id) || {};
+  if (detailChart){ detailChart.destroy(); detailChart = null; }
+  if (!d || d.dates.length < 2) return;
+  const canvas = document.getElementById('detailChartCanvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const tipo = comp.tipoComp || 'tornillo';
+  const series = {
+    tornillo: [
+      {key:'T_desc',      label:'T. descarga (°C)',    color:'#f97316'},
+      {key:'T_inyeccion', label:'T. inyección (°C)',   color:'#a78bfa'},
+      {key:'P_aceite',    label:'P. aceite (bar)',     color:'#10c98a'}
+    ],
+    anillo: [
+      {key:'Conc_H2SO4',  label:'Conc. H₂SO₄ (%)',     color:'#ef4444'},
+      {key:'T_acido_in',  label:'T. ácido in (°C)',    color:'#06b6d4'},
+      {key:'T_desc',      label:'T. descarga cloro (°C)', color:'#f97316'}
+    ],
+    reciprocante: [
+      {key:'T_desc',      label:'T. descarga (°C)',    color:'#f97316'},
+      {key:'T_aceite',    label:'T. aceite (°C)',      color:'#f0b429'},
+      {key:'P_desc',      label:'P. descarga (bar)',   color:'#8b5cf6'}
+    ]
+  }[tipo] || [];
+  const labels = d.dates.map(fmtDate);
+  const datasets = series
+    .map(s => ({
+      label: s.label,
+      data: (d.params[s.key] || []).map(v => isN(v) ? v : null),
+      borderColor: s.color, backgroundColor: 'transparent',
+      tension: .3, spanGaps: true, pointRadius: 3
+    }))
+    .filter(ds => ds.data.some(v => v !== null));
+  if (!datasets.length) return;
+  detailChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: {mode:'index', intersect:false},
+      plugins: { legend: {labels: {color:'#cdd9f0', font:{size:10}}} },
+      scales: {
+        x: { ticks: {color:'#5e7a9a', maxTicksLimit:8}, grid: {color:'#1e2d45'} },
+        y: { ticks: {color:'#5e7a9a'}, grid: {color:'#1e2d45'} }
+      }
+    }
+  });
+}
+function borrarLectura(id, i){
+  const d = readingsData.get(id);
+  if (!d || i < 0 || i >= d.dates.length) return;
+  if (!confirm(`¿Eliminar la medición del ${fmtDate(d.dates[i])}? Se borra también de la nube.`)) return;
+  const k = keyOfDate(d.dates[i]);
+  const tag = getCompName(id);
+  _pend.push({t:'med', tag, fecha: k + 'Z'});
+  _hashes.delete('m:' + tag + '|' + k + 'Z');
+  d.dates.splice(i, 1);
+  d.obs.splice(i, 1);
+  for (const pk of Object.keys(d.params)) d.params[pk].splice(i, 1);
+  if (!d.dates.length) readingsData.delete(id);
+  saveState();
+  renderAll();
+  if (readingsData.has(id)) openDetail(id);
+  else closeDetail();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  10. EDITAR / ELIMINAR / PUBLICAR AL HUB
+// ═══════════════════════════════════════════════════════════
+function createComp(){
+  const name = document.getElementById('newCompTag').value.trim();
+  if (!name){ alert('Ingresá un TAG.'); return; }
+  if (yaExisteComp(name)){ alert('Ya existe un compresor con ese TAG.'); return; }
+  const tipoComp = document.getElementById('newCompTipo').value;
+  const modelo = document.getElementById('newCompModelo').value.trim();
+  const ubicacion = document.getElementById('newCompUbic').value.trim();
+  const id = genId();
+  compsRegistry.set(id, fichaDefault(name, {tipoComp, modelo, ubicacion}));
+  publicarEquipoEnHub(name, tipoComp);
+  document.getElementById('newCompTag').value = '';
+  document.getElementById('newCompModelo').value = '';
+  document.getElementById('newCompUbic').value = '';
+  saveState();
+  renderAll();
+}
+function deleteComp(id){
+  if (!confirm('¿Eliminar este compresor y todas sus mediciones? Se borran también de la nube.')) return;
+  const tag = getCompName(id);
+  _pend.push({t:'comp', tag});
+  for (const k of [..._hashes.keys()]) if (k === 'f:' + tag || k.startsWith('m:' + tag + '|')) _hashes.delete(k);
+  compsRegistry.delete(id);
+  readingsData.delete(id);
+  saveState();
+  renderAll();
+}
+// ═══════════════════════════════════════════════════════════
+//  10b. EDITAR COMPRESOR — modal real
+// ═══════════════════════════════════════════════════════════
+let _editCompId = null;
+
+function editComp(id){
+  const c = compsRegistry.get(id);
+  if (!c) return;
+  _editCompId = id;
+
+  // Rellenar los selects una sola vez por sesión
+  const tipoSel = document.getElementById('editTipo');
+  if (!tipoSel.dataset.filled){
+    tipoSel.innerHTML = TIPOS_COMP.map(t => `<option value="${t.key}">${t.icon} ${t.label}</option>`).join('');
+    tipoSel.dataset.filled = '1';
+  }
+  const refSel = document.getElementById('editRefrigerante');
+  if (!refSel.dataset.filled){
+    refSel.innerHTML = REFRIGERANTES_FREON.map(r => `<option value="${r}">${r}</option>`).join('');
+    refSel.dataset.filled = '1';
+  }
+
+  document.getElementById('editTitle').textContent = `Editar ${c.name}`;
+  document.getElementById('editTag').value = c.name || '';
+  tipoSel.value = c.tipoComp || 'tornillo';
+  document.getElementById('editModelo').value = c.modelo || '';
+  document.getElementById('editUbicacion').value = c.ubicacion || '';
+  document.getElementById('editFla').value = c.flaMotor || '';
+  refSel.value = REFRIGERANTES_FREON.includes(c.refrigeranteFreon) ? c.refrigeranteFreon : 'R-22';
+  document.getElementById('editPNominal').value = c.pNominalBar || '';
+
+  onEditTipoChange();
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+// Los campos condicionales cambian según el tipo elegido en el combo
+function onEditTipoChange(){
+  const tipo = document.getElementById('editTipo').value;
+  document.getElementById('editRefrigeranteWrap').classList.toggle('hidden', tipo !== 'reciprocante');
+  document.getElementById('editPNominalWrap').classList.toggle('hidden', tipo !== 'tornillo');
+}
+
+function closeEditComp(){
+  document.getElementById('editOverlay').classList.remove('open');
+  _editCompId = null;
+}
+
+function saveEditComp(){
+  const id = _editCompId;
+  const c = compsRegistry.get(id);
+  if (!c) return;
+
+  const tipoNuevo = document.getElementById('editTipo').value;
+  const tipoCambiado = tipoNuevo !== c.tipoComp;
+  const nLecturas = readingsData.get(id)?.dates.length || 0;
+
+  // Cambiar el tipo con mediciones cargadas: avisar antes de recalcular con otro motor
+  if (tipoCambiado && nLecturas > 0){
+    const ok = confirm(
+      `⚠️ Vas a cambiar el tipo de "${c.name}"\n\n` +
+      `De: ${TIPO_LBL[c.tipoComp]}\n` +
+      `A:  ${TIPO_LBL[tipoNuevo]}\n\n` +
+      `Este compresor ya tiene ${nLecturas} medición(es) guardadas con los parámetros del tipo anterior.\n\n` +
+      `El diagnóstico se va a recalcular con el nuevo motor, y los indicadores que no existan en el nuevo tipo van a figurar como "sin datos" (los datos crudos se conservan).\n\n` +
+      `¿Confirmás el cambio?`
+    );
+    if (!ok) return;
+  }
+
+  c.tipoComp = tipoNuevo;
+  c.modelo = document.getElementById('editModelo').value.trim();
+  c.ubicacion = document.getElementById('editUbicacion').value.trim();
+
+  const fla = parseFloat(document.getElementById('editFla').value);
+  c.flaMotor = isNaN(fla) ? 0 : fla;
+
+  if (tipoNuevo === 'reciprocante'){
+    c.refrigeranteFreon = document.getElementById('editRefrigerante').value;
+  }
+  if (tipoNuevo === 'tornillo'){
+    const pn = parseFloat(document.getElementById('editPNominal').value);
+    c.pNominalBar = isNaN(pn) ? 0 : pn;
+  }
+
+  saveState();
+  closeEditComp();
+  renderAll();
+
+  const status = document.getElementById('loadStatus');
+  if (status){
+    status.className = 'load-status ok';
+    status.textContent = `✅ Ficha actualizada: ${c.name}`;
+  }
+}
+async function publicarEquipoEnHub(name, tipoComp){
+  if(typeof SatSync === 'undefined' || !SatSync.init()) return;
+  try{
+    await SatSync.buscarOCrearEquipo(name, {tipo: TIPO_LBL[tipoComp] || 'Compresor'});
+    equiposHub.set(name, {tag:name, nombre:name, tipo:tipoComp});
+    actualizarDatalistHub();
+  }catch(err){
+    console.warn('[SatSync] no se pudo publicar el equipo en el hub', err);
+  }
+}
+function mapNivelASeveridad(nivel){
+  if(nivel === 'critical') return 'critico';
+  if(nivel === 'warning' || nivel === 'elevated') return 'atencion';
+  return 'ok';
+}
+async function publicarAnalisisComp(id){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return false;
+  const diag = diagnoseComp(id);
+  if (!diag || diag.overall < 0) return null;
+  const tag = getCompName(id);
+  if (!tag) return null;
+  const nivel = STATUS[diag.overall];
+  const health = healthScoreFromLevel(diag.overall, diag.subs);
+  const msgs = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+  const resumen = msgs.length ? msgs[0].title.replace(/^[^\w]+/, '') : 'Sin hallazgos relevantes';
+  try {
+    await SatSync.guardarAnalisis({
+      modulo: 'compresor_pro',
+      equipo_tag: tag,
+      severidad: mapNivelASeveridad(nivel),
+      resumen,
+      datos: { compresor:tag, tipo:diag.tipo, health, nivel, fecha: diag.date, hallazgos: msgs }
+    });
+    return true;
+  } catch (err) {
+    console.warn('[SatSync] no se pudo publicar análisis de', tag, err);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  11. CONFIG / UMBRALES
+// ═══════════════════════════════════════════════════════════
+function saveThresholdsFromUI(){
+  for (const tipo of Object.keys(THRESHOLD_META)){
+    for (const key of Object.keys(THRESHOLD_META[tipo])){
+      for (let i=0;i<3;i++){
+        const input = document.getElementById(`th_${tipo}_${key}_${i}`);
+        if (input){ const v = parseFloat(input.value); if (!isNaN(v)) thresholds[tipo][key][i] = v; }
+      }
+    }
+  }
+  _cfgSucia = true;
+  saveState(); renderAll();
+  alert('Umbrales guardados.');
+}
+function resetThresholds(){
+  if (!confirm('¿Restaurar los umbrales por defecto?')) return;
+  thresholds = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
+  _cfgSucia = true;
+  saveState(); renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12. INFORME OFFLINE
+// ═══════════════════════════════════════════════════════════
+function generateOfflineReport(){
+  if (!readingsData.size){ alert('Sin datos para generar el informe.'); return; }
+  const dist = statusDistribution();
+  const fh = fleetHealth();
+  const totalComps = compsRegistry.size;
+
+  let html = '';
+  html += `<div class="fleet-box">
+    <div class="fleet-box-title">🏭 Resumen de flota</div>
+    <div class="mgrid">
+      <div class="mstat"><div class="mstat-lbl">Compresores</div><div class="mstat-val">${totalComps}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Con mediciones</div><div class="mstat-val">${readingsData.size}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Salud de flota</div><div class="mstat-val">${fh===null?'—':fh+'%'}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Críticos</div><div class="mstat-val" style="color:var(--critical);">${dist.critical}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Alerta</div><div class="mstat-val" style="color:var(--warning);">${dist.warning}</div></div>
+      <div class="mstat"><div class="mstat-lbl">Elevado</div><div class="mstat-val" style="color:var(--elevated);">${dist.elevated}</div></div>
+    </div>
+  </div>`;
+
+  const actionItems = [];
+  for (const id of readingsData.keys()){
+    const diag = diagnoseComp(id);
+    if (!diag || diag.overall < 1) continue;
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag).filter(m=>m.sev!=='good');
+    const accion = msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Revisar parámetros fuera de rango';
+    const plazo = diag.overall===3?'Inmediato':diag.overall===2?'7 días':'30 días';
+    actionItems.push({
+      prio: diag.overall===3?'critical':diag.overall===2?'warning':'elevated',
+      comp: getCompName(id), tipo: diag.tipo,
+      accion, plazo, health, nivel: STATUS[diag.overall]
+    });
+  }
+  const ord = {critical:0,warning:1,elevated:2};
+  actionItems.sort((a,b)=> ord[a.prio] - ord[b.prio]);
+
+  if (actionItems.length){
+    html += `<hr class="section-divider" data-label="Plan de Acción Priorizado">`;
+    html += `<div style="overflow-x:auto;"><table class="plan-table">
+      <thead><tr><th>Prioridad</th><th>Compresor</th><th>Tipo</th><th>Hallazgo</th><th>Plazo</th><th>Salud</th></tr></thead>
+      <tbody>${actionItems.map(a=>`
+        <tr>
+          <td data-label="Prioridad"><span class="prio-badge prio-${a.prio}">${a.prio.toUpperCase()}</span></td>
+          <td data-label="Compresor" style="font-weight:700;">${escHtml(a.comp)}</td>
+          <td data-label="Tipo" style="font-size:.8rem;color:var(--muted);">${escHtml(TIPO_LBL[a.tipo]||'')}</td>
+          <td data-label="Hallazgo" style="font-size:.82rem;">${escHtml(a.accion)}</td>
+          <td data-label="Plazo" style="font-weight:700;color:${STATUS_COLORS[STATUS.indexOf(a.nivel)]};">${a.plazo}</td>
+          <td data-label="Salud" style="font-family:'Share Tech Mono';">${a.health}%</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  html += `<hr class="section-divider" data-label="Conclusiones y Próximos Pasos">`;
+  let conc = `El análisis de <strong>${readingsData.size} compresor(es)</strong> sobre <strong>${totalComps} registrado(s)</strong> arroja una salud de flota de <strong>${fh===null?'—':fh+'%'}</strong>. `;
+  if (dist.critical > 0)      conc += `Se requieren <strong>intervenciones inmediatas</strong> en ${dist.critical} equipo(s) crítico(s). `;
+  else if (dist.warning > 0)  conc += `Se recomienda programar ${dist.warning} intervención(es) dentro de los próximos 7 días. `;
+  else if (dist.elevated > 0) conc += `Varios equipos muestran deficiencias incipientes; mantener el intervalo de monitoreo actual. `;
+  else                        conc += `La flota no presenta alarmas activas. Continuar con el plan establecido. `;
+  const proxima = dist.critical>0?'dentro de 7 días':dist.warning>0?'dentro de 14 días':dist.elevated>0?'dentro de 30 días':'según plan habitual';
+  conc += `Próxima ronda recomendada: <strong>${proxima}</strong>.`;
+
+  html += `<div class="fleet-box" style="margin-bottom:0;">
+    <div class="fleet-box-title">📝 Conclusiones</div>
+    <div class="fleet-text">${conc}</div>
+  </div>
+  <div class="note-box">
+    ⚠️ Informe generado por el motor de diagnóstico offline de <strong>MANTEC – Compresor Pro</strong>, con umbrales específicos por tipo (tornillo inyectado, anillo líquido con H₂SO₄, reciprocante de freón). Los valores por defecto siguen el manual del fabricante cuando está disponible (Kirloskar serie KCX) y criterios generales de la industria cuando no. Ajustá los umbrales a tu política interna antes de usar el informe para decisiones críticas.
+  </div>`;
+
+  document.getElementById('reportSections').innerHTML = html;
+}
+function copyReport(){
+  const el = document.getElementById('reportSections');
+  const text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    alert('Informe copiado al portapapeles.');
+  }).catch(()=>alert('No se pudo copiar. Seleccioná el texto manualmente.'));
+}
+async function guardarEnLaNube(){
+  if(!readingsData.size){ alert('Generá el informe primero.'); return; }
+  const statusEl = document.getElementById('nubeStatus');
+  const btn = document.getElementById('btnGuardarNube');
+  if(typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.';
+    statusEl.style.color = 'var(--warning, #f0b429)';
+    return;
+  }
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const id of readingsData.keys()){
+    const r = await publicarAnalisisComp(id);
+    if (r === true) ok++; else if (r === false) fail++;
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning, #f0b429)' : 'var(--good, #10c98a)';
+  statusEl.textContent = fail
+    ? `☁️ Guardados ${ok} compresor(es) (${fail} con error — ver consola).`
+    : `☁️ ${ok} compresor(es) guardados en la nube correctamente.`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12b. IMPORTAR / EXPORTAR / BORRAR
+// ═══════════════════════════════════════════════════════════
+function handleFileUpload(){ alert('El import Excel sigue pendiente — usá "＋ Medición" o el hub para cargar datos.'); }
+function downloadTemplate(){ alert('La plantilla Excel sigue pendiente.'); }
+function exportCSV(){
+  if (!readingsData.size){ alert('Sin datos para exportar.'); return; }
+  const claves = new Set();
+  for (const d of readingsData.values()) Object.keys(d.params).forEach(k => claves.add(k));
+  const clavesArr = [...claves].sort();
+  const q = s => `"${String(s||'').replace(/"/g,'""')}"`;
+  const headers = ['TAG','Tipo','Modelo','Fecha','Estado', ...clavesArr, 'Observaciones'];
+  const rows = [];
+  for (const [id, d] of readingsData.entries()){
+    const c = compsRegistry.get(id) || {};
+    for (let i = 0; i < d.dates.length; i++){
+      const ev = evalReading(id, d.params, i);
+      const estado = ev.overall >= 0 ? STATUS_LABELS[ev.overall] : 'Sin datos';
+      const row = [q(c.name), q(c.tipoComp), q(c.modelo), keyOfDate(d.dates[i]), estado];
+      for (const k of clavesArr){
+        const v = d.params[k]?.[i];
+        row.push(typeof v === 'string' ? q(v) : (isN(v) ? v : ''));
+      }
+      row.push(q(d.obs && d.obs[i]));
+      rows.push(row.join(','));
+    }
+  }
+  const blob = new Blob(['\ufeff' + [headers.join(','), ...rows].join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `compresor_pro_historial_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function clearAllData(){
+  if (!confirm('¿Borrar TODOS los compresores y mediciones? Esta acción no se puede deshacer.')) return;
+  for (const c of compsRegistry.values()) _pend.push({t:'comp', tag: c.name});
+  compsRegistry.clear();
+  readingsData.clear();
+  _hashes.clear();        // evita que un TAG reusado reviva la ficha vieja
+  _equipoIds.clear();     // idem
+  saveState();
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12c. INFORME IA — FLUJO MANUAL
+// ═══════════════════════════════════════════════════════════
+let _lastIAReport = null;
+let _vistaIA = 'tecnica';
+
+// Datos del diagnóstico con nombres planos y explícitos para la IA
+// (no las claves internas del motor: tDesc, pAceRel, etc.)
+function metricasCardParaIA(d){
+  const out = {};
+  const put = (k, v, dec) => { if (isN(v)) out[k] = +v.toFixed(dec); };
+  if (d.tipo === 'tornillo'){
+    put('temperatura_descarga_c', d.tDesc, 1);
+    put('temperatura_inyeccion_aceite_c', d.tIny, 1);
+    put('presion_aceite_rel_bar', d.pAceRel, 2);
+    put('deltaP_separador_bar', d.dPsep, 2);
+    put('deltaP_filtro_aire_bar', d.dPfilAire, 3);
+    put('deltaP_filtro_aceite_bar', d.dPfilAce, 2);
+  } else if (d.tipo === 'anillo'){
+    put('concentracion_h2so4_pct', d.conc, 2);
+    put('temperatura_acido_entrada_c', d.tAcIn, 1);
+    put('temperatura_acido_salida_c', d.tAcOut, 1);
+    put('deltaT_acido_c', d.dT, 1);
+    put('temperatura_descarga_cloro_c', d.tDesc, 1);
+    put('ratio_compresion', d.ratio, 2);
+  } else if (d.tipo === 'reciprocante'){
+    put('temperatura_descarga_c', d.tDesc, 1);
+    put('temperatura_aceite_c', d.tAce, 1);
+    put('presion_aceite_rel_kgcm2', d.pAceRel, 2);
+    put('sobrecalentamiento_succion_c', d.sobrecal, 1);
+    put('presion_descarga_bar', d.pDesc, 2);
+    put('presion_succion_bar', d.pSucc, 2);
+    if (d.refr) out.refrigerante = d.refr;
+  }
+  put('carga_motor_pct', d.carga, 0);
+  put('dias_parado', d.diasParado, 0);
+  return out;
+}
+
+function buildAIPayload(){
+  const scope = document.querySelector('input[name="aiScope"]:checked').value;
+  const equipId = document.getElementById('aiEquipSelect').value;
+  const lang = document.querySelector('input[name="aiLang"]:checked').value;
+
+  let ids = [...readingsData.keys()];
+  if (scope === 'critical'){
+    ids = ids.filter(id => { const diag = diagnoseComp(id); return diag && diag.overall >= 2; });
+  } else if (scope === 'single' && equipId){
+    ids = ids.filter(id => id === equipId);
+  }
+
+  const compresores = [];
+  for (const id of ids){
+    const diag = diagnoseComp(id);
+    if (!diag || diag.overall < 0) continue;
+    const c = compsRegistry.get(id) || {};
+    const health = healthScoreFromLevel(diag.overall, diag.subs);
+    const msgs = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+    compresores.push({
+      compresor: getCompName(id),
+      tipo: diag.tipo,
+      tipo_label: TIPO_LBL[diag.tipo] || diag.tipo,
+      modelo: c.modelo || null,
+      ubicacion: c.ubicacion || null,
+      ficha: { fla_motor_a: c.flaMotor || null, refrigerante: c.tipoComp==='reciprocante' ? (c.refrigeranteFreon||'R-22') : null },
+      diagnostico: { nivel: STATUS[diag.overall], indice_salud: health, ...metricasCardParaIA(diag) },
+      hallazgos: msgs.map(m => ({ severidad: m.sev, titulo: m.title.replace(/^[^\w]+/, ''), detalle: m.action })),
+      ultima_medicion: fmtDate(diag.date)
+    });
+  }
+  if (!compresores.length) return null;
+
+  const langInstructions = {
+    es: 'Responde en español. Usa terminología técnica de mantenimiento industrial de compresores.',
+    en: 'Respond in English. Use industrial compressor predictive maintenance terminology.',
+    pt: 'Responda em português. Use terminologia técnica de manutenção de compressores industriais.'
+  };
+
+  const prompt = `Sos un experto en compresores industriales con tres tecnologías distintas en planta:
+tornillo inyectado en aceite (aire), anillo líquido para cloro (con H₂SO₄ como líquido
+de sellado), y reciprocante de freón (una etapa, refrigeración).
+${langInstructions[lang]}
+
+═══════════════════════════════════════════════════════════
+CÓMO LEER ESTE INFORME — MARCO TÉCNICO
+═══════════════════════════════════════════════════════════
+Cada compresor trae su diagnóstico YA CALCULADO por Compresor Pro. NO recalcules los
+números: interpretá, priorizá y redactá el informe.
+
+Cada entrada es UN compresor. El campo "tipo" indica cuál de las tres tecnologías
+es, y los parámetros del campo "diagnostico" dependen de ese tipo.
+
+Marco de referencia aplicado por Compresor Pro:
+- Tornillo: buenas prácticas de mantenimiento de compresores de aire inyectados en
+  aceite. T descarga ideal 70–95 °C; por encima de 100 °C el aceite se degrada rápido.
+- Anillo líquido: química del cloro-álcali. H₂SO₄ entre 95 y 98 % es lo que sella y
+  seca el cloro; por debajo de 93 % el cloro queda húmedo y se vuelve corrosivo.
+- Reciprocante: manual Kirloskar serie KCX. T descarga máx 140 °C, T aceite ref 70 °C,
+  P aceite 1.5–3 kg/cm² sobre succión, P descarga máx 21 bar para R-22.
+
+═══════════════════════════════════════════════════════════
+REGLAS DE INTERPRETACIÓN POR TIPO
+═══════════════════════════════════════════════════════════
+
+1) TORNILLO (tipo = "tornillo", ej. DENAIR):
+   · temperatura_descarga_c: indicador #1. >100 °C degrada el aceite (barnices, lodos).
+   · temperatura_inyeccion_aceite_c: si entra caliente, la descarga se dispara.
+   · presion_aceite_rel_bar: debe superar en ≥1.5 bar la presión de descarga. Menos = bomba desgastada, filtro saturado o nivel bajo.
+   · deltaP_separador_bar: >1.2 bar = elemento saturado, aceite pasando al circuito de aire.
+   · deltaP_filtro_aire_bar / deltaP_filtro_aceite_bar: restricciones de admisión y lubricación.
+   · carga_motor_pct: en esta planta los tornillos trabajan uno a la vez al 50–100 %. Alertar solo por encima de 110 % (sobrecarga real).
+   · dias_parado: umbral [45, 60, 90] porque rotan quincenalmente.
+
+2) ANILLO LÍQUIDO (tipo = "anillo", ej. DEVI con H₂SO₄):
+   · concentracion_h2so4_pct: PARÁMETRO CRÍTICO. <93 % = cloro húmedo → HCl → corrosión aguas abajo. No lo trates como "menor"; es el más importante del tipo.
+   · temperatura_acido_entrada_c: ideal <30 °C. Ácido caliente no absorbe humedad.
+   · deltaT_acido_c: 10–20 °C normal. Bajo = caudal bajo o intercambiador sucio.
+   · temperatura_descarga_cloro_c: <80 °C normal. Cloro húmedo se vuelve muy corrosivo por encima de 100 °C.
+   · ratio_compresion: 1.5–3 típico. Alto = obstrucción en descarga o succión baja.
+   · carga_motor_pct, dias_parado: idem tornillo.
+
+3) RECIPROCANTE (tipo = "reciprocante", ej. Kirloskar KCX):
+   · temperatura_descarga_c: límite absoluto 140 °C (manual KCX). >125 °C carboniza aceite en válvulas.
+   · temperatura_aceite_c: 70 °C referencia. Alto = desgaste de cojinetes.
+   · presion_aceite_rel_kgcm2: 1.5–3 sobre succión. <1.5 = NO OPERAR.
+   · sobrecalentamiento_succion_c: 5–15 normal. Alto = evaporador subalimentado, dispara T descarga.
+   · presion_descarga_bar: máx 21 bar para R-22.
+   · carga_motor_pct, dias_parado: idem.
+
+═══════════════════════════════════════════════════════════
+CUANDO GENERES HALLAZGOS
+═══════════════════════════════════════════════════════════
+- Citá valores concretos ("T descarga 118 °C sobre el límite de 110 °C").
+- Priorizá por riesgo de daño a la máquina o al proceso.
+- Para anillo líquido: si la concentración de H₂SO₄ está baja, esa es SIEMPRE la prioridad #1 — el daño puede alcanzar cañerías, válvulas y equipos aguas abajo, no solo el compresor.
+- Para tornillo: distinguí "aceite degradado" (T descarga alta sostenida) de "sobrecarga" (carga motor alta con T normal).
+- Para reciprocante: distinguí "válvula pasando" (T descarga alta con P descarga normal) de "condensador sucio" (T y P descarga ambas altas).
+- NUNCA sugieras acciones incompatibles con el refrigerante del equipo (no mezclar aceites POE/mineral, no cambiar de refrigerante).
+- Si un indicador no viene en el diagnóstico, aclará que falta instrumentación en vez de inventar diagnóstico.
+
+DATOS DE COMPRESORES ANALIZADOS (${compresores.length}):
+${JSON.stringify(compresores, null, 2)}
+
+UMBRALES CONFIGURADOS EN COMPRESOR PRO:
+${JSON.stringify(thresholds, null, 2)}
+
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
+(sin texto antes ni después, sin backticks, sin claves inventadas):
+{
+  "resumen_ejecutivo": "string — 2-4 oraciones sobre el estado global y riesgos principales",
+  "fecha_informe": "string",
+  "total_compresores_analizados": number,
+  "distribucion_estado": { "normal": number, "elevado": number, "alerta": number, "critico": number },
+  "indice_salud_flota": number,
+  "compresores": [
+    {
+      "compresor": "string",
+      "tipo": "string",
+      "estado": "string",
+      "indice_salud": number,
+      "prioridad": number,
+      "hallazgos": ["string — hallazgo concreto con valores"],
+      "causa_probable": "string — causa raíz con fundamento técnico",
+      "recomendaciones": ["string — acción concreta"],
+      "plazo_accion": "INMEDIATO|7 DÍAS|30 DÍAS|RUTINA",
+      "riesgo_falla": "ALTO|MEDIO|BAJO"
+    }
+  ],
+  "plan_de_accion": [
+    { "prioridad": number, "compresor": "string", "accion": "string", "plazo": "string",
+      "responsable": "Mantenimiento Predictivo|Mantenimiento Correctivo|Operaciones" }
+  ],
+  "conclusiones": "string — párrafo estratégico",
+  "proxima_inspeccion": "string"
+}`;
+
+  return { prompt, compresores };
+}
+
+function copiarPromptManual(){
+  const payload = buildAIPayload();
+  const st = document.getElementById('manualPromptStatus');
+  if (!payload){
+    st.style.color = 'var(--critical)';
+    st.textContent = '⚠️ No hay compresores con mediciones en el alcance seleccionado.';
+    return;
+  }
+  const box = document.getElementById('aiManualPromptBox');
+  box.value = payload.prompt;
+  box.style.display = 'block';
+  const finish = ok => {
+    st.style.color = ok ? 'var(--good)' : 'var(--warning)';
+    st.textContent = ok
+      ? `✅ Prompt copiado (${payload.compresores.length} compresor/es). Pegalo en tu IA web.`
+      : '⚠️ No se pudo copiar automáticamente — seleccioná el texto y copiá con Ctrl+C.';
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload.prompt).then(()=>finish(true)).catch(()=>{ box.select(); finish(false); });
+  } else { box.select(); finish(false); }
+}
+
+function procesarRespuestaManual(){
+  const raw = document.getElementById('aiManualResponse').value.trim();
+  if (!raw){ alert('Pegá la respuesta de la IA primero.'); return; }
+  try{
+    let cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) cleaned = m[0];
+    const report = JSON.parse(cleaned);
+    _lastIAReport = report;
+    document.getElementById('aiEmptyState').style.display = 'none';
+    mostrarReporteIA(report);
+  }catch(err){
+    alert('No se pudo interpretar la respuesta como JSON: ' + err.message +
+      '\n\nVerificá que hayas pegado la respuesta completa, sin texto extra antes o después del bloque { ... }.');
+  }
+}
+
+function setVistaIA(vista){
+  _vistaIA = vista;
+  if (_lastIAReport) mostrarReporteIA(_lastIAReport);
+}
+function mostrarReporteIA(r){
+  const bT = document.getElementById('btnVistaTecnica');
+  const bE = document.getElementById('btnVistaEjecutiva');
+  if (bT) bT.classList.toggle('active', _vistaIA === 'tecnica');
+  if (bE) bE.classList.toggle('active', _vistaIA === 'ejecutiva');
+  if (_vistaIA === 'ejecutiva') renderReporteEjecutivo(r);
+  else renderReporteTecnico(r);
+}
+
+function nivelDeEstadoIA(estado){
+  const e = (estado || '').toLowerCase();
+  return e.includes('crít') || e.includes('crit') ? 'critical'
+       : e.includes('alert') ? 'warning'
+       : e.includes('elev') ? 'elevated' : 'good';
+}
+function colorSalud(s){ return s < 40 ? 'var(--critical)' : s < 70 ? 'var(--warning)' : s < 85 ? 'var(--elevated)' : 'var(--good)'; }
+
+function renderReporteTecnico(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  const salud = r.indice_salud_flota;
+  const saludTxt = (salud === undefined || salud === null) ? '—' : salud;
+  const dist = r.distribucion_estado || {};
+  const card = (icon, val, color, lbl) => `<div class="ai-sum-card"><div class="ai-sum-card-icon">${icon}</div>
+      <div><div class="ai-sum-card-val" style="color:${color}">${val}</div><div class="ai-sum-card-lbl">${lbl}</div></div></div>`;
+  document.getElementById('aiSummaryCards').innerHTML =
+    card('🌀', r.total_compresores_analizados || (r.compresores||[]).length, 'var(--accent)', 'Compresores analizados') +
+    card('💪', saludTxt, colorSalud(salud||0), 'Salud flota (%)') +
+    card('🔴', dist.critico||0, 'var(--critical)', 'Críticos') +
+    card('🟠', dist.alerta||0, 'var(--warning)', 'En alerta') +
+    card('🟡', dist.elevado||0, 'var(--elevated)', 'Elevados') +
+    card('🟢', dist.normal||0, 'var(--good)', 'Normales');
+
+  let html = '';
+  if (r.resumen_ejecutivo){
+    html += `<div class="ai-fleet-box">
+      <div class="ai-fleet-box-title">📋 Resumen Ejecutivo — ${escHtml(r.fecha_informe||'')}</div>
+      <div class="ai-fleet-text">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  const comps = (r.compresores || []).slice().sort((a,b) => (a.prioridad||99)-(b.prioridad||99));
+  if (comps.length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:20px 0 12px;">🔍 Análisis por Compresor</div>`;
+    comps.forEach(c => {
+      const lvl = nivelDeEstadoIA(c.estado);
+      const prioClass = `ai-prio-${Math.min(c.prioridad||4,4)}`;
+      const riesgoIcon = c.riesgo_falla === 'ALTO' ? '⛔' : c.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `<div class="ai-equip-card">
+        <div class="ai-equip-card-header">
+          <div>
+            <div class="ai-equip-name">${escHtml(c.compresor||'')} <span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--accent2);border:1px solid rgba(139,92,246,.25);padding:1px 7px;border-radius:4px;font-size:.66rem;">${escHtml(c.tipo||'')}</span></div>
+            <div class="ai-equip-meta">${riesgoIcon} Riesgo: ${escHtml(c.riesgo_falla||'—')} &nbsp;|&nbsp; Plazo: <strong>${escHtml(c.plazo_accion||'—')}</strong></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="mbadge badge-${lvl}">${escHtml(c.estado||'')}</span>
+            <span class="ai-prio-badge ${prioClass}">P${c.prioridad||'—'}</span>
+          </div>
+        </div>
+        <div class="ai-equip-card-body">
+          ${c.causa_probable ? `<div class="ai-finding ${lvl}"><strong>Causa probable:</strong> ${escHtml(c.causa_probable)}</div>` : ''}
+          ${(c.hallazgos||[]).length ? `<div class="ai-section-label">Hallazgos</div>
+            ${c.hallazgos.map(h => `<div class="ai-finding ${lvl}">${escHtml(typeof h==='string'?h:(h.titulo||'')+(h.detalle?' — '+h.detalle:''))}</div>`).join('')}` : ''}
+          ${(c.recomendaciones||[]).length ? `<div class="ai-section-label">Recomendaciones</div>
+            <ul class="ai-rec-list">${c.recomendaciones.map(rec=>`<li>${escHtml(rec)}</li>`).join('')}</ul>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  if ((r.plan_de_accion||[]).length){
+    html += `<div class="ai-scope-title" style="color:var(--accent2);font-size:.85rem;letter-spacing:2px;margin:24px 0 12px;">📅 Plan de Acción</div>
+    <div class="ai-equip-card"><div style="overflow-x:auto;padding:6px 0;">
+    <table class="ai-plan-table">
+      <thead><tr><th>#</th><th>Compresor</th><th>Acción</th><th>Plazo</th><th>Responsable</th></tr></thead>
+      <tbody>${r.plan_de_accion.map((p,i)=>`<tr>
+          <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+          <td style="font-weight:700;color:#fff;">${escHtml(p.compresor||p.equipo||'')}</td>
+          <td>${escHtml(p.accion||'')}</td>
+          <td style="white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          <td style="font-size:.8rem;color:var(--muted);">${escHtml(p.responsable||'')}</td>
+        </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  }
+  if (r.conclusiones || r.proxima_inspeccion){
+    html += `<div class="ai-fleet-box" style="border-color:rgba(16,201,138,.25);background:rgba(16,201,138,.05);">
+      <div class="ai-fleet-box-title" style="color:var(--good);">💡 Conclusiones y Próximos Pasos</div>
+      ${r.conclusiones ? `<div class="ai-fleet-text" style="margin-bottom:${r.proxima_inspeccion?'12px':'0'}">${escHtml(String(r.conclusiones))}</div>` : ''}
+      ${r.proxima_inspeccion ? `<div style="margin-top:8px;padding-top:10px;border-top:1px solid rgba(16,201,138,.2);font-size:.86rem;color:var(--good);">🗓 Próxima inspección: <strong>${escHtml(String(r.proxima_inspeccion))}</strong></div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function renderReporteEjecutivo(r){
+  document.getElementById('aiReportOutput').style.display = 'block';
+  document.getElementById('aiEmptyState').style.display = 'none';
+  const dist  = Object.assign({normal:0, elevado:0, alerta:0, critico:0}, r.distribucion_estado || {});
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_compresores_analizados || 0;
+  const salud = r.indice_salud_flota || 0;
+  const top = (r.compresores || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0, 6);
+  const planTop = (r.plan_de_accion || []).filter(p => (p.prioridad||99) <= 2).slice(0, 5);
+  const kpi = (val, color, lbl) => `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+      <div style="font-size:2rem;font-weight:800;font-family:'Share Tech Mono';color:${color};line-height:1;">${val}</div>
+      <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">${lbl}</div></div>`;
+  const nivelColor = {critical:'var(--critical)',warning:'var(--warning)',elevated:'var(--elevated)',good:'var(--good)'};
+
+  let html = `
+  <div style="background:linear-gradient(135deg,#0d1117,#1a1030);border:1px solid var(--border2);border-radius:14px;padding:26px 30px;margin-bottom:20px;">
+    <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Informe Ejecutivo · Compresor Pro</div>
+    <div style="font-size:1.6rem;font-weight:800;color:#fff;margin-top:6px;">Estado de la flota de compresores</div>
+    <div style="font-size:.86rem;color:var(--muted);margin-top:4px;">${escHtml(r.fecha_informe||'')} · ${total} compresor(es) analizados</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:18px;">
+    ${kpi(salud+'%', colorSalud(salud), 'Salud flota')}${kpi(dist.critico,'var(--critical)','Críticos')}${kpi(dist.alerta,'var(--warning)','En alerta')}${kpi(dist.elevado,'var(--elevated)','Elevados')}${kpi(dist.normal,'var(--good)','Normales')}
+  </div>`;
+  if (r.resumen_ejecutivo){
+    html += `<div style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:10px;">Resumen ejecutivo</div>
+      <div style="font-size:1rem;color:var(--text);line-height:1.7;">${escHtml(String(r.resumen_ejecutivo))}</div>
+    </div>`;
+  }
+  if (top.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Top ${top.length} compresores a atender</div><div style="display:grid;gap:10px;margin-bottom:22px;">`;
+    for (const c of top){
+      const nivel = nivelDeEstadoIA(c.estado), nc = nivelColor[nivel];
+      const ic = c.riesgo_falla === 'ALTO' ? '⛔' : c.riesgo_falla === 'MEDIO' ? '⚠️' : '✅';
+      html += `<div style="background:var(--card);border:1px solid var(--border);border-left:4px solid ${nc};border-radius:10px;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:#fff;">${escHtml(c.compresor||'')} <span style="font-size:.7rem;color:var(--muted);">${escHtml(c.tipo||'')}</span></div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">${ic} Riesgo ${escHtml(c.riesgo_falla||'—')} · Plazo: <strong style="color:${nc};">${escHtml(c.plazo_accion||'—')}</strong></div>
+          </div>
+          <span class="mbadge badge-${nivel}">${escHtml(c.estado||'')}</span>
+        </div>
+        ${c.causa_probable ? `<div style="font-size:.85rem;color:var(--text);margin-top:8px;line-height:1.5;">${escHtml(c.causa_probable)}</div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  if (planTop.length){
+    html += `<div style="font-size:.75rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin:22px 0 12px;">Plan de acción inmediato</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <table class="ai-plan-table" style="margin:0;">
+        <thead><tr><th style="width:50px;">#</th><th>Compresor</th><th>Acción</th><th style="width:100px;">Plazo</th></tr></thead>
+        <tbody>${planTop.map((p,i)=>`<tr>
+            <td><span class="ai-prio-badge ai-prio-${Math.min(p.prioridad||4,4)}">P${p.prioridad||i+1}</span></td>
+            <td style="font-weight:700;color:#fff;">${escHtml(p.compresor||p.equipo||'')}</td>
+            <td style="font-size:.88rem;">${escHtml(p.accion||'')}</td>
+            <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+  if (r.proxima_inspeccion || r.conclusiones){
+    html += `<div style="background:rgba(16,201,138,.06);border:1px solid rgba(16,201,138,.2);border-left:4px solid var(--good);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:22px;">
+      <div style="font-size:.68rem;color:var(--good);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;margin-bottom:8px;">Próximo paso</div>
+      ${r.proxima_inspeccion ? `<div style="font-size:1rem;color:var(--text);line-height:1.6;margin-bottom:${r.conclusiones?'10px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="font-size:.88rem;color:var(--muted);line-height:1.6;">${escHtml(String(r.conclusiones))}</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('aiReportSections').innerHTML = html;
+  document.getElementById('aiSummaryCards').innerHTML = '';
+  document.getElementById('aiJsonViewer').textContent = JSON.stringify(r, null, 2);
+}
+
+function toggleJsonView(){
+  const pre = document.getElementById('aiJsonViewer');
+  pre.style.display = pre.style.display === 'none' ? 'block' : 'none';
+}
+function downloadJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const blob = new Blob([JSON.stringify(_lastIAReport, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `compresor_pro_informe_ia_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function copyJSON(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  navigator.clipboard.writeText(JSON.stringify(_lastIAReport, null, 2))
+    .then(()=>alert('JSON copiado al portapapeles ✅'))
+    .catch(()=>alert('No se pudo copiar.'));
+}
+function mapEstadoASeveridadIA(estado){
+  const n = nivelDeEstadoIA(estado);
+  return n === 'critical' ? 'critico' : (n === 'warning' || n === 'elevated') ? 'atencion' : 'ok';
+}
+async function guardarIAEnLaNube(){
+  if (!_lastIAReport){ alert('Procesá un informe primero.'); return; }
+  const statusEl = document.getElementById('iaNubeStatus');
+  const btn = document.getElementById('btnGuardarNubeIA');
+  if (typeof SatSync === 'undefined' || !SatSync.init()){
+    statusEl.textContent = '⚠️ Sin conexión configurada. Abrí el hub (index.html) y conectá Supabase primero.';
+    statusEl.style.color = 'var(--warning)';
+    return;
+  }
+  const comps = _lastIAReport.compresores || [];
+  if (!comps.length){ statusEl.textContent = '⚠️ El informe no trae compresores individuales para guardar.'; return; }
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const c of comps){
+    const tag = c.compresor;
+    if (!tag){ fail++; continue; }
+    try{
+      await SatSync.guardarAnalisis({
+        modulo: 'compresor_pro_informe_ia',
+        equipo_tag: tag,
+        severidad: mapEstadoASeveridadIA(c.estado),
+        resumen: c.causa_probable || (typeof (c.hallazgos||[])[0] === 'string' ? c.hallazgos[0] : '') || c.estado || '',
+        datos: c
+      });
+      ok++;
+    }catch(err){ console.error('[SatSync] error guardando', tag, err); fail++; }
+  }
+  btn.disabled = false;
+  statusEl.style.color = fail ? 'var(--warning)' : 'var(--good)';
+  statusEl.textContent = fail
+    ? `☁️ Guardados ${ok} de ${comps.length} (${fail} con error — ver consola).`
+    : `☁️ ${ok} compresor(es) guardados en el informe IA.`;
+}
+
+function imprimirInformeEjecutivo(){
+  const r = _lastIAReport;
+  if (!r){ alert('Procesá un informe primero.'); return; }
+  const dist = Object.assign({normal:0, elevado:0, alerta:0, critico:0}, r.distribucion_estado || {});
+  const salud = r.indice_salud_flota || 0;
+  const total = Object.values(dist).reduce((a,b)=>a+b,0) || r.total_compresores_analizados || 0;
+  const saludColorHex = salud < 40 ? '#dc2626' : salud < 70 ? '#ea580c' : salud < 85 ? '#d97706' : '#16a34a';
+  const hexNivel = {critical:'#dc2626',warning:'#ea580c',elevated:'#d97706',good:'#16a34a'};
+  const top = (r.compresores || []).slice().sort((a,b)=>(a.prioridad||99)-(b.prioridad||99)).slice(0,6);
+  const planTop = (r.plan_de_accion||[]).filter(p=>(p.prioridad||99)<=2).slice(0,5);
+  const fecha = new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Informe Ejecutivo — Compresor Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;font-size:12px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{max-width:840px;margin:0 auto;padding:32px 40px;}
+  .hdr{background:linear-gradient(135deg,#2e1065,#4c1d95);color:#fff;padding:26px 32px;border-radius:12px;margin-bottom:22px;}
+  .hdr-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#ddd6fe;font-weight:700;}
+  .hdr-title{font-size:26px;font-weight:800;margin-top:6px;}
+  .hdr-meta{font-size:11px;color:#ddd6fe;margin-top:6px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+  .kpi{padding:14px 8px;border-radius:10px;text-align:center;background:#f8fafc;border:1px solid #e5e7eb;}
+  .kpi-n{font-size:26px;font-weight:800;font-family:'Courier New',monospace;line-height:1;}
+  .kpi-l{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:6px;font-weight:700;}
+  .sec-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#6d28d9;font-weight:800;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+  .box{padding:16px 20px;border-radius:10px;margin-bottom:14px;border-left:4px solid #8b5cf6;background:#f5f3ff;}
+  .box.good{border-left-color:#16a34a;background:#f0fdf4;}
+  .eq{padding:12px 16px;border-radius:8px;background:#f9fafb;border:1px solid #e5e7eb;border-left:4px solid #dc2626;margin-bottom:8px;}
+  .eq-name{font-weight:800;}
+  .eq-meta{font-size:10px;color:#6b7280;margin-top:3px;}
+  .eq-cause{font-size:11.5px;color:#374151;margin-top:6px;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;border-bottom:1px solid #e5e7eb;}
+  td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;text-transform:uppercase;border:1px solid #e5e7eb;}
+  .prio{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;}
+  .footer{margin-top:32px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
+  @page{margin:14mm;size:A4;}
+</style></head><body><div class="page">
+  <div class="hdr"><div class="hdr-sub">Informe Ejecutivo · Compresor Pro</div>
+    <div class="hdr-title">Estado de la flota de compresores</div>
+    <div class="hdr-meta">${escHtml(fecha)} · ${total} compresor(es) analizados</div></div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-n" style="color:${saludColorHex};">${salud}%</div><div class="kpi-l">Salud flota</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#dc2626;">${dist.critico}</div><div class="kpi-l">Críticos</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#ea580c;">${dist.alerta}</div><div class="kpi-l">En alerta</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#d97706;">${dist.elevado}</div><div class="kpi-l">Elevados</div></div>
+    <div class="kpi"><div class="kpi-n" style="color:#16a34a;">${dist.normal}</div><div class="kpi-l">Normales</div></div>
+  </div>
+  ${r.resumen_ejecutivo ? `<div class="sec-title">Resumen ejecutivo</div><div class="box">${escHtml(String(r.resumen_ejecutivo))}</div>` : ''}
+  ${top.length ? `<div class="sec-title">Top ${top.length} compresores a atender</div>${top.map(c=>{
+      const nivel = nivelDeEstadoIA(c.estado);
+      return `<div class="eq" style="border-left-color:${hexNivel[nivel]};">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <span class="eq-name">${escHtml(c.compresor||'')} · ${escHtml(c.tipo||'')}</span>
+          <span class="badge">${escHtml(c.estado||'')}</span></div>
+        <div class="eq-meta">Riesgo ${escHtml(c.riesgo_falla||'—')} · Plazo: <strong>${escHtml(c.plazo_accion||'—')}</strong></div>
+        ${c.causa_probable ? `<div class="eq-cause">${escHtml(c.causa_probable)}</div>` : ''}
+      </div>`;}).join('')}` : ''}
+  ${planTop.length ? `<div class="sec-title">Plan de acción inmediato</div>
+    <table><thead><tr><th style="width:44px;">#</th><th>Compresor</th><th>Acción</th><th style="width:90px;">Plazo</th></tr></thead>
+    <tbody>${planTop.map((p,i)=>`<tr><td><span class="prio">P${p.prioridad||i+1}</span></td>
+      <td style="font-weight:700;">${escHtml(p.compresor||p.equipo||'')}</td><td>${escHtml(p.accion||'')}</td>
+      <td style="font-weight:700;white-space:nowrap;">${escHtml(p.plazo||'')}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${(r.proxima_inspeccion || r.conclusiones) ? `<div class="sec-title">Próximo paso</div><div class="box good">
+      ${r.proxima_inspeccion ? `<div style="font-weight:600;margin-bottom:${r.conclusiones?'8px':'0'};">${escHtml(String(r.proxima_inspeccion))}</div>` : ''}
+      ${r.conclusiones ? `<div style="color:#4b5563;">${escHtml(String(r.conclusiones))}</div>` : ''}</div>` : ''}
+  <div class="footer"><span>MANTEC – Compresor Pro · Motor de diagnóstico predictivo</span>
+    <span>Generado: ${escHtml(new Date().toLocaleString('es-PY'))}</span></div>
+</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1200');
+  if (!win){ alert('El navegador bloqueó la ventana emergente.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', ()=>setTimeout(()=>win.print(), 500));
+}
+
+function initIATab(){
+  const sel = document.getElementById('aiEquipSelect');
+  sel.innerHTML = '<option value="">— seleccionar —</option>';
+  for (const [id, c] of compsRegistry.entries()){
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = c.name || id;
+    sel.appendChild(opt);
+  }
+  const fc = document.getElementById('aiFleetCount');
+  if (fc) fc.textContent = readingsData.size;
+  if (!_lastIAReport){
+    const empty = document.getElementById('aiEmptyState');
+    if (empty) empty.style.display = 'block';
+    document.getElementById('aiReportOutput').style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12d. CAPTURAS DE CAMPO — pendiente
+// ═══════════════════════════════════════════════════════════
+function abrirCapturasPendientes(){ alert('Capturas de campo: se conectan en una etapa posterior.'); }
+function cerrarCapturasPendientes(){ const o = document.getElementById('capturasOverlay'); if (o) o.classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════
+//  13. INIT
+// ═══════════════════════════════════════════════════════════
+loadState();
+populateCompTipoSelects();
+renderAll();
+nubeEstado(navigator.onLine ? 'bajando' : 'offline');
+iniciarNube().then(() => { sincronizarEquiposHub(true); });
+</script>
+</body>
+</html>

@@ -198,7 +198,25 @@
   .spec-grid label{margin:0 0 4px;}
   .spec-aviso{font-size:11.5px; color:var(--warn); margin-top:14px; padding:9px 11px; border:1px dashed var(--warn); border-radius:6px; display:none;}
   .spec-aviso.show{display:block;}
-  pre.payload{background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:12px; font-family:'JetBrains Mono',monospace; font-size:11.5px; white-space:pre-wrap; word-break:break-word;}
+  .payload{font-family:'Inter',sans-serif;}
+  .payload-meta{display:flex; flex-wrap:wrap; gap:8px 16px; font-size:12px; color:var(--muted); margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--line);}
+  .payload-meta b{color:var(--text); font-weight:600;}
+  .payload-report{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:18px 20px; font-size:13.5px; line-height:1.65; color:var(--text);}
+  .payload-report h1,.payload-report h2,.payload-report h3{font-family:'Rajdhani',sans-serif; margin:16px 0 8px; color:var(--accent);}
+  .payload-report h1:first-child,.payload-report h2:first-child,.payload-report h3:first-child{margin-top:0;}
+  .payload-report p{margin:0 0 10px;}
+  .payload-report ul,.payload-report ol{margin:0 0 10px; padding-left:22px;}
+  .payload-report li{margin:3px 0;}
+  .payload-report strong{color:#fff;}
+  .payload-kv{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .payload-kv td{padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .payload-kv td.k{color:var(--muted); width:38%; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
+  .payload-kv td.v{color:var(--text); word-break:break-word;}
+  .payload-extra{margin-top:16px;}
+  .payload-raw{margin-top:14px;}
+  .payload-raw summary{cursor:pointer; font-size:11.5px; color:var(--muted); font-family:'JetBrains Mono',monospace; user-select:none;}
+  .payload-raw summary:hover{color:var(--text);}
+  .payload-raw pre{margin-top:8px; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:12px; font-family:'JetBrains Mono',monospace; font-size:11px; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;}
 
   .timeline-item{border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--panel-2);}
   .timeline-item .tl-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px;}
@@ -390,9 +408,9 @@
 
 <!-- modal payload -->
 <div class="modal-bg" id="payloadModal">
-  <div class="modal">
+  <div class="modal wide">
     <h3 id="payloadTitle">Datos</h3>
-    <pre class="payload" id="payloadBody"></pre>
+    <div class="payload" id="payloadBody"></div>
     <div class="row"><button class="ghost" id="btnPayloadClose">Cerrar</button></div>
   </div>
 </div>
@@ -722,6 +740,106 @@ function nombreModulo(key){
   return (MODULOS.find(m=>m.key===key)||{}).name || MODULOS_AUX_LABELS[key] || key;
 }
 
+// ---------------- visor de datos / informes ----------------
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function humanizarClave(k){
+  return String(k)
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, c => c.toUpperCase());
+}
+
+// markdown-lite: negrita, headers #/##/###, listas -/* y 1., párrafos.
+function miniMarkdown(texto){
+  const lineas = escapeHtml(texto).split(/\r?\n/);
+  let html = '', enLista = null; // null | 'ul' | 'ol'
+  const cerrarLista = () => { if (enLista){ html += `</${enLista}>`; enLista = null; } };
+  for (let linea of lineas){
+    const l = linea.trim();
+    if (!l){ cerrarLista(); continue; }
+    const mH = l.match(/^(#{1,3})\s+(.*)$/);
+    const mUl = l.match(/^[-*]\s+(.*)$/);
+    const mOl = l.match(/^\d+[.)]\s+(.*)$/);
+    const conNegrita = s => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    if (mH){
+      cerrarLista();
+      const nivel = mH[1].length;
+      html += `<h${nivel}>${conNegrita(mH[2])}</h${nivel}>`;
+    } else if (mUl){
+      if (enLista !== 'ul'){ cerrarLista(); html += '<ul>'; enLista = 'ul'; }
+      html += `<li>${conNegrita(mUl[1])}</li>`;
+    } else if (mOl){
+      if (enLista !== 'ol'){ cerrarLista(); html += '<ol>'; enLista = 'ol'; }
+      html += `<li>${conNegrita(mOl[1])}</li>`;
+    } else {
+      cerrarLista();
+      html += `<p>${conNegrita(l)}</p>`;
+    }
+  }
+  cerrarLista();
+  return html || `<p>${escapeHtml(texto)}</p>`;
+}
+
+const CAMPOS_INFORME_PRIORITARIOS = /informe|reporte|texto|contenido|markdown|conclusion|analisis_ia|diagnostico/i;
+
+function extraerTextoInforme(datos){
+  if (!datos || typeof datos !== 'object') return null;
+  const entradas = Object.entries(datos).filter(([,v]) => typeof v === 'string' && v.trim().length > 120);
+  if (!entradas.length) return null;
+  const prioritaria = entradas.find(([k]) => CAMPOS_INFORME_PRIORITARIOS.test(k));
+  const [key, texto] = prioritaria || entradas.sort((a,b) => b[1].length - a[1].length)[0];
+  return {key, texto};
+}
+
+function formatearValor(v){
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'sí' : 'no';
+  if (Array.isArray(v)) return v.length ? v.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(', ') : '—';
+  if (typeof v === 'object') return `<code style="font-size:11px;">${escapeHtml(JSON.stringify(v))}</code>`;
+  return escapeHtml(String(v));
+}
+
+function renderTablaKV(obj){
+  const filas = Object.entries(obj || {})
+    .filter(([,v]) => v !== null && v !== undefined && v !== '')
+    .map(([k,v]) => `<tr><td class="k">${escapeHtml(humanizarClave(k))}</td><td class="v">${formatearValor(v)}</td></tr>`)
+    .join('');
+  return filas ? `<table class="payload-kv"><tbody>${filas}</tbody></table>` : `<div class="empty">Sin campos adicionales.</div>`;
+}
+
+function renderPayloadHTML(r){
+  const meta = `<div class="payload-meta">
+    <span><b>Equipo:</b> ${escapeHtml(r.equipos?.tag || '—')}</span>
+    <span><b>Módulo:</b> ${escapeHtml(nombreModulo(r.modulo))}</span>
+    <span><b>Fecha:</b> ${fmtFecha(r.fecha)}</span>
+    <span>${badgeSeveridad(r.severidad)}</span>
+  </div>`;
+
+  const datos = r.datos || {};
+  const informe = extraerTextoInforme(datos);
+  const rawToggle = `<details class="payload-raw"><summary>ver JSON crudo</summary><pre>${escapeHtml(JSON.stringify(datos, null, 2))}</pre></details>`;
+
+  if (informe){
+    const resto = {...datos}; delete resto[informe.key];
+    const hayResto = Object.values(resto).some(v => v !== null && v !== undefined && v !== '');
+    return `${meta}
+      <div class="payload-report">${miniMarkdown(informe.texto)}</div>
+      ${hayResto ? `<div class="payload-extra"><table class="payload-kv"><tbody>${
+        Object.entries(resto).filter(([,v]) => v !== null && v !== undefined && v !== '')
+          .map(([k,v]) => `<tr><td class="k">${escapeHtml(humanizarClave(k))}</td><td class="v">${formatearValor(v)}</td></tr>`).join('')
+      }</tbody></table></div>` : ''}
+      ${rawToggle}`;
+  }
+
+  return `${meta}${renderTablaKV(datos)}${rawToggle}`;
+}
+
+
 function rangoADias(rango){
   return rango === 'all' ? null : parseInt(rango, 10);
 }
@@ -918,8 +1036,8 @@ function abrirDetalleEquipo(id){
 }
 function verPayloadDetalle(i){
   const r = window._detalleRows[i];
-  document.getElementById('payloadTitle').textContent = `${r.equipos?.tag || 'equipo'} · ${r.modulo}`;
-  document.getElementById('payloadBody').textContent = JSON.stringify(r.datos, null, 2);
+  document.getElementById('payloadTitle').textContent = `${r.equipos?.tag || 'equipo'} · ${nombreModulo(r.modulo)}`;
+  document.getElementById('payloadBody').innerHTML = renderPayloadHTML(r);
   document.getElementById('payloadModal').classList.add('show');
 }
 
@@ -1176,8 +1294,8 @@ function renderAnalisisTable(){
 
 function verPayload(i){
   const r = window._analisisRows[i];
-  document.getElementById('payloadTitle').textContent = `${r.equipos?.tag || 'equipo'} · ${r.modulo}`;
-  document.getElementById('payloadBody').textContent = JSON.stringify(r.datos, null, 2);
+  document.getElementById('payloadTitle').textContent = `${r.equipos?.tag || 'equipo'} · ${nombreModulo(r.modulo)}`;
+  document.getElementById('payloadBody').innerHTML = renderPayloadHTML(r);
   document.getElementById('payloadModal').classList.add('show');
 }
 
