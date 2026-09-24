@@ -188,7 +188,7 @@
   .modal .note{font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.4;}
   .modal .danger-text{color:var(--crit);}
 
-  .modal-tabs{display:flex; gap:4px; margin:14px 0 6px; border-bottom:1px solid var(--line);}
+  .modal-tabs{display:flex; flex-wrap:wrap; gap:4px; margin:14px 0 6px; border-bottom:1px solid var(--line);}
   .modal-tab{background:transparent; border:none; color:var(--muted); font-family:'Inter',sans-serif; font-size:12.5px; padding:8px 12px; cursor:pointer; border-bottom:2px solid transparent;}
   .modal-tab.active{color:var(--accent); border-bottom-color:var(--accent);}
   .modal-tab .dot-fill{display:none; width:6px; height:6px; border-radius:50%; background:var(--ok); margin-left:6px;}
@@ -530,7 +530,7 @@ const MODULOS_AUX_LABELS = {
 // supuesto en silencio).
 const SEV_ORDEN = {critico:3, atencion:2, ok:1, intervencion:0};
 
-// ---------------- fichas técnicas (equipos_specs: motor / bomba) ----------------
+// ---------------- fichas técnicas (equipos_specs: una fila por equipo y tipo) ----------------
 const MOTOR_FIELDS = [
   {key:'rpm',               label:'RPM Nominal',            type:'number'},
   {key:'n_polos',           label:'N° Polos',               type:'number'},
@@ -626,6 +626,191 @@ const GRUA_FIELDS = [
   {key:'potencia_kw',             label:'Potencia (kW)',             type:'number'},
 ];
 
+const TANQUE_RECIPIENTE_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"capacidad_m3",            label:"Capacidad (m³)",                  type:"number"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"presion_trabajo_bar",     label:"Presión Trabajo (bar)",           type:"number"},
+  {key:"temperatura_diseno_c",    label:"Temp. Diseño (°C)",               type:"number"},
+  {key:"temperatura_trabajo_c",   label:"Temp. Trabajo (°C)",              type:"number"},
+  {key:"diametro_mm",             label:"Diámetro (mm)",                   type:"number"},
+  {key:"altura_largo_mm",         label:"Altura / Largo (mm)",             type:"number"},
+  {key:"espesor_mm",              label:"Espesor (mm)",                    type:"number"},
+  {key:"orientacion",             label:"Orientación",                     type:"text"},
+  {key:"aislamiento",             label:"Aislamiento",                     type:"text"},
+  {key:"revestimiento",           label:"Revestimiento",                   type:"text"},
+  {key:"norma_diseno",            label:"Norma de Diseño",                 type:"text"},
+  {key:"fluido",                  label:"Fluido",                          type:"text"},
+  {key:"densidad_kg_m3",          label:"Densidad (kg/m³)",                type:"number"},
+];
+const INTERCAMBIADOR_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"area_m2",                 label:"Área (m²)",                       type:"number"},
+  {key:"potencia_termica_kw",     label:"Potencia Térmica (kW)",           type:"number"},
+  {key:"fluido_caliente",         label:"Fluido Caliente",                 type:"text"},
+  {key:"fluido_frio",             label:"Fluido Frío",                     type:"text"},
+  {key:"t_entrada_caliente_c",    label:"T° Entrada Caliente (°C)",        type:"number"},
+  {key:"t_salida_caliente_c",     label:"T° Salida Caliente (°C)",         type:"number"},
+  {key:"t_entrada_frio_c",        label:"T° Entrada Frío (°C)",            type:"number"},
+  {key:"t_salida_frio_c",         label:"T° Salida Frío (°C)",             type:"number"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"material_placas_tubos",   label:"Material Placas / Tubos",         type:"text"},
+  {key:"material_carcasa",        label:"Material Carcasa",                type:"text"},
+  {key:"n_placas",                label:"N° Placas",                       type:"number"},
+  {key:"n_pasos",                 label:"N° Pasos",                        type:"number"},
+  {key:"conexion_in",             label:"Conexión Entrada",                type:"text"},
+  {key:"conexion_out",            label:"Conexión Salida",                 type:"text"},
+];
+const REACTOR_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"volumen_m3",              label:"Volumen (m³)",                    type:"number"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"temperatura_diseno_c",    label:"Temp. Diseño (°C)",               type:"number"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"agitacion",               label:"Agitación (Si/No)",               type:"text"},
+  {key:"potencia_agitacion_kw",   label:"Potencia Agitación (kW)",         type:"number"},
+  {key:"rpm_agitacion",           label:"RPM Agitación",                   type:"number"},
+  {key:"tipo_agitador",           label:"Tipo Agitador",                   type:"text"},
+  {key:"camisa_serpentin",        label:"Camisa / Serpentín",              type:"text"},
+  {key:"fluido_calefactor",       label:"Fluido Calefactor",               type:"text"},
+  {key:"fluido_enfriador",        label:"Fluido Enfriador",                type:"text"},
+  {key:"catalizador",             label:"Catalizador",                     type:"text"},
+  {key:"norma_diseno",            label:"Norma de Diseño",                 type:"text"},
+];
+const TORRE_COLUMNA_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"diametro_mm",             label:"Diámetro (mm)",                   type:"number"},
+  {key:"altura_mm",               label:"Altura (mm)",                     type:"number"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"temperatura_diseno_c",    label:"Temp. Diseño (°C)",               type:"number"},
+  {key:"tipo_relleno",            label:"Tipo de Relleno",                 type:"text"},
+  {key:"altura_relleno_mm",       label:"Altura Relleno (mm)",             type:"number"},
+  {key:"n_etapas",                label:"N° Etapas",                       type:"number"},
+  {key:"fluido_gas",              label:"Fluido Gas",                      type:"text"},
+  {key:"fluido_liquido",          label:"Fluido Líquido",                  type:"text"},
+  {key:"caudal_gas_m3h",          label:"Caudal Gas (m³/h)",               type:"number"},
+  {key:"caudal_liquido_m3h",      label:"Caudal Líquido (m³/h)",           type:"number"},
+  {key:"eficiencia",              label:"Eficiencia (%)",                  type:"number"},
+  {key:"conexiones",              label:"Conexiones",                      type:"text"},
+];
+const FILTRO_TAMIZ_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"area_filtracion_m2",      label:"Área Filtración (m²)",            type:"number"},
+  {key:"caudal_m3h",              label:"Caudal (m³/h)",                   type:"number"},
+  {key:"presion_trabajo_bar",     label:"Presión Trabajo (bar)",           type:"number"},
+  {key:"dp_inicial_bar",          label:"ΔP Inicial (bar)",                type:"number"},
+  {key:"dp_final_bar",            label:"ΔP Final (bar)",                  type:"number"},
+  {key:"micraje_um",              label:"Micraje (µm)",                    type:"number"},
+  {key:"material_medio_filtrante", label:"Medio Filtrante",                 type:"text"},
+  {key:"n_elementos",             label:"N° Elementos",                    type:"number"},
+  {key:"material_carcasa",        label:"Material Carcasa",                type:"text"},
+  {key:"conexion_in",             label:"Conexión Entrada",                type:"text"},
+  {key:"conexion_out",            label:"Conexión Salida",                 type:"text"},
+  {key:"limpieza",                label:"Limpieza",                        type:"text"},
+  {key:"frecuencia_limpieza",     label:"Frecuencia Limpieza",             type:"text"},
+];
+const VALVULA_SELLO_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"diametro_in",             label:"Diámetro (pulg)",                 type:"number"},
+  {key:"presion_set_bar",         label:"Presión de Set (bar)",            type:"number"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"material_cuerpo",         label:"Material Cuerpo",                 type:"text"},
+  {key:"material_sello",          label:"Material Sello",                  type:"text"},
+  {key:"conexion_in",             label:"Conexión Entrada",                type:"text"},
+  {key:"conexion_out",            label:"Conexión Salida",                 type:"text"},
+  {key:"fluido",                  label:"Fluido",                          type:"text"},
+  {key:"temperatura_c",           label:"Temperatura (°C)",                type:"number"},
+  {key:"norma_diseno",            label:"Norma de Diseño",                 type:"text"},
+  {key:"certificacion",           label:"Certificación",                   type:"text"},
+];
+const CALDERA_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"capacidad_vapor_kgh",     label:"Capacidad Vapor (kg/h)",          type:"number"},
+  {key:"presion_diseno_bar",      label:"Presión Diseño (bar)",            type:"number"},
+  {key:"presion_trabajo_bar",     label:"Presión Trabajo (bar)",           type:"number"},
+  {key:"temperatura_vapor_c",     label:"Temp. Vapor (°C)",                type:"number"},
+  {key:"combustible",             label:"Combustible",                     type:"text"},
+  {key:"consumo_combustible",     label:"Consumo Combustible",             type:"text"},
+  {key:"eficiencia",              label:"Eficiencia (%)",                  type:"number"},
+  {key:"superficie_calefaccion_m2", label:"Superficie Calefacción (m²)",     type:"number"},
+  {key:"volumen_agua_m3",         label:"Volumen Agua (m³)",               type:"number"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"norma_diseno",            label:"Norma de Diseño",                 type:"text"},
+  {key:"certificacion",           label:"Certificación",                   type:"text"},
+  {key:"sistema_control",         label:"Sistema de Control",              type:"text"},
+];
+const AGITADOR_MEZCLADOR_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"potencia_kw",             label:"Potencia (kW)",                   type:"number"},
+  {key:"rpm",                     label:"RPM Nominal",                     type:"number"},
+  {key:"relacion_reduccion",      label:"Relación Reducción",              type:"number"},
+  {key:"tipo_agitador",           label:"Tipo Agitador",                   type:"text"},
+  {key:"diametro_agitador_mm",    label:"Diámetro Agitador (mm)",          type:"number"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"sello",                   label:"Sello",                           type:"text"},
+  {key:"montaje",                 label:"Montaje",                         type:"text"},
+  {key:"lubricacion",             label:"Lubricación",                     type:"text"},
+  {key:"rodamientos",             label:"Rodamientos",                     type:"text"},
+];
+const EQUIPO_ELECTRICO_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"potencia_kva",            label:"Potencia (kVA)",                  type:"number"},
+  {key:"voltaje_primario_v",      label:"Voltaje Primario (V)",            type:"number"},
+  {key:"voltaje_secundario_v",    label:"Voltaje Secundario (V)",          type:"number"},
+  {key:"corriente_a",             label:"Corriente (A)",                   type:"number"},
+  {key:"fases",                   label:"Fases",                           type:"number"},
+  {key:"frecuencia_hz",           label:"Frecuencia (Hz)",                 type:"number"},
+  {key:"conexion",                label:"Conexión",                        type:"text"},
+  {key:"refrigeracion",           label:"Refrigeración",                   type:"text"},
+  {key:"protecciones",            label:"Protecciones",                    type:"text"},
+  {key:"norma",                   label:"Norma",                           type:"text"},
+  {key:"certificacion",           label:"Certificación",                   type:"text"},
+  {key:"puesta_tierra",           label:"Puesta a Tierra",                 type:"text"},
+];
+const EQUIPO_MOVIL_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"patente",                 label:"Patente",                         type:"text"},
+  {key:"capacidad_carga_kg",      label:"Capacidad Carga (kg)",            type:"number"},
+  {key:"motor",                   label:"Motor",                           type:"text"},
+  {key:"potencia_hp",             label:"Potencia (HP)",                   type:"number"},
+  {key:"combustible",             label:"Combustible",                     type:"text"},
+  {key:"horometro_h",             label:"Horómetro (h)",                   type:"number"},
+  {key:"kilometraje_km",          label:"Kilometraje (km)",                type:"number"},
+  {key:"certificaciones",         label:"Certificaciones",                 type:"text"},
+  {key:"vencimiento_revision",    label:"Vencimiento Revisión (AAAA-MM-DD)", type:"text"},
+];
+const SECADOR_PLANTA_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"capacidad",               label:"Capacidad",                       type:"text"},
+  {key:"punto_rocio_c",           label:"Punto de Rocío (°C)",             type:"number"},
+  {key:"pureza",                  label:"Pureza (%)",                      type:"number"},
+  {key:"presion_trabajo_bar",     label:"Presión Trabajo (bar)",           type:"number"},
+  {key:"caudal_m3h",              label:"Caudal (m³/h)",                   type:"number"},
+  {key:"potencia_kw",             label:"Potencia (kW)",                   type:"number"},
+  {key:"refrigerante",            label:"Refrigerante",                    type:"text"},
+  {key:"consumibles",             label:"Consumibles",                     type:"text"},
+  {key:"norma",                   label:"Norma",                           type:"text"},
+];
+const INSTRUMENTO_FIELDS = [
+  {key:"tipo",                    label:"Tipo",                            type:"text"},
+  {key:"rango",                   label:"Rango",                           type:"text"},
+  {key:"unidad",                  label:"Unidad",                          type:"text"},
+  {key:"precision",               label:"Precisión",                       type:"text"},
+  {key:"senal_salida",            label:"Señal de Salida",                 type:"text"},
+  {key:"alimentacion",            label:"Alimentación",                    type:"text"},
+  {key:"conexion",                label:"Conexión",                        type:"text"},
+  {key:"material",                label:"Material",                        type:"text"},
+  {key:"certificacion",           label:"Certificación",                   type:"text"},
+];
+
+// Tipos ampliados: ids de tab/pane/grid/dot se derivan de la key, así agregar
+// un tipo es solo definir su *_FIELDS y una línea _tipoEspec(...) acá abajo.
+const _capKey = k => k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+const _tipoEspec = (key, label, fields) => ({key, label, fields,
+  tabId:'tabBtn'+_capKey(key), paneId:'pane'+_capKey(key), gridId:'grid'+_capKey(key), dotId:'dot'+_capKey(key)});
+
 const TIPOS_ESPEC = [
   {key:'motor',         fields: MOTOR_FIELDS,         tabId:'tabBtnMotor',         paneId:'paneMotor',         gridId:'gridMotor',         dotId:'dotMotor',         label:'Motor'},
   {key:'bomba',         fields: BOMBA_FIELDS,         tabId:'tabBtnBomba',         paneId:'paneBomba',         gridId:'gridBomba',         dotId:'dotBomba',         label:'Bomba'},
@@ -634,6 +819,18 @@ const TIPOS_ESPEC = [
   {key:'tablero',       fields: TABLERO_FIELDS,       tabId:'tabBtnTablero',       paneId:'paneTablero',       gridId:'gridTablero',       dotId:'dotTablero',       label:'Tablero'},
   {key:'refrigeracion', fields: REFRIGERACION_FIELDS, tabId:'tabBtnRefrigeracion', paneId:'paneRefrigeracion', gridId:'gridRefrigeracion', dotId:'dotRefrigeracion', label:'Refrigeración'},
   {key:'grua',          fields: GRUA_FIELDS,          tabId:'tabBtnGrua',          paneId:'paneGrua',          gridId:'gridGrua',          dotId:'dotGrua',          label:'Grúa'},
+  _tipoEspec("tanque_recipiente", "Tanque / Recipiente", TANQUE_RECIPIENTE_FIELDS),
+  _tipoEspec("intercambiador", "Intercambiador", INTERCAMBIADOR_FIELDS),
+  _tipoEspec("reactor", "Reactor", REACTOR_FIELDS),
+  _tipoEspec("torre_columna", "Torre / Columna", TORRE_COLUMNA_FIELDS),
+  _tipoEspec("filtro_tamiz", "Filtro / Tamiz", FILTRO_TAMIZ_FIELDS),
+  _tipoEspec("valvula_sello", "Válvula / Sello", VALVULA_SELLO_FIELDS),
+  _tipoEspec("caldera", "Caldera", CALDERA_FIELDS),
+  _tipoEspec("agitador_mezclador", "Agitador / Mezclador", AGITADOR_MEZCLADOR_FIELDS),
+  _tipoEspec("equipo_electrico", "Equipo eléctrico", EQUIPO_ELECTRICO_FIELDS),
+  _tipoEspec("equipo_movil", "Equipo móvil", EQUIPO_MOVIL_FIELDS),
+  _tipoEspec("secador_planta", "Secador / Planta", SECADOR_PLANTA_FIELDS),
+  _tipoEspec("instrumento", "Instrumento", INSTRUMENTO_FIELDS),
 ];
 
 function inputSpecId(prefijo, key){ return `spec_${prefijo}_${key}`; }
@@ -1457,10 +1654,40 @@ function keyToHeader(key){
   return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-// Nombres de hoja iguales a SatSync.HOJAS_SPECS_MAP (motor→MOTORES, etc.)
-const HOJA_POR_TIPO = {
-  motor: 'MOTORES', bomba: 'BOMBAS', ventilador: 'VENTILADORES', compresor: 'COMPRESORES',
-  tablero: 'TABLEROS', refrigeracion: 'REFRIGERACION', grua: 'GRUAS_ELEVACION'
+// Nombres de hoja: se derivan de SatSync.HOJAS_SPECS_MAP (fuente única), así
+// la plantilla que descarga el hub siempre coincide con lo que el importador lee.
+const HOJA_POR_TIPO = (() => {
+  if (!SatSync.HOJAS_SPECS_MAP){
+    console.error('[MANTEC] sat-sync.js desactualizado: falta SatSync.HOJAS_SPECS_MAP — subí la versión nueva.');
+    return {};
+  }
+  return Object.fromEntries(Object.entries(SatSync.HOJAS_SPECS_MAP).map(([hoja, tipo]) => [tipo, hoja]));
+})();
+TIPOS_ESPEC.forEach(t => { if (!HOJA_POR_TIPO[t.key]) console.warn(`[MANTEC] tipo "${t.key}" sin hoja en SatSync.HOJAS_SPECS_MAP — no se importará.`); });
+
+// Una fila de ejemplo por tipo. Los valores siguen el mismo orden que
+// *_FIELDS (el primero es el TAG), así que si agregás un campo a un tipo,
+// agregá también su valor acá en la misma posición — o '' si es opcional.
+const SAMPLE_POR_TIPO = {
+    motor:         ['MOT-BOMBA-01', 3600, 2, 60, 22, 380, 42, 0.86, 91.5, '160M', 'IP55', 'F', 'Estrella', 'B3', '6308-2Z', '6308-2Z', 'Grasa', 180],
+    bomba:         ['MOT-BOMBA-01', 'Centrífuga', 3600, 45, 32, 3.5, 4.2, 165, 6, 'Mecánico simple', 3, 2, 'Agua', 25, 'Hierro fundido'],
+    ventilador:    ['VEN-01', 'Centrífugo', 1750, 8000, 450, 500, 12, 'Correa', 7.5],
+    compresor:     ['COMP-01', 'Tornillo', 3000, 5.2, 8, 10, 30, 'Aire', 'ISO VG 46', 200],
+    tablero:       ['TAB-GENERAL-PLANTA', 'MCC', 380, 630, 4, 'Trifásico', 60, 'IP54', 'TT', 'Schneider', 25, 'Breaker'],
+    refrigeracion: ['AC-OFICINA-02', 'Split pared', 'R410A', 12000, 1.1, 220, 'Scroll', 1, 0.85, 18, 'Serpentín', 'Aire'],
+    grua:          ['GRUA-PUENTE-01', 'Puente', 5000, 8, 5, 20, 12, 4, 12, 'Electromecánico', 15],
+    tanque_recipiente:   ["TK-01", "Tanque atmosférico", "Acero inox 316L", 20, 1.5, 0.2, 80, 40, 2500, 4000, 6, "Vertical", "Lana mineral", "", "API 650", "Soda cáustica", 1330],
+    intercambiador:      ["IC-01", "Placas", 35, 500, "Agua", "Proceso", 90, 60, 25, 55, 10, "Titanio", "Acero carbono", 61, 1, "DN100", "DN100"],
+    reactor:             ["RX-01", "Proceso agitado", 5, 6, 150, "Acero inox 316L", "Si", 11, 60, "Turbina", "Camisa", "Vapor", "Agua", "", "ASME VIII"],
+    torre_columna:       ["TOR-01", "Absorción", 1200, 8000, "PRFV", 0.5, 80, "Anillos Pall", 3000, 3, "Cl2", "Soda", 1500, 20, 98, "DN200"],
+    filtro_tamiz:        ["FIL-01", "Filtro prensa", 40, 30, 6, 0.2, 1.5, 5, "Polipropileno", 24, "Acero inox", "DN80", "DN80", "Manual", "Semanal"],
+    valvula_sello:       ["VAL-01", "Válvula de seguridad", 2, 10, 16, "Acero inox", "PTFE", "Brida 2\"", "Brida 3\"", "Vapor", 180, "API 526", "Calibración 2025"],
+    caldera:             ["CAL-01", "Pirotubular", 5000, 12, 10, 184, "Gas natural", "350 Nm3/h", 90, 120, 6, "Acero P265GH", "EN 12953", "Inspección 2025", "PLC"],
+    agitador_mezclador:  ["AGI-01", "Agitador vertical", 11, 60, 24, "Turbina Rushton", 800, "Acero inox 316L", "Mecánico doble", "Superior", "Aceite ISO VG 220", ""],
+    equipo_electrico:    ["TR-01", "Transformador", 1000, 13200, 380, 1519, 3, 50, "Dyn11", "ONAN", "Buchholz, térmica", "IEC 60076", "", "Neutro sólido"],
+    equipo_movil:        ["MOV-01", "Autoelevador", "AB123CD", 2500, "Diésel", 60, "Gasoil", 3200, "", "RTO", "2027-03-31"],
+    secador_planta:      ["SEC-01", "Secador de aire frigorífico", "10 m3/min", 3, "", 8, 600, 2.5, "R134a", "Filtro coalescente", "ISO 8573-1"],
+    instrumento:         ["INS-01", "Transmisor de presión", "0-16", "bar", "0.1%", "4-20 mA HART", "24 VDC", "1/2\" NPT", "Acero inox 316", "ATEX"],
 };
 
 function downloadTemplateEquipos(){
@@ -1470,40 +1697,52 @@ function downloadTemplateEquipos(){
     ['Plantilla de importación masiva de equipos — MANTEC'],
     [''],
     ['1. Completá la hoja EQUIPOS con un TAG por fila (obligatorio) y los datos generales que tengas.'],
-    ['2. Para cada tipo de equipo, completá su hoja técnica (MOTORES, BOMBAS, etc.) usando el mismo TAG.'],
+    ['2. Para cada tipo de equipo, completá su hoja técnica usando el mismo TAG.'],
     ['   Un motor-bomba, por ejemplo, va con el mismo TAG en la hoja EQUIPOS, en MOTORES y en BOMBAS.'],
     ['3. Dejá vacías las celdas que no apliquen o no conozcas — no hace falta completar todo.'],
-    ['4. Subí el archivo con "Importar Excel" en el hub. Un TAG que no exista en EQUIPOS se ignora en las hojas técnicas.'],
-    ['5. Después de importar, revisá los avisos: te muestran, por ejemplo, motores sin RPM o tableros sin voltaje de barras.'],
+    ['4. Las filas de ejemplo (Notas: "Ejemplo — borrar antes de importar") son solo de referencia de formato: borralas.'],
+    ['5. No renombres encabezados ni hojas: se leen como clave (Potencia Kw → potencia_kw). Fechas AAAA-MM-DD, TAG siempre como texto.'],
+    ['6. Subí el archivo con "Importar Excel" en el hub. Un TAG que no exista en EQUIPOS se ignora en las hojas técnicas.'],
+    ['7. Después de importar, revisá los avisos: te muestran, por ejemplo, motores sin RPM o tableros sin voltaje de barras.'],
+    [''],
+    ['Hojas técnicas disponibles: ' + TIPOS_ESPEC.map(t => HOJA_POR_TIPO[t.key]).filter(Boolean).join(', ')],
   ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(instrucciones), 'INSTRUCCIONES');
+  const wsInst = XLSX.utils.aoa_to_sheet(instrucciones);
+  wsInst['!cols'] = [{wch:120}];
+  XLSX.utils.book_append_sheet(wb, wsInst, 'INSTRUCCIONES');
 
+  const NOTA_EJ = 'Ejemplo — borrar antes de importar';
   const sampleEq = [
     EQUIPOS_TEMPLATE_HEADERS,
-    ['MOT-BOMBA-01', 'Motor bomba de agua 01', 'Motor', 'Planta A', 'Sala de bombas', 'WEG', 'W22', 'SN12345', 2021, 'B', 'operativo', '15/03/2021', 'Proveedor SA', ''],
-    ['TAB-GENERAL-PLANTA', 'Tablero general', 'Tablero', 'Planta A', 'Sala eléctrica', '', '', '', '', 'A', 'operativo', '', '', ''],
-    ['AC-OFICINA-02', 'Aire acondicionado oficina 2', 'Refrigeración', 'Edificio administrativo', 'Piso 2', '', '', '', '', 'C', 'operativo', '', '', ''],
+    ['MOT-BOMBA-01', 'Motor bomba de agua 01', 'Motor', 'Planta A', 'Sala de bombas', 'WEG', 'W22', 'SN12345', 2021, 'B', 'operativo', '2021-03-15', 'Proveedor SA', NOTA_EJ],
+    ['TAB-GENERAL-PLANTA', 'Tablero general', 'Tablero', 'Planta A', 'Sala eléctrica', '', '', '', '', 'A', 'operativo', '', '', NOTA_EJ],
+    ['AC-OFICINA-02', 'Aire acondicionado oficina 2', 'Refrigeración', 'Edificio administrativo', 'Piso 2', '', '', '', '', 'C', 'operativo', '', '', NOTA_EJ],
   ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sampleEq), 'EQUIPOS');
-
-  // Una fila de ejemplo por tipo. Los valores siguen el mismo orden que
-  // *_FIELDS, así que si agregás un campo a un tipo, agregá también su valor
-  // acá en la misma posición — o dejalo vacío ('') si es opcional.
-  const SAMPLE_POR_TIPO = {
-    motor:         ['MOT-BOMBA-01', 3600, 2, 60, 22, 380, 42, 0.86, 91.5, '160M', 'IP55', 'F', 'Estrella', 'B3', '6308-2Z', '6308-2Z', 'Grasa', 180],
-    bomba:         ['MOT-BOMBA-01', 'Centrífuga', 3600, 45, 32, 3.5, 4.2, 165, 6, 'Mecánico simple', 3, 2, 'Agua', 25, 'Hierro fundido'],
-    ventilador:    ['VEN-01', 'Centrífugo', 1750, 8000, 450, 500, 12, 'Correa', 7.5],
-    compresor:     ['COMP-01', 'Tornillo', 3000, 5.2, 8, 10, 30, 'Aire', 'ISO VG 46', 200],
-    tablero:       ['TAB-GENERAL-PLANTA', 'MCC', 380, 630, 4, 'Trifásico', 60, 'IP54', 'TT', 'Schneider', 25, 'Breaker'],
-    refrigeracion: ['AC-OFICINA-02', 'Split pared', 'R410A', 12000, 1.1, 220, 'Scroll', 1, 0.85, 18, 'Serpentín', 'Aire'],
-    grua:          ['GRUA-PUENTE-01', 'Puente', 5000, 8, 5, 20, 12, 4, 12, 'Electromecánico', 15],
-  };
+  // Cada fila de ejemplo de una hoja técnica necesita su TAG en EQUIPOS; si no
+  // está en las de arriba se agrega una genérica (así el ejemplo importa sin errores).
+  const tagsEq = new Set(sampleEq.slice(1).map(r => r[0]));
+  TIPOS_ESPEC.forEach(t => {
+    const tag = (SAMPLE_POR_TIPO[t.key] || [])[0];
+    if (tag && !tagsEq.has(tag)){
+      tagsEq.add(tag);
+      sampleEq.push([tag, 'Ejemplo de ' + t.label.toLowerCase(), t.label, 'Planta A', '', '', '', '', '', 'C', 'operativo', '', '', NOTA_EJ]);
+    }
+  });
+  const wsEq = XLSX.utils.aoa_to_sheet(sampleEq);
+  wsEq['!cols'] = EQUIPOS_TEMPLATE_HEADERS.map(h => ({wch: Math.max(14, h.length + 3)}));
+  XLSX.utils.book_append_sheet(wb, wsEq, 'EQUIPOS');
 
   TIPOS_ESPEC.forEach(t => {
+    const hoja = HOJA_POR_TIPO[t.key];
+    if (!hoja) return;                      // sin hoja en el importador → no se ofrece
     const headers = ['TAG', ...t.fields.map(f => keyToHeader(f.key))];
     const sample  = SAMPLE_POR_TIPO[t.key] || [];
-    const rows    = sample.length ? [headers, sample] : [headers];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), HOJA_POR_TIPO[t.key]);
+    if (sample.length && sample.length !== headers.length){
+      console.warn(`[MANTEC] SAMPLE_POR_TIPO.${t.key} tiene ${sample.length} valores y la hoja ${headers.length} columnas.`);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(sample.length ? [headers, sample] : [headers]);
+    ws['!cols'] = headers.map(x => ({wch: Math.max(12, x.length + 3)}));
+    XLSX.utils.book_append_sheet(wb, ws, hoja);
   });
 
   XLSX.writeFile(wb, 'plantilla_equipos_mantec.xlsx');
