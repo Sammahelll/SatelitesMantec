@@ -2406,24 +2406,22 @@ function triggerPairing(rawMap, filename) {
   const sortedEntries = Array.from(rawMap.entries()).sort((a, b) => {
     const [nameA, dataA] = a, [nameB, dataB] = b;
     const partsA = splitRawNameLast(nameA), partsB = splitRawNameLast(nameB);
-    const pointA = (partsA[1] || partsA[0]).toString();
-    const pointB = (partsB[1] || partsB[0]).toString();
 
-    // 1) Agrupar por PUNTO (el identificador real: "COJFRONZ", "PADELAPOY",
-    //    etc.) — esto es lo que realmente distingue una toma de otra.
-    const pointCmp = pointA.localeCompare(pointB, 'es', {numeric:true, sensitivity:'base'});
-    if (pointCmp !== 0) return pointCmp;
-
-    // 2) Dentro del mismo punto, agrupar por nombre base de máquina SIN el
-    //    sufijo "· Lectura N (fecha)" / "· Toma N (fecha)" que se le inyecta
-    //    a los nombres genéricos — de lo contrario cada lectura del mismo
-    //    punto se trataría como una "máquina" distinta y no quedarían juntas.
+    // 1) Agrupar por EQUIPO (nombre base sin sufijo "· Lectura N") — todos
+    //    los puntos del mismo equipo quedan juntos en el pairing.
     const machA = stripLecturaSuffix(partsA[0]);
     const machB = stripLecturaSuffix(partsB[0]);
     const machCmp = machA.localeCompare(machB, 'es', {numeric:true, sensitivity:'base'});
     if (machCmp !== 0) return machCmp;
 
-    // 3) Y por último, orden cronológico ascendente (número de muestra real).
+    // 2) Dentro del mismo equipo, agrupar por PUNTO ("BAX", "BAY", etc.)
+    //    para que los puntos de la misma máquina queden en orden.
+    const pointA = (partsA[1] || partsA[0]).toString();
+    const pointB = (partsB[1] || partsB[0]).toString();
+    const pointCmp = pointA.localeCompare(pointB, 'es', {numeric:true, sensitivity:'base'});
+    if (pointCmp !== 0) return pointCmp;
+
+    // 3) Dentro del mismo equipo+punto, orden cronológico ascendente.
     const validA = dataA.dates.filter(d => d instanceof Date && !isNaN(d));
     const validB = dataB.dates.filter(d => d instanceof Date && !isNaN(d));
     const minA = validA.length ? Math.min(...validA.map(d => d.getTime())) : Infinity;
@@ -2793,6 +2791,28 @@ function confirmPairing() {
   document.getElementById('analysisView').style.display = 'none';
   document.getElementById('noAnalysis').style.display = 'block';
   document.getElementById('excelFile').value = '';
+
+  // ── [AUTOSYNC] Auto-sube mediciones al hub en background ─────────────
+  // Corre silenciosamente después de confirmar el pairing — el usuario no
+  // tiene que acordarse de hacer click en "Subir al hub". Si SatSync no
+  // está configurado, es un no-op.
+  if (typeof SatSync !== 'undefined' && SatSync.init()) {
+    const st = document.getElementById('subirMedicionesStatus');
+    if (st) { st.style.color = 'var(--muted)'; st.textContent = '⏳ Sincronizando…'; }
+    guardarMedicionesEnNube()
+      .then(r => {
+        if (!st) return;
+        if (r.error) {
+          st.style.color = 'var(--warning)';
+          st.textContent = '⚠️ Auto-sync: ' + r.error;
+        } else {
+          st.style.color = 'var(--good)';
+          st.textContent = `☁️ ${r.ok} medición(es) sincronizadas automáticamente.`;
+          setTimeout(() => { if(st) st.textContent = ''; }, 6000);
+        }
+      })
+      .catch(() => {});
+  }
 }
 
 function cancelPairing() {
@@ -8068,6 +8088,34 @@ loadConfig();
 renderConfig();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
 sincronizarConfigConHub(true).catch(()=>{});  // silencioso, best-effort
+
+// ── [AUTOSYNC] Auto-descarga de mediciones del hub al arrancar ────────
+// Baja las mediciones del hub y las mergea con las locales. Si llegan
+// lecturas nuevas, refresca el dashboard. Completamente silencioso: si
+// SatSync no está configurado o hay error de red, no hace nada visible.
+if (typeof SatSync !== 'undefined' && SatSync.init()) {
+  const st = document.getElementById('bajarMedicionesStatus');
+  bajarMedicionesDelHub()
+    .then(r => {
+      if (!r || r.error) return;
+      if (r.nuevasLecturas > 0 || r.puntosNuevos > 0) {
+        // Hay datos nuevos — guardar localmente y refrescar UI
+        saveConfig();
+        renderDashboard();
+        renderMachineList();
+        renderEaEquipList();
+        renderSummaryBar();
+        renderConfig();
+        if (st) {
+          st.style.color = 'var(--good)';
+          st.textContent = `☁️ ${r.nuevasLecturas} lectura(s) nueva(s) del hub.`;
+          setTimeout(() => { if(st) st.textContent = ''; }, 6000);
+        }
+      }
+    })
+    .catch(() => {});
+}
+
 if(machinesData.size>0){
   renderDashboard();
   renderMachineList();
