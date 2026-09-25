@@ -4267,7 +4267,7 @@ function buildHistoryTable(k, isoGroupOverride){
               const vNorm  = normalizeParam('Vel_RMS', vr, rpmRow, refRPMHist);
               return `<td class="s-${metStatus(vNorm, velT_iso)}" title="Cruda: ${fmt(vr,4)} mm/s @ ${isNaN(rpmRow)?'—':rpmRow} RPM">${fmt(vNorm,4)}</td>`;
             })() : ''}
-            ${isBlower ? `<td contenteditable="true" class="editable-rpm" data-idx="${ri}" data-key="${escHtml(k)}" title="Clic para editar RPM">${isNaN(rpmVal)?'—':rpmVal}</td>` : ''}
+            ${isBlower ? `<td contenteditable="true" class="editable-rpm" data-idx="${ri}" data-key="${escHtml(k)}" title="Clic para editar RPM">${(rpmVal == null || isNaN(rpmVal)) ? '—' : rpmVal}</td>` : ''}
             <td class="s-${STATUS[lv]}">${STATUS_LABELS[lv]}</td>
             ${bdxCell}
           </tr>`;
@@ -4282,11 +4282,26 @@ function buildHistoryTable(k, isoGroupOverride){
 // NUEVO DeepSeek: editores de RPM en la tabla de historial
 function attachRpmEditors() {
   document.querySelectorAll('.editable-rpm').forEach(cell => {
-    cell.removeEventListener('blur',  handleRpmEdit);
+    cell.removeEventListener('blur',    handleRpmEdit);
     cell.removeEventListener('keydown', handleRpmKeydown);
+    cell.removeEventListener('focus',   handleRpmFocus);
     cell.addEventListener('blur',    handleRpmEdit);
     cell.addEventListener('keydown', handleRpmKeydown);
+    cell.addEventListener('focus',   handleRpmFocus);
   });
+}
+
+// Al enfocar la celda, selecciona todo el contenido para que tipear
+// reemplace directamente el valor anterior (o "—") sin necesidad de
+// borrar manualmente.
+function handleRpmFocus(e) {
+  setTimeout(() => {
+    const range = document.createRange();
+    range.selectNodeContents(e.target);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, 0);
 }
 
 function handleRpmKeydown(e) {
@@ -4307,6 +4322,19 @@ function handleRpmEdit(e) {
     d.rpms[idx] = newVal;
     machinesData.set(key, d);
     saveConfig();
+    // [AUTOSYNC] Subir al hub 3s después del último edit de RPM.
+    // El debounce evita un upload por cada celda cuando se editan varias
+    // en secuencia — espera a que el usuario termine de tipear.
+    scheduleRpmSync();
+    // [RENDER-FIX] Re-render de la tabla de historial para que Vel.norm
+    // se recalcule en pantalla sin esperar a recargar el análisis.
+    const tableId = 'histTbl_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+    const tbl = document.getElementById(tableId);
+    const section = tbl ? tbl.closest('.msection') : null;
+    if (section) {
+      section.outerHTML = buildHistoryTable(key, getISOClassOverride());
+      setTimeout(() => attachRpmEditors(), 0);
+    }
   }
 }
 
@@ -8088,6 +8116,58 @@ loadConfig();
 renderConfig();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
 sincronizarConfigConHub(true).catch(()=>{});  // silencioso, best-effort
+
+// ═══════════════════════════════════════════════════════════
+//  SYNC BIDIRECCIONAL — hub ↔ app
+// ═══════════════════════════════════════════════════════════
+
+// Helper compartido por visibilitychange y el polling periódico.
+// Baja del hub, mergea localmente y refresca la UI si hay novedades.
+// Silencioso — no muestra alertas ni bloquea nada.
+async function autoSyncFromHub() {
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return;
+  try {
+    const r = await bajarMedicionesDelHub();
+    if (!r || r.error) return;
+    if ((r.nuevasLecturas || 0) > 0 || (r.puntosNuevos || 0) > 0) {
+      saveConfig();
+      renderDashboard();
+      renderMachineList();
+      renderEaEquipList();
+      renderSummaryBar();
+      // Si hay un análisis abierto, recargarlo con los datos nuevos
+      if (currentKey) loadAnalysis(currentKey);
+      const st = document.getElementById('bajarMedicionesStatus');
+      if (st) {
+        st.style.color = 'var(--good)';
+        st.textContent = `☁️ ${r.nuevasLecturas} lectura(s) nueva(s) del hub.`;
+        setTimeout(() => { if (st) st.textContent = ''; }, 6000);
+      }
+    }
+  } catch (_) {}
+}
+
+// Debounce de upload: espera 3s después del último edit de RPM antes de
+// subir al hub. Evita una request por cada celda cuando el usuario edita
+// varias en secuencia.
+let _rpmSyncTimer = null;
+function scheduleRpmSync() {
+  clearTimeout(_rpmSyncTimer);
+  _rpmSyncTimer = setTimeout(() => {
+    if (typeof SatSync === 'undefined' || !SatSync.init()) return;
+    guardarMedicionesEnNube().catch(() => {});
+  }, 3000);
+}
+
+// Pull al volver a la pestaña (la terminal B estaba en otra pestaña o
+// minimizada mientras la A cargó nuevas mediciones).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') autoSyncFromHub();
+});
+
+// Polling periódico: pull cada 10 minutos. Cubre el caso donde la app
+// queda abierta en un monitor sin interacción y otra terminal sube datos.
+setInterval(autoSyncFromHub, 10 * 60 * 1000);
 
 // ── [AUTOSYNC] Auto-descarga de mediciones del hub al arrancar ────────
 // Baja las mediciones del hub y las mergea con las locales. Si llegan
