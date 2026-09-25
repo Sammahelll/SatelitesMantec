@@ -1622,8 +1622,13 @@ const DEFAULT_PREFIX_MAP = {
 // NUEVO DeepSeek: machinesData ahora incluye rpms[] por medición
 let machinesData     = new Map(); // fullKey → {dates, params, rpms?}
 let equiposHub        = new Map(); // tag → {nombre, tipo, ubicacion, id} — catálogo compartido leído del hub
-let equipmentRegistry= new Map(); // equipId → {name, type, powerKW, rpmBase}
+let equipmentRegistry= new Map(); // equipId → {name, type, powerKW, rpmBase, location, brandModel}
 let machineMetadata  = new Map(); // fullKey → {displayName, powerKW, rpmBase}
+// [DATOS-CONTEXTO] Ficha por rodamiento (ubicación física dentro de un equipo,
+// ej. "ML" = Motor Lado Libre). Clave: `${equipId}::${locPrefix}`.
+// Guarda designación (ej. SKF 6316), fecha del último reemplazo, y un log de
+// observaciones/intervenciones de mantenimiento cortas con fecha.
+let rodamientoRegistry = new Map(); // equipId::locPrefix → {designacion, fechaReemplazo, observaciones:[{fecha,texto}]}
 let prefixMap        = {...DEFAULT_PREFIX_MAP};
 let pendingRawData   = null;
 let thresholds = {
@@ -1921,6 +1926,8 @@ function loadConfig() {
     if (c.thresholds) thresholds = {...thresholds,...c.thresholds};
     if (c.metadata) for (const [k,v] of Object.entries(c.metadata)) machineMetadata.set(k,v);
     if (c.equipmentRegistry) for (const [k,v] of Object.entries(c.equipmentRegistry)) equipmentRegistry.set(k,v);
+    // [DATOS-CONTEXTO] cargar ficha de rodamientos (designación / reemplazo / observaciones)
+    if (c.rodamientoRegistry) for (const [k,v] of Object.entries(c.rodamientoRegistry)) rodamientoRegistry.set(k,v);
     if (c.prefixMap) prefixMap = {...DEFAULT_PREFIX_MAP,...c.prefixMap};
     if (c.instrumentConfig) instrumentConfig = {...instrumentConfig,...c.instrumentConfig};
     if (c.machinesData) {
@@ -1948,10 +1955,51 @@ function saveConfig() {
     thresholds,
     metadata:          Object.fromEntries(machineMetadata),
     equipmentRegistry: Object.fromEntries(equipmentRegistry),
+    rodamientoRegistry: Object.fromEntries(rodamientoRegistry), // [DATOS-CONTEXTO]
     prefixMap,
     instrumentConfig,
     machinesData:      mdSerial
   }));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  3a. FICHA DE RODAMIENTO — designación, fecha de reemplazo, observaciones
+// ═══════════════════════════════════════════════════════════
+// [DATOS-CONTEXTO] Estos datos NO vienen del vibrómetro — se cargan a mano
+// desde la UI (ver panel en buildHistoryTable) y viajan en el payload de la
+// IA para enriquecer el análisis (designación de rodamiento habilita razonar
+// sobre frecuencias de falla; fecha de reemplazo evita interpretar como
+// "crónica" una tendencia que en realidad arrancó de cero tras un cambio).
+function getRodamientoKey(equipId, locPrefix){ return equipId + '::' + locPrefix; }
+
+function getRodamientoMeta(equipId, locPrefix){
+  return rodamientoRegistry.get(getRodamientoKey(equipId, locPrefix))
+      || { designacion:'', fechaReemplazo:'', observaciones:[] };
+}
+
+function setRodamientoMeta(equipId, locPrefix, patch){
+  const key  = getRodamientoKey(equipId, locPrefix);
+  const prev = rodamientoRegistry.get(key) || { designacion:'', fechaReemplazo:'', observaciones:[] };
+  rodamientoRegistry.set(key, {...prev, ...patch});
+  saveConfig();
+}
+
+function addObservacionRodamiento(equipId, locPrefix, texto){
+  if (!texto || !texto.trim()) return;
+  const key  = getRodamientoKey(equipId, locPrefix);
+  const prev = rodamientoRegistry.get(key) || { designacion:'', fechaReemplazo:'', observaciones:[] };
+  const observaciones = [...(prev.observaciones||[]), { fecha: new Date().toISOString(), texto: texto.trim() }];
+  rodamientoRegistry.set(key, {...prev, observaciones});
+  saveConfig();
+}
+
+function deleteObservacionRodamiento(equipId, locPrefix, idx){
+  const key  = getRodamientoKey(equipId, locPrefix);
+  const prev = rodamientoRegistry.get(key);
+  if (!prev) return;
+  const observaciones = (prev.observaciones||[]).filter((_,i)=>i!==idx);
+  rodamientoRegistry.set(key, {...prev, observaciones});
+  saveConfig();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1985,6 +2033,7 @@ function wipeAllData() {
   // 2) Resetear estado en memoria a sus valores por defecto
   machinesData.clear();
   equipmentRegistry.clear();
+  rodamientoRegistry.clear(); // [DATOS-CONTEXTO]
   machineMetadata.clear();
   prefixMap = {...DEFAULT_PREFIX_MAP};
   thresholds = {...DEFAULT_TH};
@@ -2860,6 +2909,13 @@ function renderEquipmentRegistry() {
              placeholder="RPM ref. norm." step="10"
              title="RPM de referencia para normalizar velocidad. Dejar 0 = automático (máx. observado). Solo aplica a equipos de velocidad variable."
              style="grid-column:span 2;">
+      <!-- ▼ [DATOS-CONTEXTO]: datos de ficha técnica para enriquecer el prompt de IA -->
+      <input type="text" id="eloc_${sid}" value="${escHtml(eq.location||'')}"
+             placeholder="Ubicación en planta" title="Ej: Planta Ácido Sulfúrico"
+             style="grid-column:span 2;">
+      <input type="text" id="ebm_${sid}" value="${escHtml(eq.brandModel||'')}"
+             placeholder="Marca / Modelo / Fabricante" title="Ej: Lone Star Blower MC12-5 — Fama Air Technologies"
+             style="grid-column:span 2;">
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
         <button class="btn-accent" style="font-size:.78rem;padding:4px 12px;" onclick="saveEquipment('${id}')">Guardar</button>
         <button class="btn-danger" style="font-size:.73rem;" onclick="deleteEquipment('${id}')">Eliminar</button>
@@ -2881,6 +2937,9 @@ function saveEquipment(id) {
   // [RPM-FIX] RPM de referencia para normalización (equipos variables).
   // 0 = automático (usa el máximo observado en el historial).
   const referenceRPM = parseFloat(document.getElementById(`refRpm_${sid}`)?.value) || 0;
+  // [DATOS-CONTEXTO] ficha técnica libre, no obligatoria — viaja en el payload de IA
+  const location    = document.getElementById(`eloc_${sid}`)?.value?.trim() || '';
+  const brandModel  = document.getElementById(`ebm_${sid}`)?.value?.trim() || '';
   // Si el usuario ya cargó kW y RPM reales, el flag needsConfig se cae solo —
   // los defaults (0 / 0 / rigid / Rotativa) que trajo importarEquiposDelHub()
   // ya no aplican.
@@ -2888,6 +2947,7 @@ function saveEquipment(id) {
   const complete = powerKW > 0 && rpmBase > 0;
   equipmentRegistry.set(id, {
     name, type, powerKW, rpmBase, mountType, machineTypeISO, referenceRPM,
+    location, brandModel,
     needsConfig: complete ? undefined : (prev.needsConfig || false)
   });
   syncEquipmentToPoints(id);  // NUEVO DeepSeek
@@ -2902,6 +2962,10 @@ function deleteEquipment(id) {
   equipmentRegistry.delete(id);
   for (const k of [...machinesData.keys()]) {
     if (k.startsWith(id+'/')) { machinesData.delete(k); machineMetadata.delete(k); }
+  }
+  // [DATOS-CONTEXTO] limpiar fichas de rodamiento asociadas a este equipo
+  for (const rk of [...rodamientoRegistry.keys()]) {
+    if (rk.startsWith(id+'::')) rodamientoRegistry.delete(rk);
   }
   saveConfig(); renderDashboard(); renderMachineList(); renderEquipmentRegistry();
   if (currentKey && currentKey.startsWith(id+'/')) {
@@ -4201,7 +4265,8 @@ function buildRecommendationsSection(k,lvl,r){
 // NUEVO DeepSeek: historial con columna RPM editable para sopladores
 function buildHistoryTable(k, isoGroupOverride){
   const d = machinesData.get(k);
-  const equipType = getEquipType(getEquipId(k));
+  const equipId   = getEquipId(k);
+  const equipType = getEquipType(equipId);
   const isBlower  = (equipType === 'Soplador');
   const tableId   = 'histTbl_' + k.replace(/[^a-zA-Z0-9]/g,'_');
   // ── ISO 10816-3 dynamic thresholds for table coloring ────────────────────
@@ -4212,7 +4277,8 @@ function buildHistoryTable(k, isoGroupOverride){
   // [RPM-FIX] Columna normalizada para equipos de velocidad variable.
   const isVarSpeedHist = isVariableSpeed(k);
   const refRPMHist     = isVarSpeedHist ? getReferenceRPM(k) : 0;
-  return `<div class="msection"><div class="msection-title">📋 Historial de Mediciones <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(ISO 10816-3 G${isoTh.isoClass} ${isoTh.mounting} — Alerta: ${isoTh.alertaVel} mm/s | Crítico: ${isoTh.criticoVel} mm/s)</span></div>
+  return `${buildRodamientoMetaPanel(equipId, getLocationPrefix(getPointCode(k)))}
+  <div class="msection"><div class="msection-title">📋 Historial de Mediciones <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(ISO 10816-3 G${isoTh.isoClass} ${isoTh.mounting} — Alerta: ${isoTh.alertaVel} mm/s | Crítico: ${isoTh.criticoVel} mm/s)</span></div>
     <div style="overflow-x:auto">
     <table class="rtable" id="${tableId}">
       <thead><tr>
@@ -4231,19 +4297,27 @@ function buildHistoryTable(k, isoGroupOverride){
           const cf = d.params.CFPlus[ri];
           const dr = d.params.Disp_RMS[ri];
           const rpmVal = d.rpms ? d.rpms[ri] : NaN;
+          // [RPM-FIX] Normalizar ANTES de evaluar estado/diagnóstico, no solo
+          // para mostrar la columna Vel.norm. Sin esto, una fila podía quedar
+          // "CRÍTICO" solo por haber sido medida a mayor RPM, contradiciendo
+          // el resumen normalizado del equipo que se muestra más arriba.
+          const vNorm = isVarSpeedHist ? normalizeParam('Vel_RMS',  vr, rpmVal, refRPMHist) : vr;
+          const apNorm= isVarSpeedHist ? normalizeParam('Acc_Peak', ap, rpmVal, refRPMHist) : ap;
+          const hfNorm= isVarSpeedHist ? normalizeParam('HF_Peak',  hf, rpmVal, refRPMHist) : hf;
           const lv = Math.max(
-            levelOf(vr, velT_iso),
-            levelOf(ap, T.acc_peak),
-            levelOf(hf, T.hf_peak),
+            levelOf(vNorm, velT_iso),
+            levelOf(apNorm, T.acc_peak),
+            levelOf(hfNorm, T.hf_peak),
             levelOf(tp, T.temp),
             levelOf(cf, T.cfplus),
             isoTh.useDisp ? levelOf(dr, dispT_iso) : 0
           );
-          // Bearing diagnosis per row (mismos umbrales técnicos que diagnoseMachine())
+          // Bearing diagnosis per row (mismos umbrales técnicos que diagnoseMachine(),
+          // y ahora sobre los MISMOS valores normalizados que usa ese resumen).
           const bdx = bearingDiagnosisMatrix(
             isNaN(cf) ? NaN : cf,
-            isNaN(hf) ? NaN : hf,
-            isNaN(ap) ? NaN : ap,
+            isNaN(hfNorm) ? NaN : hfNorm,
+            isNaN(apNorm) ? NaN : apNorm,
             isoTh
           );
           const bdxCell = bdx
@@ -4256,17 +4330,13 @@ function buildHistoryTable(k, isoGroupOverride){
             : `<td style="color:var(--muted);font-size:.7rem;">✅ Normal</td>`;
           return `<tr>
             <td>${fmtDate(d.dates[ri])}</td>
-            <td class="s-${metStatus(vr,velT_iso)}">${fmt(vr,4)}</td>
-            <td class="s-${metStatus(ap,T.acc_peak)}">${fmt(ap,3)}</td>
-            <td class="s-${metStatus(hf,T.hf_peak)}">${fmt(hf,2)}</td>
+            <td class="s-${metStatus(vNorm,velT_iso)}" title="${isVarSpeedHist?`Cruda: ${fmt(vr,4)} mm/s`:''}">${fmt(vr,4)}</td>
+            <td class="s-${metStatus(apNorm,T.acc_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(apNorm,3)} g`:''}">${fmt(ap,3)}</td>
+            <td class="s-${metStatus(hfNorm,T.hf_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(hfNorm,2)} g`:''}">${fmt(hf,2)}</td>
             <td class="s-${metStatus(tp,T.temp)}">${fmt(tp,1)}</td>
             <td class="s-${metStatus(cf,T.cfplus)}">${fmt(cf,2)}</td>
             <td>${fmt(dr,1)}</td>
-            ${isVarSpeedHist ? (()=>{
-              const rpmRow = d.rpms ? d.rpms[ri] : NaN;
-              const vNorm  = normalizeParam('Vel_RMS', vr, rpmRow, refRPMHist);
-              return `<td class="s-${metStatus(vNorm, velT_iso)}" title="Cruda: ${fmt(vr,4)} mm/s @ ${isNaN(rpmRow)?'—':rpmRow} RPM">${fmt(vNorm,4)}</td>`;
-            })() : ''}
+            ${isVarSpeedHist ? `<td class="s-${metStatus(vNorm, velT_iso)}" title="Cruda: ${fmt(vr,4)} mm/s @ ${isNaN(rpmVal)?'—':rpmVal} RPM">${fmt(vNorm,4)}</td>` : ''}
             ${isBlower ? `<td contenteditable="true" class="editable-rpm" data-idx="${ri}" data-key="${escHtml(k)}" title="Clic para editar RPM">${(rpmVal == null || isNaN(rpmVal)) ? '—' : rpmVal}</td>` : ''}
             <td class="s-${STATUS[lv]}">${STATUS_LABELS[lv]}</td>
             ${bdxCell}
@@ -4277,6 +4347,62 @@ function buildHistoryTable(k, isoGroupOverride){
     </div>
     ${isBlower ? '<div style="margin-top:8px;font-size:.7rem;color:var(--muted);">✏️ Haga clic en una celda de RPM para editarla. Los cambios se guardan automáticamente.</div>' : ''}
   </div>`;
+}
+
+// [DATOS-CONTEXTO] Panel de ficha del rodamiento: designación, fecha del
+// último reemplazo, y un log corto de observaciones/intervenciones. Se
+// muestra arriba del historial de mediciones porque aplica a la UBICACIÓN
+// física (rodamiento), no a un eje individual — los tres ejes de un mismo
+// rodamiento comparten esta ficha.
+function buildRodamientoMetaPanel(equipId, locPrefix){
+  const meta = getRodamientoMeta(equipId, locPrefix);
+  const sid  = (equipId + '_' + locPrefix).replace(/[^a-zA-Z0-9]/g,'_');
+  const obsList = (meta.observaciones||[]).slice().reverse().map((o,revIdx)=>{
+    const idx = meta.observaciones.length - 1 - revIdx; // índice real para poder borrar
+    return `<div class="robs-item" style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:.68rem;color:var(--muted);white-space:nowrap;">${fmtDate(new Date(o.fecha))}</span>
+      <span style="font-size:.78rem;flex:1;">${escHtml(o.texto)}</span>
+      <button class="btn-small" style="padding:1px 7px;font-size:.68rem;" title="Eliminar observación"
+        onclick="deleteObservacionRodamiento('${escHtml(equipId)}','${escHtml(locPrefix)}',${idx});refreshRodamientoMetaPanel('${escHtml(equipId)}','${escHtml(locPrefix)}');">✕</button>
+    </div>`;
+  }).join('') || `<div style="font-size:.75rem;color:var(--muted);padding:4px 0;">Sin observaciones cargadas.</div>`;
+
+  return `<div class="msection" id="rodMeta_${sid}">
+    <div class="msection-title">🔧 Ficha del Rodamiento (${escHtml(locPrefix)})
+      <span style="font-size:.68rem;color:var(--muted);font-weight:400;">— datos cargados a mano, no vienen del vibrómetro</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:.72rem;color:var(--muted);display:block;margin-bottom:3px;">Designación del rodamiento</label>
+        <input type="text" id="rdes_${sid}" value="${escHtml(meta.designacion||'')}" placeholder="Ej: SKF 6316, NU-322..."
+          onchange="setRodamientoMeta('${escHtml(equipId)}','${escHtml(locPrefix)}',{designacion:this.value.trim()})">
+      </div>
+      <div>
+        <label style="font-size:.72rem;color:var(--muted);display:block;margin-bottom:3px;">Fecha de último reemplazo</label>
+        <input type="date" id="rfec_${sid}" value="${escHtml(meta.fechaReemplazo||'')}"
+          onchange="setRodamientoMeta('${escHtml(equipId)}','${escHtml(locPrefix)}',{fechaReemplazo:this.value})">
+      </div>
+    </div>
+    <label style="font-size:.72rem;color:var(--muted);display:block;margin-bottom:4px;">Observaciones / intervenciones</label>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="robsInput_${sid}" placeholder="Ej: alineación láser realizada, pérdida de aceite en retén, etc." style="flex:1;">
+      <button class="btn-small" onclick="(function(){
+        const inp = document.getElementById('robsInput_${sid}');
+        addObservacionRodamiento('${escHtml(equipId)}','${escHtml(locPrefix)}', inp.value);
+        inp.value='';
+        refreshRodamientoMetaPanel('${escHtml(equipId)}','${escHtml(locPrefix)}');
+      })()">➕ Agregar</button>
+    </div>
+    <div id="robsList_${sid}" style="max-height:160px;overflow-y:auto;">${obsList}</div>
+  </div>`;
+}
+
+// Re-renderiza in-place el panel de ficha de rodamiento tras agregar/borrar
+// una observación, sin tener que reabrir todo el modal.
+function refreshRodamientoMetaPanel(equipId, locPrefix){
+  const sid = (equipId + '_' + locPrefix).replace(/[^a-zA-Z0-9]/g,'_');
+  const el  = document.getElementById('rodMeta_' + sid);
+  if (el) el.outerHTML = buildRodamientoMetaPanel(equipId, locPrefix);
 }
 
 // NUEVO DeepSeek: editores de RPM en la tabla de historial
@@ -4949,6 +5075,32 @@ function toggleApiKeyVisibility(){
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
+// [DATOS-CONTEXTO] Serie histórica compacta (últimas n lecturas) de un eje,
+// con fecha, parámetros clave y RPM de esa misma fila. Se manda dentro del
+// payload de IA para que el modelo pueda razonar sobre la EVOLUCIÓN (ej.
+// detectar un colapso de CF+ o un salto de aceleración global) en vez de
+// depender solo del último valor + una tendencia pre-calculada.
+function buildSerieHistorica(k, n=8){
+  const d = machinesData.get(k);
+  if (!d || !d.dates || !d.dates.length) return [];
+  const len   = d.dates.length;
+  const start = Math.max(0, len - n);
+  const out = [];
+  for (let i = start; i < len; i++){
+    const rpmVal = d.rpms ? d.rpms[i] : NaN;
+    out.push({
+      fecha:       fmtDate(d.dates[i]),
+      vel_rms_mms: fmt(d.params.Vel_RMS?.[i], 4),
+      hf_peak_g:   fmt(d.params.HF_Peak?.[i], 2),
+      acc_peak_g:  fmt(d.params.Acc_Peak?.[i], 3),
+      cf_plus:     fmt(d.params.CFPlus?.[i], 2),
+      temp_c:      fmt(d.params.Temp?.[i], 1),
+      rpm:         (rpmVal != null && !isNaN(rpmVal)) ? rpmVal : null
+    });
+  }
+  return out;
+}
+
 function buildAIPayload(){
   const scope = document.querySelector('input[name="aiScope"]:checked').value;
   const equipId = document.getElementById('aiEquipSelect').value;
@@ -4986,7 +5138,15 @@ function buildAIPayload(){
       const loc = diagnoseLocation(locKeys);
       if (!loc) continue;
 
-      // Ejes con sus valores + tendencia individual
+      // [RPM-FIX/DATOS-CONTEXTO] ¿Este rodamiento opera a velocidad variable?
+      // Se evalúa una vez por ubicación (todos sus ejes comparten equipo).
+      const varSpeedLoc = loc.axes.length ? isVariableSpeed(loc.axes[0].k) : false;
+      const refRPMLoc   = varSpeedLoc ? getReferenceRPM(loc.axes[0].k) : null;
+
+      // Ejes con sus valores + tendencia individual + serie histórica compacta.
+      // La serie histórica (últimas 8 lecturas) es lo que permite a la IA
+      // razonar sobre patrones de evolución (ej. "colapso de CF+") en vez de
+      // ver solo el último valor + una pendiente ya calculada de un parámetro.
       const ejes = loc.axes.map(a => {
         const d = machinesData.get(a.k);
         const r = getLastRecord(a.k);
@@ -5006,9 +5166,16 @@ function buildAIPayload(){
             hf_peak_g:   fmt(r.hf_acc_peak_g,2),
             cf_plus:     fmt(r.cfplus,2),
             acc_peak_g:  fmt(r.ov_acc_peak_g,3),
-            temp_c:      fmt(r.temp_c,1)
+            temp_c:      fmt(r.temp_c,1),
+            // [RPM-FIX] RPM real de ESTA lectura (null si no se cargó — equipos
+            // de velocidad variable sin RPM registrado en esa fila puntual).
+            rpm:         (r.rpm != null && !isNaN(r.rpm)) ? r.rpm : null
           },
           tendencia_vel_rms: tendencia,
+          // [DATOS-CONTEXTO] últimas 8 lecturas crudas (fecha + parámetros clave + RPM
+          // de esa misma fila) para que la IA pueda evaluar la evolución completa,
+          // no solo el último valor y una tendencia pre-calculada de un solo parámetro.
+          serie_historica: buildSerieHistorica(a.k, 8),
           modos_falla_eje: a.faults.map(f=>({
             codigo:f.code, severidad:f.severity, score:Math.round(f.score)
           }))
@@ -5028,14 +5195,33 @@ function buildAIPayload(){
         }
       }
 
+      // [DATOS-CONTEXTO] ficha de rodamiento cargada a mano (designación,
+      // fecha de reemplazo, observaciones de mantenimiento). null explícito
+      // si no está cargada — nunca se omite la clave.
+      const rodMeta = getRodamientoMeta(eid, locPrefix);
+      const observacionesRecientes = (rodMeta.observaciones && rodMeta.observaciones.length)
+        ? rodMeta.observaciones.slice(-4).map(o => `${fmtDate(new Date(o.fecha))}: ${o.texto}`)
+        : null;
+
       rodamientos.push({
         tipo_entrada:            'rodamiento',     // ← marca explícita para la IA
         equipo:                  getEquipName(eid),
         tipo_equipo:             eq.type || 'Desconocido',
         potencia_kw:             eq.powerKW || 0,
-        rpm:                     eq.rpmBase || 0,
+        rpm:                     eq.rpmBase || 0,   // RPM nominal de chapa (referencia, no necesariamente el real de cada lectura)
+        // [RPM-FIX] si el equipo es de velocidad variable, aclarar contra qué
+        // RPM de referencia están normalizados vel/acc/hf en cada eje.
+        velocidad_variable:            varSpeedLoc,
+        rpm_referencia_normalizacion:  refRPMLoc,
+        // [DATOS-CONTEXTO] ficha técnica del equipo, cargada a mano
+        ubicacion_planta:        eq.location    || null,
+        marca_modelo:            eq.brandModel  || null,
         rodamiento:              loc.locLabel,      // "Motor LL", "Bomba LA", etc.
         codigo_rodamiento:       loc.locPrefix,     // "ML", "BA", ...
+        // [DATOS-CONTEXTO] ficha del rodamiento específico
+        designacion_rodamiento:  rodMeta.designacion || null,
+        fecha_ultimo_reemplazo:  rodMeta.fechaReemplazo || null,
+        observaciones_recientes: observacionesRecientes,
         ejes_medidos:            loc.axes.length,
         indice_salud_rodamiento: loc.locHealth,
         nivel_consolidado:       loc.locLevel,
@@ -5094,6 +5280,29 @@ REGLAS DE ANÁLISIS CRUZADO (obligatorias):
 7. NO renombres "rodamientos" a "equipos" ni "puntos_medicion" en tu respuesta.
 8. "resumen_ejecutivo" debe ser un STRING, no un objeto ni una lista.
 9. "plan_de_accion" trae UNA entrada por rodamiento que lo necesite, no una por eje.
+10. Si "velocidad_variable" es true, los valores de vel_rms/acc_peak/hf_peak que
+    recibís YA vienen normalizados a "rpm_referencia_normalizacion" — no los
+    reinterpretes como si fueran a RPM nominal fijo, y no asumas que una caída
+    de amplitud entre lecturas se debe a mejora mecánica si el "rpm" de esa
+    fila en "serie_historica" también cayó: puede ser solo menor régimen de
+    operación.
+11. "serie_historica" trae las últimas lecturas crudas (fecha, parámetros, rpm
+    de esa fila) de cada eje. Usala para evaluar TENDENCIA real — en especial
+    caídas de CF+ que coincidan con subas de vel_rms/acc_peak (patrón de
+    colapso de factor de cresta en fase terminal de rodamiento) — no te
+    quedes solo con "ultima_lectura".
+12. "designacion_rodamiento" (si no es null) es el modelo comercial del
+    rodamiento (ej. "SKF 6316"): si lo conocés, podés mencionar frecuencias
+    de falla típicas (BPFO/BPFI/BSF/FTF) como apoyo, aclarando que son
+    estimadas si no tenés la geometría exacta.
+13. "fecha_ultimo_reemplazo" (si no es null) marca cuándo se reemplazó ESE
+    rodamiento: no interpretes la tendencia previa a esa fecha como parte de
+    la vida del rodamiento actual.
+14. "observaciones_recientes" (si no es null) son notas de mantenimiento
+    cargadas a mano (alineaciones, pérdidas de aceite, cambios, etc.) — cruzalas
+    con la tendencia de vibración si son relevantes a la causa probable.
+15. Cualquier campo anterior puede venir en null cuando el dato no está
+    cargado — nunca lo inventes ni asumas un valor por defecto.
 
 DATOS DE RODAMIENTOS (${rodamientos.length} rodamientos):
 ${JSON.stringify(rodamientos, null, 2)}
