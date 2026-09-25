@@ -1536,6 +1536,39 @@ header{
   </div>
 </div>
 
+<!-- ===== RPM BULK-LOAD MODAL ===== -->
+<div class="modal-overlay" id="rpmBulkModal" style="z-index:1500;" onclick="closeRpmBulkModal(event)">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" style="font-size:1.1rem;">📥 Cargar RPM por fecha</div>
+        <div class="modal-sub" id="rpmBulkSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeRpmBulkModal(null)">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">
+        Se aplica a <strong>todos los ejes/puntos</strong> de este equipo que tengan una lectura en cada fecha
+        — no hace falta repetir la carga eje por eje.
+      </div>
+      <label style="font-size:.72rem;color:var(--muted);display:block;margin-bottom:4px;">
+        Pegar desde Excel (opcional) — una fila por línea: <code>fecha&nbsp;&nbsp;RPM</code> (tab, coma o espacio)
+      </label>
+      <textarea id="rpmPasteArea" rows="3" placeholder="15/03/2025	2400&#10;22/03/2025	2380"
+        style="width:100%;resize:vertical;background:var(--card2);border:1px solid var(--border);border-radius:8px;
+        color:var(--text);padding:8px 10px;font-family:'Share Tech Mono',monospace;font-size:.78rem;box-sizing:border-box;"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin:8px 0 16px;">
+        <button class="btn-small" onclick="applyRpmPaste()">⬆️ Aplicar pegado a la lista</button>
+      </div>
+      <div id="rpmBulkRows" style="max-height:320px;overflow-y:auto;border-top:1px solid var(--border);"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+        <button class="btn-ghost" onclick="closeRpmBulkModal(null)">Cancelar</button>
+        <button class="btn-accent" onclick="saveRpmBulk()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 //  1. CONSTANTS
@@ -4285,7 +4318,11 @@ function buildHistoryTable(k, isoGroupOverride){
         <th>Fecha/Hora</th><th>Vel.RMS mm/s</th><th>Acc.Peak g</th>
         <th>HF Pk g</th><th>Temp °C</th><th>CF+</th><th>Disp.RMS µm</th>
         ${isVarSpeedHist ? `<th>Vel.norm<br><span style="font-size:.6rem;font-weight:400;">@ ${refRPMHist} RPM</span></th>` : ''}
-        ${isBlower?'<th>RPM</th>':''}<th>Estado ISO</th><th>Diag. Rodamiento</th>
+        ${isBlower?`<th>RPM
+          <button class="btn-small" style="padding:1px 7px;font-size:.65rem;margin-left:4px;vertical-align:middle;"
+            title="Cargar RPM por fecha para todos los ejes/puntos de este equipo"
+            onclick="event.stopPropagation();openRpmBulkLoad('${escJs(k)}')">📥</button>
+        </th>`:''}<th>Estado ISO</th><th>Diag. Rodamiento</th>
       </tr></thead>
       <tbody>
         ${[...d.dates].map((_,i)=>{
@@ -4454,14 +4491,143 @@ function handleRpmEdit(e) {
     scheduleRpmSync();
     // [RENDER-FIX] Re-render de la tabla de historial para que Vel.norm
     // se recalcule en pantalla sin esperar a recargar el análisis.
-    const tableId = 'histTbl_' + key.replace(/[^a-zA-Z0-9]/g,'_');
-    const tbl = document.getElementById(tableId);
-    const section = tbl ? tbl.closest('.msection') : null;
-    if (section) {
-      section.outerHTML = buildHistoryTable(key, getISOClassOverride());
-      setTimeout(() => attachRpmEditors(), 0);
-    }
+    refreshHistoryTable(key);
   }
+}
+
+// [RENDER-FIX] Helper compartido: re-renderiza in-place la tabla de
+// historial de una key (usado tanto por la edición celda-por-celda como
+// por la carga masiva de RPM por fecha).
+function refreshHistoryTable(key) {
+  const tableId = 'histTbl_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+  const tbl = document.getElementById(tableId);
+  const section = tbl ? tbl.closest('.msection') : null;
+  if (section) {
+    section.outerHTML = buildHistoryTable(key, getISOClassOverride());
+    setTimeout(() => attachRpmEditors(), 0);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// [RPM-BULK] Carga de RPM por fecha para todo el equipo — evita tener
+// que editar celda por celda en cada eje/punto de medición. Se abre desde
+// el botón 📥 en el encabezado de la columna RPM de buildHistoryTable().
+// Junta las fechas ÚNICAS (por día) de TODOS los ejes/puntos del mismo
+// equipo (mismo equipId, distintos sufijos de key) y, al guardar, escribe
+// el RPM en cada eje que tenga una lectura ese día — así no hace falta
+// repetir la carga en cada uno de los ejes/puntos por separado.
+// ═══════════════════════════════════════════════════════════
+let _rpmBulkKey = null; // key del eje desde el que se abrió (referencia de valores actuales)
+
+function _rpmBulkSiblingKeys(k) {
+  const equipId = getEquipId(k);
+  return [...machinesData.keys()].filter(kk => kk.startsWith(equipId + '/'));
+}
+
+function _rpmBulkSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function openRpmBulkLoad(k) {
+  const d = machinesData.get(k);
+  if (!d || !d.dates || !d.dates.length) return;
+  _rpmBulkKey = k;
+  document.getElementById('rpmBulkSub').textContent = getEquipNameOnly(k);
+  document.getElementById('rpmPasteArea').value = '';
+  renderRpmBulkRows(k);
+  document.getElementById('rpmBulkModal').classList.add('open');
+}
+
+function closeRpmBulkModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('rpmBulkModal').classList.remove('open');
+  _rpmBulkKey = null;
+}
+
+// Construye la lista de fechas únicas (por día), más reciente primero,
+// con un input de RPM prellenado con el valor ya cargado (si existe) en
+// la key desde la que se abrió el modal.
+function renderRpmBulkRows(k) {
+  const d = machinesData.get(k);
+  const uniqueDays = [];
+  [...d.dates].forEach((dt, i) => {
+    if (!uniqueDays.some(u => _rpmBulkSameDay(u.date, dt))) {
+      const rv = d.rpms ? d.rpms[i] : null;
+      uniqueDays.push({ date: dt, rpm: (rv != null && !isNaN(rv)) ? rv : '' });
+    }
+  });
+  uniqueDays.sort((a, b) => b.date - a.date); // más reciente primero
+  const rows = uniqueDays.map((u, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border);">
+      <span style="flex:1;font-size:.8rem;font-family:'Share Tech Mono',monospace;">${fmtDate(u.date)}</span>
+      <input type="number" step="10" class="rpm-bulk-input" data-ts="${u.date.getTime()}"
+        value="${u.rpm}" placeholder="RPM"
+        style="width:100px;background:var(--card2);border:1px solid var(--border);border-radius:6px;
+        color:var(--text);padding:5px 8px;font-family:'Share Tech Mono',monospace;font-size:.8rem;">
+    </div>`).join('');
+  document.getElementById('rpmBulkRows').innerHTML = rows ||
+    '<div style="padding:12px 0;color:var(--muted);font-size:.8rem;">Sin fechas cargadas.</div>';
+}
+
+// Parsea el texto pegado (fecha + RPM por línea, separados por tab, coma
+// o espacios) y completa los inputs cuya fecha coincide (mismo día).
+function applyRpmPaste() {
+  const raw = document.getElementById('rpmPasteArea').value;
+  if (!raw.trim()) return;
+  const inputs = [...document.querySelectorAll('.rpm-bulk-input')];
+  let matched = 0, unmatched = 0;
+  raw.split(/\r?\n/).forEach(line => {
+    if (!line.trim()) return;
+    const parts = line.split(/\t|,|;/).map(s => s.trim()).filter(Boolean);
+    let dateStr, rpmStr;
+    if (parts.length >= 2) { [dateStr, rpmStr] = parts; }
+    else {
+      const m = line.trim().match(/^(.+?)\s+([\d.,]+)$/);
+      if (!m) { unmatched++; return; }
+      dateStr = m[1]; rpmStr = m[2];
+    }
+    const rpm = parseFloat(String(rpmStr).replace(',', '.'));
+    let dt = new Date(dateStr);
+    if (isNaN(dt)) {
+      const dm = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if (dm) dt = new Date(+dm[3] < 100 ? 2000 + +dm[3] : +dm[3], +dm[2] - 1, +dm[1]);
+    }
+    if (isNaN(dt) || isNaN(rpm)) { unmatched++; return; }
+    const inp = inputs.find(el => _rpmBulkSameDay(new Date(+el.dataset.ts), dt));
+    if (inp) { inp.value = rpm; matched++; } else { unmatched++; }
+  });
+  const sub = document.getElementById('rpmBulkSub');
+  if (sub) sub.textContent = `${getEquipNameOnly(_rpmBulkKey)} — ${matched} fecha(s) emparejada(s)` +
+    (unmatched ? `, ${unmatched} sin coincidencia` : '');
+}
+
+// Guarda los RPM ingresados en TODOS los ejes/puntos del equipo cuya
+// fecha de lectura coincida (mismo día) con la fila editada.
+function saveRpmBulk() {
+  if (!_rpmBulkKey) return;
+  const siblingKeys = _rpmBulkSiblingKeys(_rpmBulkKey);
+  const entries = [...document.querySelectorAll('.rpm-bulk-input')]
+    .map(inp => ({ ts: +inp.dataset.ts, val: inp.value.trim() === '' ? null : parseFloat(inp.value) }))
+    .filter(e => e.val === null || !isNaN(e.val));
+  if (!entries.length) { closeRpmBulkModal(null); return; }
+  siblingKeys.forEach(kk => {
+    const d = machinesData.get(kk);
+    if (!d || !d.dates) return;
+    if (!d.rpms || d.rpms.length !== d.dates.length) {
+      d.rpms = new Array(d.dates.length).fill(NaN);
+    }
+    let touched = false;
+    d.dates.forEach((dt, i) => {
+      const e = entries.find(en => _rpmBulkSameDay(new Date(en.ts), dt));
+      if (e) { d.rpms[i] = e.val; touched = true; }
+    });
+    if (touched) machinesData.set(kk, d);
+  });
+  saveConfig();
+  scheduleRpmSync();
+  const openKey = _rpmBulkKey;
+  closeRpmBulkModal(null);
+  refreshHistoryTable(openKey);
 }
 
 function closeModal(e){
