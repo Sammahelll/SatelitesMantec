@@ -1982,7 +1982,7 @@ function setRodamientoMeta(equipId, locPrefix, patch){
   const prev = rodamientoRegistry.get(key) || { designacion:'', fechaReemplazo:'', observaciones:[] };
   rodamientoRegistry.set(key, {...prev, ...patch});
   saveConfig();
-  scheduleRodamientoMetaSync(); // [SYNC-FIX] subir la ficha al hub (debounced)
+  scheduleFichaRodamientoSync(equipId);
 }
 
 function addObservacionRodamiento(equipId, locPrefix, texto){
@@ -1992,7 +1992,7 @@ function addObservacionRodamiento(equipId, locPrefix, texto){
   const observaciones = [...(prev.observaciones||[]), { fecha: new Date().toISOString(), texto: texto.trim() }];
   rodamientoRegistry.set(key, {...prev, observaciones});
   saveConfig();
-  scheduleRodamientoMetaSync(); // [SYNC-FIX] subir la ficha al hub (debounced)
+  scheduleFichaRodamientoSync(equipId);
 }
 
 function deleteObservacionRodamiento(equipId, locPrefix, idx){
@@ -2002,7 +2002,65 @@ function deleteObservacionRodamiento(equipId, locPrefix, idx){
   const observaciones = (prev.observaciones||[]).filter((_,i)=>i!==idx);
   rodamientoRegistry.set(key, {...prev, observaciones});
   saveConfig();
-  scheduleRodamientoMetaSync(); // [SYNC-FIX] subir la ficha al hub (debounced)
+  scheduleFichaRodamientoSync(equipId);
+}
+
+// ── Subida a la nube de la ficha de rodamiento (designación / fecha de
+// reemplazo / observaciones) — hasta acá SOLO vivía en localStorage (saveConfig).
+// Usa SatSync.guardarFichas, el mismo mecanismo equipos.ficha[modulo] que ya
+// usan bomba_pro / motor_pro, agrupando por equipo todos los rodamientos
+// (locPrefix) que le pertenecen. Debounce de 3s por equipo, igual patrón que
+// scheduleRpmSync, para no disparar una llamada por cada tecla.
+const _fichaRodamientoSyncTimers = new Map();
+function buildFichaRodamientosParaEquipo(equipId){
+  const rodamientos = {};
+  for (const [key, meta] of rodamientoRegistry.entries()){
+    if (!key.startsWith(equipId + '::')) continue;
+    const locPrefix = key.slice((equipId + '::').length);
+    rodamientos[locPrefix] = meta;
+  }
+  return { rodamientos };
+}
+async function guardarFichaRodamientoEnNube(equipId){
+  if (typeof SatSync === 'undefined' || !SatSync.init()) return;
+  const tag = getEquipName(equipId);
+  if (!tag) return;
+  try{
+    await SatSync.guardarFichas('vibra_pro', [{ tag, ficha: buildFichaRodamientosParaEquipo(equipId) }]);
+  }catch(err){
+    console.warn('[SatSync] no se pudo subir la ficha de rodamiento de ' + tag, err);
+  }
+}
+function scheduleFichaRodamientoSync(equipId){
+  if (_fichaRodamientoSyncTimers.has(equipId)) clearTimeout(_fichaRodamientoSyncTimers.get(equipId));
+  _fichaRodamientoSyncTimers.set(equipId, setTimeout(() => {
+    _fichaRodamientoSyncTimers.delete(equipId);
+    guardarFichaRodamientoEnNube(equipId);
+  }, 3000));
+}
+
+// ── Bajada: adopta del hub la ficha de rodamiento de cada equipo, SOLO para
+// rellenar lo que todavía no existe localmente (equivalente al patrón
+// noPisar de guardarFichas) — nunca pisa una edición local con lo que vino
+// de la nube, para no perder un cambio hecho hace instantes en otra pestaña.
+function adoptarFichasRodamientoDelHub(equiposNube){
+  let adoptados = 0;
+  for (const eq of equiposNube){
+    if (!eq || !eq.tag || !eq.ficha || !eq.ficha.vibra_pro || !eq.ficha.vibra_pro.rodamientos) continue;
+    let equipId = null;
+    for (const [id, e] of equipmentRegistry.entries()){
+      if (normalizeEquipStr(e.name) === normalizeEquipStr(eq.tag)) { equipId = id; break; }
+    }
+    if (!equipId) continue;
+    for (const [locPrefix, meta] of Object.entries(eq.ficha.vibra_pro.rodamientos)){
+      const key = getRodamientoKey(equipId, locPrefix);
+      if (rodamientoRegistry.has(key)) continue; // ya hay algo local: no pisar
+      rodamientoRegistry.set(key, meta);
+      adoptados++;
+    }
+  }
+  if (adoptados) saveConfig();
+  return adoptados;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2614,6 +2672,7 @@ async function sincronizarEquiposHub(silencioso){
     equiposHub = new Map(rows.map(e => [e.tag, e]));
     const dl = document.getElementById('hubTagsDatalist');
     if(dl) dl.innerHTML = rows.map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.nombre||'')}</option>`).join('');
+    if (adoptarFichasRodamientoDelHub(rows)) renderEquipmentRegistry();
     return true;
   }catch(err){
     console.error('[SatSync] error sincronizando equipos', err);
@@ -2919,6 +2978,11 @@ function renderEquipmentRegistry() {
       <input type="text" id="ebm_${sid}" value="${escHtml(eq.brandModel||'')}"
              placeholder="Marca / Modelo / Fabricante" title="Ej: Lone Star Blower MC12-5 — Fama Air Technologies"
              style="grid-column:span 2;">
+      <!-- ▼ [SYNC-FIX]: checkbox manual de velocidad variable (antes dependía solo de type==='Soplador') -->
+      <label style="grid-column:span 2;display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="evar_${sid}" ${eq.variableSpeed ? 'checked' : ''}>
+        ⚙️ Velocidad variable (habilita columna RPM editable y carga por fecha)
+      </label>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
         <button class="btn-accent" style="font-size:.78rem;padding:4px 12px;" onclick="saveEquipment('${id}')">Guardar</button>
         <button class="btn-danger" style="font-size:.73rem;" onclick="deleteEquipment('${id}')">Eliminar</button>
@@ -2943,6 +3007,8 @@ function saveEquipment(id) {
   // [DATOS-CONTEXTO] ficha técnica libre, no obligatoria — viaja en el payload de IA
   const location    = document.getElementById(`eloc_${sid}`)?.value?.trim() || '';
   const brandModel  = document.getElementById(`ebm_${sid}`)?.value?.trim() || '';
+  // [SYNC-FIX] flag manual de velocidad variable (independiente del tipo de equipo)
+  const variableSpeed = document.getElementById(`evar_${sid}`)?.checked || false;
   // Si el usuario ya cargó kW y RPM reales, el flag needsConfig se cae solo —
   // los defaults (0 / 0 / rigid / Rotativa) que trajo importarEquiposDelHub()
   // ya no aplican.
@@ -2950,7 +3016,7 @@ function saveEquipment(id) {
   const complete = powerKW > 0 && rpmBase > 0;
   equipmentRegistry.set(id, {
     name, type, powerKW, rpmBase, mountType, machineTypeISO, referenceRPM,
-    location, brandModel,
+    location, brandModel, variableSpeed,
     needsConfig: complete ? undefined : (prev.needsConfig || false)
   });
   syncEquipmentToPoints(id);  // NUEVO DeepSeek
@@ -4270,7 +4336,7 @@ function buildHistoryTable(k, isoGroupOverride){
   const d = machinesData.get(k);
   const equipId   = getEquipId(k);
   const equipType = getEquipType(equipId);
-  const isBlower  = (equipType === 'Soplador');
+  const isBlower  = isVariableSpeed(k);  // [SYNC-FIX] ya no depende del tipo "Soplador" literal, sino del flag manual/heurística de velocidad variable
   const tableId   = 'histTbl_' + k.replace(/[^a-zA-Z0-9]/g,'_');
   // ── ISO 10816-3 dynamic thresholds for table coloring ────────────────────
   const isoTh = getISOThresholdsForKey(k, isoGroupOverride);
@@ -4278,10 +4344,32 @@ function buildHistoryTable(k, isoGroupOverride){
                   : [isoTh.alertaVel*0.63, isoTh.alertaVel, isoTh.criticoVel];
   const dispT_iso = [isoTh.alertaDisp*0.5, isoTh.alertaDisp, isoTh.criticoDisp];
   // [RPM-FIX] Columna normalizada para equipos de velocidad variable.
-  const isVarSpeedHist = isVariableSpeed(k);
+  const isVarSpeedHist = isBlower;
   const refRPMHist     = isVarSpeedHist ? getReferenceRPM(k) : 0;
+  // [SYNC-FIX] cajita "RPM por fecha" — carga un RPM una sola vez y lo aplica
+  // a TODAS las filas (de TODOS los ejes/puntos de este mismo equipo) que
+  // compartan esa fecha (agrupando por día), para no repetir la carga eje
+  // por eje cuando se sabe que el RPM fue el mismo en toda la ronda.
+  const rpmBulkBox = isBlower ? (() => {
+    const seen = new Set();
+    const dayOpts = [...d.dates].map((dt,i)=>({dt, i}))
+      .sort((a,b)=> b.dt - a.dt) // newest first
+      .map(({dt})=>{
+        const dayKey = (dt instanceof Date ? dt : new Date(dt)).toISOString().slice(0,10);
+        if (seen.has(dayKey)) return '';
+        seen.add(dayKey);
+        return `<option value="${dayKey}">${fmtDateShort(dt)}</option>`;
+      }).join('');
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:8px;border:1px dashed var(--border);border-radius:6px;">
+      <span style="font-size:.72rem;color:var(--muted);">⚡ Cargar RPM para una fecha (se aplica a todos los ejes/puntos de este equipo):</span>
+      <select id="rpmBulkDate_${tableId}" style="font-size:.75rem;">${dayOpts}</select>
+      <input type="number" id="rpmBulkVal_${tableId}" placeholder="RPM" step="10" style="width:90px;">
+      <button class="btn-small rpm-bulk-apply" data-key="${escHtml(k)}" data-table="${tableId}">Aplicar a fecha</button>
+    </div>`;
+  })() : '';
   return `${buildRodamientoMetaPanel(equipId, getLocationPrefix(getPointCode(k)))}
   <div class="msection"><div class="msection-title">📋 Historial de Mediciones <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(ISO 10816-3 G${isoTh.isoClass} ${isoTh.mounting} — Alerta: ${isoTh.alertaVel} mm/s | Crítico: ${isoTh.criticoVel} mm/s)</span></div>
+    ${rpmBulkBox}
     <div style="overflow-x:auto">
     <table class="rtable" id="${tableId}">
       <thead><tr>
@@ -4418,6 +4506,66 @@ function attachRpmEditors() {
     cell.addEventListener('keydown', handleRpmKeydown);
     cell.addEventListener('focus',   handleRpmFocus);
   });
+  attachRpmBulkBox();
+}
+
+// [SYNC-FIX] cajita "RPM por fecha" — wiring del botón "Aplicar a fecha".
+function attachRpmBulkBox() {
+  document.querySelectorAll('.rpm-bulk-apply').forEach(btn => {
+    btn.removeEventListener('click', handleRpmBulkApply);
+    btn.addEventListener('click', handleRpmBulkApply);
+  });
+}
+
+function handleRpmBulkApply(e) {
+  const btn     = e.currentTarget;
+  const key     = btn.dataset.key;
+  const tableId = btn.dataset.table;
+  const dateSel = document.getElementById('rpmBulkDate_' + tableId);
+  const valInp  = document.getElementById('rpmBulkVal_' + tableId);
+  const dayKey  = dateSel ? dateSel.value : '';
+  const rpmVal  = parseFloat(valInp ? valInp.value : NaN);
+  if (!dayKey || isNaN(rpmVal)) { alert('Elegí una fecha y cargá un valor de RPM válido.'); return; }
+  const equipId = getEquipId(key);
+  const n = applyRpmToDateAllPoints(equipId, dayKey, rpmVal);
+  if (n > 0) {
+    if (valInp) valInp.value = '';
+    const tbl = document.getElementById(tableId);
+    const section = tbl ? tbl.closest('.msection') : null;
+    if (section) {
+      section.outerHTML = buildHistoryTable(key, getISOClassOverride());
+      setTimeout(() => attachRpmEditors(), 0);
+    }
+  } else {
+    alert('No se encontraron lecturas con esa fecha en ningún eje/punto de este equipo.');
+  }
+}
+
+// [SYNC-FIX] Aplica un valor de RPM a TODAS las lecturas (de TODOS los
+// ejes/puntos de un mismo equipo) que caigan en el día indicado (dayKey,
+// formato YYYY-MM-DD). Agrupa por día porque distintos ejes de una misma
+// ronda de medición pueden quedar guardados con minutos/segundos
+// levemente distintos aunque el RPM real fue el mismo.
+function applyRpmToDateAllPoints(equipId, dayKey, rpmVal) {
+  if (!equipId || !dayKey || isNaN(rpmVal)) return 0;
+  let updated = 0;
+  for (const [key, d] of machinesData.entries()) {
+    if (getEquipId(key) !== equipId) continue;
+    if (!d || !d.dates || !d.dates.length) continue;
+    if (!d.rpms || d.rpms.length !== d.dates.length) {
+      d.rpms = new Array(d.dates.length).fill(NaN);
+    }
+    d.dates.forEach((dt, i) => {
+      const dk = (dt instanceof Date ? dt : new Date(dt)).toISOString().slice(0,10);
+      if (dk === dayKey) { d.rpms[i] = rpmVal; updated++; }
+    });
+    machinesData.set(key, d);
+  }
+  if (updated > 0) {
+    saveConfig();
+    scheduleRpmSync();
+  }
+  return updated;
 }
 
 // Al enfocar la celda, selecciona todo el contenido para que tipear
@@ -4526,7 +4674,7 @@ function loadAnalysis(k){
   const rpmDisplay = eq.rpmBase || eq.rpm || '?';
   document.getElementById('analysisTitle').innerHTML=
     `🔧 <strong>${escHtml(getEquipName(equipId))}</strong> · <span class="mpoint-badge">${ptCode}</span> ${escHtml(ptLabel)}`+
-    `<span style="font-size:.8rem;color:var(--muted);margin-left:12px;">${eq.powerKW||'?'} kW · ${rpmDisplay} RPM${eq.type==='Soplador'?' <span style="color:var(--accent2)">(RPM variable)</span>':''}</span>`;
+    `<span style="font-size:.8rem;color:var(--muted);margin-left:12px;">${eq.powerKW||'?'} kW · ${rpmDisplay} RPM${isVariableSpeed(k)?' <span style="color:var(--accent2)">(RPM variable)</span>':''}</span>`;
   document.getElementById('thOverride').value='';
   updateAnalysisChart();
   const r=getLastRecord(k);
@@ -6526,14 +6674,12 @@ async function onBajarMedicionesClick(){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  CONFIG SYNC — thresholds / prefixMap / instrumentConfig / rodamientoRegistry
+//  CONFIG SYNC — thresholds / prefixMap / instrumentConfig
 // ═══════════════════════════════════════════════════════════
 // Sincroniza la configuración "compartida" entre dispositivos:
-//   - thresholds         (umbrales globales de alarma)
-//   - prefixMap          (mapeo de códigos de punto)
-//   - instrumentConfig   (nombre/modelo del instrumento)
-//   - rodamientoRegistry (ficha por rodamiento: designación, fecha de
-//     reemplazo, observaciones — [SYNC-FIX] antes solo vivía en localStorage)
+//   - thresholds       (umbrales globales de alarma)
+//   - prefixMap        (mapeo de códigos de punto)
+//   - instrumentConfig (nombre/modelo del instrumento)
 // NO sincroniza: equipmentRegistry, machineMetadata, machinesData (ya
 // viajan por buscarOCrearEquipo / guardarMediciones), ni las API keys
 // (locales por seguridad).
@@ -6570,12 +6716,6 @@ async function sincronizarConfigConHub(silencioso = true){
       instrumentConfig = {...instrumentConfig, ...cfg.instrumentConfig};
       adopto = true;
     }
-    // [SYNC-FIX] adoptar la ficha de rodamiento bajada del hub — mismo
-    // criterio que el resto de esta función: la nube manda en el pull.
-    if (cfg.rodamientoRegistry && typeof cfg.rodamientoRegistry === 'object'){
-      for (const [k,v] of Object.entries(cfg.rodamientoRegistry)) rodamientoRegistry.set(k, v);
-      adopto = true;
-    }
     if (!adopto) return false;
 
     saveConfig();
@@ -6600,24 +6740,8 @@ async function publicarConfigEnHub(){
     thresholds,
     prefixMap,
     instrumentConfig,
-    // [SYNC-FIX] antes no viajaba: la ficha de rodamiento (designación, fecha
-    // de reemplazo, observaciones) quedaba atrapada en el localStorage de
-    // cada terminal. Ahora sube junto con el resto de la config compartida.
-    rodamientoRegistry: Object.fromEntries(rodamientoRegistry),
     updatedAt: new Date().toISOString()
   });
-}
-
-// [SYNC-FIX] Debounce de subida de la ficha de rodamiento: espera 3s después
-// del último cambio (designación / fecha de reemplazo / observación) antes
-// de publicar en el hub. Mismo patrón que scheduleRpmSync() más abajo.
-let _rodMetaSyncTimer = null;
-function scheduleRodamientoMetaSync() {
-  clearTimeout(_rodMetaSyncTimer);
-  _rodMetaSyncTimer = setTimeout(() => {
-    if (typeof SatSync === 'undefined' || !SatSync.init()) return;
-    publicarConfigEnHub().catch(() => {});
-  }, 3000);
 }
 
 // Handlers de los dos botones manuales (los automaticos van silenciosos).
@@ -8430,6 +8554,12 @@ setInterval(autoSyncFromHub, 10 * 60 * 1000);
 // Baja las mediciones del hub y las mergea con las locales. Si llegan
 // lecturas nuevas, refresca el dashboard. Completamente silencioso: si
 // SatSync no está configurado o hay error de red, no hace nada visible.
+// [SYNC-FIX] "Backlog" único por terminal: datos (mediciones/RPM y fichas de
+// rodamiento) que quedaron solo en ESTE localStorage antes de que existiera
+// este sync — de ahí en más, cualquier edición ya sube sola (scheduleRpmSync
+// / scheduleFichaRodamientoSync), así que esto solo hace falta una vez.
+const BACKLOG_MED_KEY   = 'vibrapro_backlog_mediciones_synced_v1';
+const BACKLOG_FICHA_KEY = 'vibrapro_backlog_fichas_rodamiento_synced_v1';
 if (typeof SatSync !== 'undefined' && SatSync.init()) {
   const st = document.getElementById('bajarMedicionesStatus');
   bajarMedicionesDelHub()
@@ -8450,7 +8580,24 @@ if (typeof SatSync !== 'undefined' && SatSync.init()) {
         }
       }
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      if (localStorage.getItem(BACKLOG_MED_KEY)) return;
+      guardarMedicionesEnNube()
+        .then(r => { if (r && !r.error && !r.fail) localStorage.setItem(BACKLOG_MED_KEY, '1'); })
+        .catch(() => {}); // si falla, queda sin marcar y reintenta la próxima vez que se abra
+    });
+
+  // [SYNC-FIX] Backlog de fichas de rodamiento (designación / fecha de
+  // reemplazo / observaciones) cargadas ANTES de que existiera guardarFichas
+  // en esta app — se suben una sola vez, una llamada por equipo que tenga
+  // algo en rodamientoRegistry, agrupando todos sus rodamientos/ejes.
+  if (!localStorage.getItem(BACKLOG_FICHA_KEY)) {
+    const equiposConFicha = new Set([...rodamientoRegistry.keys()].map(k => k.split('::')[0]));
+    Promise.all([...equiposConFicha].map(equipId => guardarFichaRodamientoEnNube(equipId)))
+      .then(() => localStorage.setItem(BACKLOG_FICHA_KEY, '1'))
+      .catch(() => {}); // si falla, reintenta la próxima vez que se abra
+  }
 }
 
 if(machinesData.size>0){
