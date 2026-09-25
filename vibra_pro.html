@@ -1793,8 +1793,13 @@ function getISOThresholdsForKey(k, isoGroupOverride) {
   const mountType = eq.mountType || meta.mountType  || 'rigid';
   const mti       = eq.machineTypeISO || 'Rotativa General / Bomba';
   const d         = machinesData.get(k);
-  let rpmAvg      = eq.rpmBase || meta.rpmBase || 0;
-  if (d && d.rpms && d.rpms.length > 0) {
+  let rpmAvg = eq.rpmBase || meta.rpmBase || 0;
+  // [RPM-FIX] Equipos variables: usar refRPM (estable) en vez del promedio
+  // observado (que oscila con producción y ensucia la clasificación ISO).
+  // Para fixed-speed, mantener el comportamiento original (promedio histórico).
+  if (isVariableSpeed(k)) {
+    rpmAvg = getReferenceRPM(k) || rpmAvg;
+  } else if (d && d.rpms && d.rpms.length > 0) {
     const validRpms = d.rpms.filter(r => r && !isNaN(r));
     if (validRpms.length > 0) rpmAvg = validRpms.reduce((a,b)=>a+b,0)/validRpms.length;
   }
@@ -2830,6 +2835,11 @@ function renderEquipmentRegistry() {
         style="background:var(--bg);border:1px solid var(--accent);color:var(--text);padding:5px 9px;border-radius:6px;font-family:'Rajdhani',sans-serif;font-size:.86rem;outline:none;grid-column:span 2;">
         ${MACHINE_TYPES_ISO.map(t=>`<option value="${t}" ${(eq.machineTypeISO||'Rotativa General / Bomba')===t?'selected':''}>${t}</option>`).join('')}
       </select>
+      <!-- ▼ [RPM-FIX]: RPM de referencia para normalización (equipos variables) -->
+      <input type="number" id="refRpm_${sid}" value="${eq.referenceRPM||0}"
+             placeholder="RPM ref. norm." step="10"
+             title="RPM de referencia para normalizar velocidad. Dejar 0 = automático (máx. observado). Solo aplica a equipos de velocidad variable."
+             style="grid-column:span 2;">
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
         <button class="btn-accent" style="font-size:.78rem;padding:4px 12px;" onclick="saveEquipment('${id}')">Guardar</button>
         <button class="btn-danger" style="font-size:.73rem;" onclick="deleteEquipment('${id}')">Eliminar</button>
@@ -2848,13 +2858,16 @@ function saveEquipment(id) {
   const mountType      = document.getElementById(`emnt_${sid}`)?.value || 'rigid';
   // ▼ NUEVO v14: perfil de tecnología para diagnóstico cruzado ISO
   const machineTypeISO = document.getElementById(`emti_${sid}`)?.value || 'Rotativa General / Bomba';
+  // [RPM-FIX] RPM de referencia para normalización (equipos variables).
+  // 0 = automático (usa el máximo observado en el historial).
+  const referenceRPM = parseFloat(document.getElementById(`refRpm_${sid}`)?.value) || 0;
   // Si el usuario ya cargó kW y RPM reales, el flag needsConfig se cae solo —
   // los defaults (0 / 0 / rigid / Rotativa) que trajo importarEquiposDelHub()
   // ya no aplican.
   const prev = equipmentRegistry.get(id) || {};
   const complete = powerKW > 0 && rpmBase > 0;
   equipmentRegistry.set(id, {
-    name, type, powerKW, rpmBase, mountType, machineTypeISO,
+    name, type, powerKW, rpmBase, mountType, machineTypeISO, referenceRPM,
     needsConfig: complete ? undefined : (prev.needsConfig || false)
   });
   syncEquipmentToPoints(id);  // NUEVO DeepSeek
@@ -3050,6 +3063,97 @@ function detectAnomalies(origKey, param='Acc_Peak'){
   return anoms.slice(0,6);
 }
 
+// ═══════════════════════════════════════════════════════════
+//  NORMALIZACIÓN POR RPM — equipos de velocidad variable
+// ═══════════════════════════════════════════════════════════
+// ISO 10816 asume velocidad constante. En equipos con VFD o poleas
+// variables (sopladores, bombas con variador, etc.), comparar Vel_RMS
+// crudas entre lecturas a distinto RPM mezcla estado mecánico real
+// con régimen de operación. La normalización elimina el efecto operativo.
+//
+// Escalas físicas por parámetro (misma falla, distinto RPM):
+//   Desplazamiento (µm) → invariante (exp 0)   dx ∝ F/ω² y F ∝ ω², se cancelan
+//   Velocidad (mm/s)    → lineal    (exp 1)     v = dx/dt
+//   Aceleración (g)     → cuadrática(exp 2)     a = dv/dt
+//   HF Peak/RMS (g)     → lineal    (exp 1)     aprox. conservadora
+//   Temp / CF+          → invariantes(exp 0)    CF+ es un cociente
+
+const RPM_SCALE_EXP = {
+  Vel_RMS:1,  Vel_Peak:1,  Vel_PkPk:1,
+  Acc_Peak:2, Acc_RMS:2,   Acc_PkPk:2,
+  HF_Peak:1,  HF_RMS:1,    HF_PkPk:1,
+  Disp_Peak:0,Disp_RMS:0,  Disp_PkPk:0,
+  Temp:0,     CFPlus:0,
+};
+
+// ¿El equipo corre a velocidad variable?
+// True si: tipo Soplador, flag manual variableSpeed, o dispersión de RPM > 10%.
+function isVariableSpeed(k){
+  const eq = equipmentRegistry.get(getEquipId(k)) || {};
+  if (eq.type === 'Soplador') return true;
+  if (eq.variableSpeed === true) return true;
+  const d = machinesData.get(k);
+  if (!d || !d.rpms) return false;
+  const valid = d.rpms.filter(r => r && !isNaN(r) && r > 0);
+  if (valid.length < 3) return false;
+  const min = Math.min(...valid), max = Math.max(...valid);
+  return max > 0 && (max - min) / max > 0.10;
+}
+
+// RPM de referencia. Prioridad: configurado → máx. observado → rpmBase.
+// El MÁXIMO es la referencia ISO 10816-3: "máxima velocidad continua de
+// operación". Estable y no varía con producción.
+function getReferenceRPM(k){
+  const eq = equipmentRegistry.get(getEquipId(k)) || {};
+  if (eq.referenceRPM > 0) return eq.referenceRPM;
+  const d = machinesData.get(k);
+  if (d && d.rpms){
+    const valid = d.rpms.filter(r => r && !isNaN(r) && r > 0);
+    if (valid.length) return Math.max(...valid);
+  }
+  return eq.rpmBase || 0;
+}
+
+// Normaliza un valor a refRPM. Si actualRPM o refRPM son 0/NaN,
+// devuelve el valor crudo (no-op seguro).
+function rpmNormalizeValue(value, actualRPM, refRPM, exp){
+  if (value == null || isNaN(value)) return NaN;
+  if (exp === 0) return value;
+  if (!actualRPM || isNaN(actualRPM) || actualRPM <= 0) return value;
+  if (!refRPM   || isNaN(refRPM)   || refRPM   <= 0) return value;
+  return value * Math.pow(refRPM / actualRPM, exp);
+}
+
+// Wrapper por nombre de parámetro.
+function normalizeParam(param, value, actualRPM, refRPM){
+  const exp = RPM_SCALE_EXP[param];
+  if (exp === undefined) return value;
+  return rpmNormalizeValue(value, actualRPM, refRPM, exp);
+}
+
+// Normaliza una serie entera, preservando índices (para trends).
+// Si el RPM de un índice es NaN/0, el valor queda crudo (no-op).
+function normalizeSeries(param, rawValues, rawRpms, refRPM){
+  const exp = RPM_SCALE_EXP[param];
+  if (exp === undefined) return rawValues.slice();
+  return rawValues.map((v, i) => {
+    if (v == null || isNaN(v)) return NaN;
+    return rpmNormalizeValue(v, rawRpms?.[i], refRPM, exp);
+  });
+}
+
+// Último valor no-NaN de un array, junto con su índice.
+// Necesario para parear cada parámetro con el RPM de su MISMA fila,
+// ya que distintos parámetros pueden tener distintas filas con último
+// valor válido (datos parciales por punto).
+function lastValidWithIndex(arr){
+  if (!arr) return { val: NaN, idx: -1 };
+  for (let i = arr.length - 1; i >= 0; i--){
+    if (arr[i] != null && !isNaN(arr[i])) return { val: arr[i], idx: i };
+  }
+  return { val: NaN, idx: -1 };
+}
+
 // ── VIBRA PRO v14 — diagnoseMachine: Motor Experto de Diagnóstico Cruzado Inteligente ──
 // Combina:
 //   1. Motor de salud multi-falla ponderado (faults array + health score)
@@ -3060,16 +3164,44 @@ function diagnoseMachine(origKey){
   const d=machinesData.get(origKey);
   if(!d)return{diagnosis:'Sin datos',health:0,level:'critical'};
 
-  const lv  = lastValid(d.params.Vel_RMS);
-  const la  = lastValid(d.params.Acc_Peak);
-  const lh  = lastValid(d.params.HF_Peak);
+  // ── [RPM-FIX] Normalización por RPM ─────────────────────────────────
+  // Para equipos de velocidad variable (sopladores, VFD, etc.) cada
+  // parámetro se normaliza a un RPM de referencia ANTES de comparar contra
+  // umbrales ISO. Esto elimina el efecto "subió producción → subió RPM →
+  // subió Vel_RMS → badge CRÍTICO aunque el rodamiento esté sano".
+  // Para fixed-speed o sin RPM registradas, normalizeParam es un no-op.
+  const varSpeed = isVariableSpeed(origKey);
+  const refRPM   = getReferenceRPM(origKey);
+
+  // Índice de la última lectura válida por parámetro, para parear con el
+  // RPM de ESA MISMA fila (datos parciales pueden tener índices distintos).
+  const velInfo = lastValidWithIndex(d.params.Vel_RMS);
+  const accInfo = lastValidWithIndex(d.params.Acc_Peak);
+  const hfInfo  = lastValidWithIndex(d.params.HF_Peak);
+
+  const rawVel = velInfo.val;
+  const rawAcc = accInfo.val;
+  const rawHf  = hfInfo.val;
+
+  const rpmVel = (d.rpms && velInfo.idx >= 0) ? d.rpms[velInfo.idx] : NaN;
+  const rpmAcc = (d.rpms && accInfo.idx >= 0) ? d.rpms[accInfo.idx] : NaN;
+  const rpmHf  = (d.rpms && hfInfo.idx  >= 0) ? d.rpms[hfInfo.idx]  : NaN;
+
+  const lv  = varSpeed ? normalizeParam('Vel_RMS',  rawVel, rpmVel, refRPM) : rawVel;
+  const la  = varSpeed ? normalizeParam('Acc_Peak', rawAcc, rpmAcc, refRPM) : rawAcc;
+  const lh  = varSpeed ? normalizeParam('HF_Peak',  rawHf,  rpmHf,  refRPM) : rawHf;
   const lt  = lastValid(d.params.Temp);
   const lc  = lastValid(d.params.CFPlus);
   const ldr = lastValid(d.params.Disp_RMS);
 
   // ── Time-domain trends (weighted regression on last 10 valid pts) ──
+  // [RPM-FIX] Para equipos variables, normalizar cada punto de la serie
+  // antes de regresar. Así la pendiente mide degradación mecánica real,
+  // no variación de producción.
   function trendOf(param){
-    const v=(d.params[param]||[]).filter(x=>!isNaN(x)).slice(-10);
+    const raw = d.params[param] || [];
+    const series = varSpeed ? normalizeSeries(param, raw, d.rpms, refRPM) : raw;
+    const v = series.filter(x => x != null && !isNaN(x)).slice(-10);
     if(v.length<3)return{slope:0,r2:0};
     return weightedRegression(v);
   }
@@ -3080,7 +3212,9 @@ function diagnoseMachine(origKey){
   // Pico reciente de CF+ (últimas 10 lecturas válidas, sin contar la actual) — necesario
   // para detectar el colapso de factor de cresta en bearingDiagnosisMatrix() más abajo.
   function recentMaxOf(param){
-    const v=(d.params[param]||[]).filter(x=>!isNaN(x));
+    const raw = d.params[param] || [];
+    const series = varSpeed ? normalizeSeries(param, raw, d.rpms, refRPM) : raw;
+    const v = series.filter(x => x != null && !isNaN(x));
     const w=v.slice(0,-1).slice(-10);
     return w.length ? Math.max(...w) : NaN;
   }
@@ -4055,12 +4189,16 @@ function buildHistoryTable(k, isoGroupOverride){
   const velT_iso  = isoTh.useDisp ? T.vel_rms
                   : [isoTh.alertaVel*0.63, isoTh.alertaVel, isoTh.criticoVel];
   const dispT_iso = [isoTh.alertaDisp*0.5, isoTh.alertaDisp, isoTh.criticoDisp];
+  // [RPM-FIX] Columna normalizada para equipos de velocidad variable.
+  const isVarSpeedHist = isVariableSpeed(k);
+  const refRPMHist     = isVarSpeedHist ? getReferenceRPM(k) : 0;
   return `<div class="msection"><div class="msection-title">📋 Historial de Mediciones <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(ISO 10816-3 G${isoTh.isoClass} ${isoTh.mounting} — Alerta: ${isoTh.alertaVel} mm/s | Crítico: ${isoTh.criticoVel} mm/s)</span></div>
     <div style="overflow-x:auto">
     <table class="rtable" id="${tableId}">
       <thead><tr>
         <th>Fecha/Hora</th><th>Vel.RMS mm/s</th><th>Acc.Peak g</th>
         <th>HF Pk g</th><th>Temp °C</th><th>CF+</th><th>Disp.RMS µm</th>
+        ${isVarSpeedHist ? `<th>Vel.norm<br><span style="font-size:.6rem;font-weight:400;">@ ${refRPMHist} RPM</span></th>` : ''}
         ${isBlower?'<th>RPM</th>':''}<th>Estado ISO</th><th>Diag. Rodamiento</th>
       </tr></thead>
       <tbody>
@@ -4104,6 +4242,11 @@ function buildHistoryTable(k, isoGroupOverride){
             <td class="s-${metStatus(tp,T.temp)}">${fmt(tp,1)}</td>
             <td class="s-${metStatus(cf,T.cfplus)}">${fmt(cf,2)}</td>
             <td>${fmt(dr,1)}</td>
+            ${isVarSpeedHist ? (()=>{
+              const rpmRow = d.rpms ? d.rpms[ri] : NaN;
+              const vNorm  = normalizeParam('Vel_RMS', vr, rpmRow, refRPMHist);
+              return `<td class="s-${metStatus(vNorm, velT_iso)}" title="Cruda: ${fmt(vr,4)} mm/s @ ${isNaN(rpmRow)?'—':rpmRow} RPM">${fmt(vNorm,4)}</td>`;
+            })() : ''}
             ${isBlower ? `<td contenteditable="true" class="editable-rpm" data-idx="${ri}" data-key="${escHtml(k)}" title="Clic para editar RPM">${isNaN(rpmVal)?'—':rpmVal}</td>` : ''}
             <td class="s-${STATUS[lv]}">${STATUS_LABELS[lv]}</td>
             ${bdxCell}
@@ -4440,6 +4583,11 @@ function renderConfig(){
         style="background:var(--bg);border:1px solid var(--accent);color:var(--text);padding:5px 9px;border-radius:6px;font-family:'Rajdhani',sans-serif;font-size:.86rem;outline:none;grid-column:span 2;">
         ${MACHINE_TYPES_ISO.map(t=>`<option value="${t}" ${(eq.machineTypeISO||'Rotativa General / Bomba')===t?'selected':''}>${t}</option>`).join('')}
       </select>
+      <!-- ▼ [RPM-FIX]: RPM de referencia para normalización (equipos variables) -->
+      <input type="number" id="refRpm_${sid}" value="${eq.referenceRPM||0}"
+             placeholder="RPM ref. norm." step="10"
+             title="RPM de referencia para normalización. 0 = auto (máx. observado)."
+             style="grid-column:span 2;">
       <button class="btn-accent" style="font-size:.8rem;" onclick="saveMachineMeta('${k}')">Guardar</button>
       <button class="btn-danger" style="font-size:.8rem;" onclick="deletePoint('${k}')">Eliminar</button>
     </div>`;
@@ -4454,9 +4602,11 @@ function saveMachineMeta(k){
   const mountType=document.getElementById(`mnt_${sid}`)?.value||'rigid';
   // ▼ NUEVO v14: leer y guardar perfil de tecnología ISO
   const machineTypeISO=document.getElementById(`mti_${sid}`)?.value||'Rotativa General / Bomba';
+  // [RPM-FIX] mismo campo que en saveEquipment — ID unificado refRpm_${sid}
+  const referenceRPM=parseFloat(document.getElementById(`refRpm_${sid}`)?.value)||0;
   const equipId=getEquipId(k);
   const eq=equipmentRegistry.get(equipId)||{name:getEquipName(equipId)};
-  equipmentRegistry.set(equipId,{...eq,powerKW,rpmBase,type,mountType,machineTypeISO});
+  equipmentRegistry.set(equipId,{...eq,powerKW,rpmBase,type,mountType,machineTypeISO,referenceRPM});
   syncEquipmentToPoints(equipId);  // NUEVO DeepSeek
   saveConfig();renderDashboard();renderMachineList();
   if(currentKey===k)loadAnalysis(k);
