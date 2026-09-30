@@ -1643,6 +1643,31 @@ let analysisChart= null;
 let modalChart   = null;
 let instrumentConfig = { name: '', model: '' };
 
+// [T-FIX] Reemplaza a `T` (tabla de umbrales fija, igual para cualquier
+// equipo) por umbrales calculados por equipo — reutiliza isoTh (kW +
+// tecnología + RPM, vía getISOThresholdsForKey) para Vel_RMS/HF_Peak/CF+/
+// Disp_RMS, y `thresholds`/TH (el cuadro manual editable en Config) para
+// Acc_Peak/Temp, que ISO no define. Mismo formato y mismas proporciones
+// relativas [elevated,warning,critical] que tenía `T`, para no romper de
+// golpe la sensibilidad visual de los badges — pero con el valor real del
+// equipo en vez de una tabla fija compartida por todos.
+function isoTripletsFor(k, isoGroupOverride){
+  const isoTh = getISOThresholdsForKey(k, isoGroupOverride);
+  const hfTol = isoTh.hfTolerance || 1.0;
+  const velA  = isoTh.alertaVel, velC = isoTh.criticoVel;
+  const hfA   = isoTh.alertaHF  || thresholds.HF_Peak;
+  const hfC   = isoTh.criticoHF || thresholds.HF_Peak * 2;
+  const cfA   = thresholds.CFPlus * hfTol;
+  return {
+    vel_rms:  [velA*(2.8/4.5), velA, velC],
+    hf_peak:  [hfA*0.5, hfA, hfC],
+    acc_peak: [thresholds.Acc_Peak*0.4, thresholds.Acc_Peak, thresholds.Acc_Peak*2],
+    temp:     [thresholds.Temp*(70/85), thresholds.Temp, thresholds.Temp*(95/85)],
+    cfplus:   [cfA*0.6, cfA, cfA*1.6],
+    disp_rms: [isoTh.alertaDisp*0.5, isoTh.alertaDisp, isoTh.criticoDisp]
+  };
+}
+
 const T = {
   vel_rms:  [2.8, 4.5, 11.2],
   hf_peak:  [5,   10,  20],
@@ -3167,15 +3192,23 @@ function escJs(s){return String(s).replace(/'/g,"\\'").replace(/\\/g,'\\\\');}
 function getLastRecord(m){
   const d=machinesData.get(m);
   if(!d)return null;
-  const n=d.dates.length-1;
+  // [LASTVALID-FIX] Antes usaba siempre la última FILA (d.dates.length-1),
+  // aunque esa fila tuviera NaN en algún parámetro por dato parcial — igual
+  // que el gap que ya resolvimos en diagnoseMachine() con lastValidWithIndex().
+  // Ahora cada parámetro busca su propio último valor no-NaN, en vez de
+  // heredar el hueco de la última fila. La fecha/RPM de referencia se anclan
+  // a la fila del último Vel_RMS válido (parámetro primario en casi todas
+  // las tecnologías), para no perder la trazabilidad de "cuándo fue esto".
+  const velLV = lastValidWithIndex(d.params.Vel_RMS);
+  const n = velLV.idx >= 0 ? velLV.idx : d.dates.length-1;
   return{
     datetime:d.dates[n],
-    ov_vel_rms_mms:d.params.Vel_RMS[n],   ov_vel_peak_mms:d.params.Vel_Peak[n],
-    ov_acc_peak_g:d.params.Acc_Peak[n],    ov_acc_rms_g:d.params.Acc_RMS[n],
-    ov_disp_peak_um:d.params.Disp_Peak[n], ov_disp_rms_um:d.params.Disp_RMS[n],
-    hf_acc_peak_g:d.params.HF_Peak[n],     hf_acc_rms_g:d.params.HF_RMS[n],
-    temp_c:d.params.Temp[n], cfplus:d.params.CFPlus[n],
-    rpm: d.rpms ? d.rpms[n] : NaN  // NUEVO DeepSeek
+    ov_vel_rms_mms:velLV.val,               ov_vel_peak_mms:lastValid(d.params.Vel_Peak),
+    ov_acc_peak_g:lastValid(d.params.Acc_Peak),    ov_acc_rms_g:lastValid(d.params.Acc_RMS),
+    ov_disp_peak_um:lastValid(d.params.Disp_Peak), ov_disp_rms_um:lastValid(d.params.Disp_RMS),
+    hf_acc_peak_g:lastValid(d.params.HF_Peak),     hf_acc_rms_g:lastValid(d.params.HF_RMS),
+    temp_c:lastValid(d.params.Temp), cfplus:lastValid(d.params.CFPlus),
+    rpm: d.rpms ? (d.rpms[n] ?? NaN) : NaN  // NUEVO DeepSeek
   };
 }
 
@@ -3376,13 +3409,24 @@ function diagnoseMachine(origKey){
   const TH = thresholds; // global alias
   const equipType    = getEquipType(getEquipId(origKey));
   const mti          = getMachineTypeISO(origKey);
-  const isoTh        = getISOThresholdsForKey(origKey);
+  // [ISOOVERRIDE-FIX] El selector manual "Clase ISO" de la pestaña Análisis
+  // (getISOClassOverride) antes solo llegaba a buildHistoryTable()/al gráfico
+  // — el health/faults/diagnosis de acá abajo seguían con la clasificación
+  // automática por kW, aunque el usuario hubiera pisado el grupo a mano para
+  // ESTE equipo. Solo se aplica cuando origKey es el equipo actualmente
+  // abierto en Análisis (currentKey): así no afecta a los demás equipos del
+  // ranking, que no tienen ese selector visible ni un motivo para usarlo.
+  const isoTh        = getISOThresholdsForKey(origKey, origKey === currentKey ? getISOClassOverride() : null);
   const hfTol        = isoTh.hfTolerance || 1.0; // HF/CF+ tolerance multiplier
   const isAgitador   = mti === 'Agitador / Máquina Lenta (<600 RPM)';
   const isGearbox    = mti === 'Motorreductor / Caja de Engranajes';
   const isPiston     = mti === 'Compresor Alternativo (Pistón)';
   const isTornillo   = mti === 'Compresor de Tornillo';
   const isAnilloLiq  = mti === 'Compresor de Anillo Líquido';
+  // [USEDISP-FIX] Cualquier equipo <600rpm sin tecnología especializada propia
+  // (Pistón/Tornillo/Anillo Líquido/Motorreductor) se evalúa como "lento" aunque
+  // no esté clasificado manualmente como Agitador — ver nota completa más abajo.
+  const isSlowGeneric = !!isoTh.useDisp && !isPiston && !isGearbox && !isTornillo && !isAnilloLiq;
 
   // ── Effective HF/CF+ thresholds (with technology tolerance) ──────
   const hfAlert    = isoTh.alertaHF   || TH.HF_Peak;
@@ -3395,7 +3439,17 @@ function diagnoseMachine(origKey){
   // ═══════════════════════════════════════════════════════════
   //  AGITADOR / MÁQUINA LENTA: evaluate by DISPLACEMENT only
   // ═══════════════════════════════════════════════════════════
-  if (isAgitador) {
+  // [USEDISP-FIX] isoTh.useDisp ya se calcula automáticamente para CUALQUIER
+  // tecnología con RPM<600 (getISO10816Thresholds, no solo para mti==='Agitador...'),
+  // y así lo respeta toda la UI (ficha, predicción, gráfico, tabla histórica).
+  // Pero acá el motor de fallas solo entraba a este branch si el usuario había
+  // clasificado el equipo manualmente como Agitador — un Rotativa General/Bomba
+  // (o cualquier equipo sin classificar aparte) que gira <600rpm seguía
+  // evaluándose por velocidad, un criterio que ISO 10816-3 Anexo B descarta en
+  // ese régimen. Ahora entra también por acá SIEMPRE que useDisp esté activo y
+  // la tecnología no tenga su propio branch especializado (Pistón/Tornillo/
+  // Anillo Líquido/Motorreductor conservan sus reglas propias aunque sean lentos).
+  if (isAgitador || isSlowGeneric) {
     const dispAlert    = isoTh.alertaDisp;   // 60 µm
     const dispCritical = isoTh.criticoDisp;  // 110 µm
     const dispRatio    = isNaN(ldr) ? 0 : ldr / dispAlert;
@@ -3416,6 +3470,18 @@ function diagnoseMachine(origKey){
       faults.push({code:'OVERTEMP', label:'🌡 Temperatura elevada', score:Math.min(100,(tempRatio-0.85)/0.3*100), severity: tempRatio>1?'critical':'warning'});
     if(hfRatioAg > 0.85)
       faults.push({code:'BEARING', label:'🔩 Rodamiento de Soporte/Puente (carga radial excesiva)', score:Math.min(100,(hfRatioAg-0.85)/0.6*100), severity: hfRatioAg>1.2?'critical':'warning'});
+    {
+      const bdxA = bearingDiagnosisMatrix(lc, lh, la, isoTh, {slopeCF, r2CF, cfRecentMax});
+      if (bdxA) {
+        const rankA = {elevated:1, warning:2, critical:3};
+        const bdxAScore = bdxA.severity==='critical'?95:bdxA.severity==='warning'?65:35;
+        const genIdxA = faults.findIndex(f=>f.code==='BEARING');
+        if (genIdxA===-1 || rankA[bdxA.severity] >= rankA[faults[genIdxA].severity]) {
+          if (genIdxA!==-1) faults.splice(genIdxA,1);
+          faults.push({code:bdxA.code, label:bdxA.label, score:bdxAScore, severity:bdxA.severity, action:bdxA.action});
+        }
+      }
+    }
 
   // ═══════════════════════════════════════════════════════════
   //  COMPRESOR ALTERNATIVO (PISTÓN): ISO 10816-6
@@ -3455,6 +3521,23 @@ function diagnoseMachine(origKey){
       faults.push({code:'LUBRICATION', label:'🧴 Lubricación deficiente (cigüeñal/biela)', score:Math.min(100,((tempRatioP-0.75)/0.5+(hfRatioPiston-0.45)/0.55)/2*100), severity: tempRatioP>1?'critical':'warning'});
     if(tempRatioP > 0.85 && hfRatioPiston <= 0.45)
       faults.push({code:'OVERTEMP', label:'🌡 Temperatura elevada', score:Math.min(100,(tempRatioP-0.85)/0.3*100), severity: tempRatioP>1?'critical':'warning'});
+    // [BEARINGMATRIX-FIX] bearingDiagnosisMatrix() (catastrófico por Acc_Peak,
+    // colapso de CF+ en fase terminal) antes solo corría en el branch genérico
+    // — un Pistón nunca lo veía, aunque tenga rodamientos de cigüeñal/biela
+    // igual de expuestos. Mismo patrón que en el branch genérico: reemplaza
+    // al fault 'PISTON_VALVE' solo si da un veredicto igual o más grave.
+    {
+      const bdxP = bearingDiagnosisMatrix(lc, lh, la, isoTh, {slopeCF, r2CF, cfRecentMax});
+      if (bdxP) {
+        const rankP = {elevated:1, warning:2, critical:3};
+        const bdxPScore = bdxP.severity==='critical'?95:bdxP.severity==='warning'?65:35;
+        const genIdxP = faults.findIndex(f=>f.code==='PISTON_VALVE');
+        if (genIdxP===-1 || rankP[bdxP.severity] >= rankP[faults[genIdxP].severity]) {
+          if (genIdxP!==-1) faults.splice(genIdxP,1);
+          faults.push({code:bdxP.code, label:bdxP.label, score:bdxPScore, severity:bdxP.severity, action:bdxP.action});
+        }
+      }
+    }
 
   // ═══════════════════════════════════════════════════════════
   //  MOTORREDUCTOR / CAJA DE ENGRANAJES
@@ -3500,6 +3583,22 @@ function diagnoseMachine(origKey){
       faults.push({code:'LUBRICATION', label:'🧴 Lubricación deficiente (aceite de caja)', score:Math.min(100,((tempRatioG-0.75)/0.5+(hfRatioG-0.45)/0.55)/2*100), severity:tempRatioG>1?'critical':'warning'});
     if(tempRatioG > 0.85 && hfRatioG <= 0.45)
       faults.push({code:'OVERTEMP', label:'🌡 Temperatura elevada (aceite/rodamiento)', score:Math.min(100,(tempRatioG-0.85)/0.3*100), severity:tempRatioG>1?'critical':'warning'});
+    // [BEARINGMATRIX-FIX] Igual que en Pistón: sin esto, un motorreductor con
+    // el rodamiento de caja en colapso terminal de CF+ (o Acc_Peak catastrófico)
+    // no lo detectaba nunca vía health/faults[], solo aparecía suelto en la
+    // tabla histórica (buildHistoryTable ya lo llama para todas las filas).
+    {
+      const bdxG = bearingDiagnosisMatrix(lc, lh, la, isoTh, {slopeCF, r2CF, cfRecentMax});
+      if (bdxG) {
+        const rankG = {elevated:1, warning:2, critical:3};
+        const bdxGScore = bdxG.severity==='critical'?95:bdxG.severity==='warning'?65:35;
+        const genIdxG = faults.findIndex(f=>f.code==='BEARING');
+        if (genIdxG===-1 || rankG[bdxG.severity] >= rankG[faults[genIdxG].severity]) {
+          if (genIdxG!==-1) faults.splice(genIdxG,1);
+          faults.push({code:bdxG.code, label:bdxG.label, score:bdxGScore, severity:bdxG.severity, action:bdxG.action});
+        }
+      }
+    }
     const trendFlag=(slopeVel>0.025&&r2Vel>0.55)||(slopeHF>0.04&&r2HF>0.5);
     if(trendFlag&&faults.length===0){
       const sc=Math.min(100,Math.max(slopeVel/0.1,slopeHF/0.15)*60);
@@ -3643,7 +3742,7 @@ function diagnoseMachine(origKey){
 
   // Continuous exceedance penalty (technology-aware) — mismos topes que antes,
   // ahora expresados como fracción de impacto en vez de puntos a restar.
-  if (isAgitador) {
+  if (isAgitador || isSlowGeneric) {
     const dispAlert = isoTh.alertaDisp;
     const dispCrit  = isoTh.criticoDisp;
     if(!isNaN(ldr) && ldr > dispAlert) impactFractions.push(Math.min(1,Math.min(30,(ldr-dispAlert)/dispAlert*30)/100));
@@ -3770,7 +3869,8 @@ function getMachineStatus(origKey){
   const d=machinesData.get(origKey);
   if(!d)return 0;
   const n=d.dates.length-1;
-  return Math.max(levelOf(d.params.Vel_RMS[n],T.vel_rms),levelOf(d.params.HF_Peak[n],T.hf_peak),levelOf(d.params.Acc_Peak[n],T.acc_peak),levelOf(d.params.Temp[n],T.temp),levelOf(d.params.CFPlus[n],T.cfplus));
+  const Tk = isoTripletsFor(origKey); // [T-FIX] antes T fijo, sin distinguir kW/tecnología
+  return Math.max(levelOf(d.params.Vel_RMS[n],Tk.vel_rms),levelOf(d.params.HF_Peak[n],Tk.hf_peak),levelOf(d.params.Acc_Peak[n],Tk.acc_peak),levelOf(d.params.Temp[n],Tk.temp),levelOf(d.params.CFPlus[n],Tk.cfplus));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3939,13 +4039,15 @@ function buildCard(k){
   // Elimina la contradicción entre el badge de estado del equipo (dinámico vía
   // diagnoseMachine) y los indicadores de color de cada métrica (antes usaban
   // T.vel_rms estático). Ahora ambos derivan del mismo motor ISO.
+  // [T-FIX] Vel/HF/Disp ya estaban dinámicos (v15 FIX 3); Temp y CF+ seguían
+  // en T fijo más abajo. Se unifica todo en isoTripletsFor(k), que cubre los
+  // 6 parámetros de forma consistente (incluye la tolerancia hfTol en CF+).
   const isoThCard  = getISOThresholdsForKey(k);
   const useDispCard = isoThCard.useDisp;  // true → Agitador
-
-  // Umbrales de 3 niveles [elevado, alerta, crítico] derivados de kW + soporte
-  const velThCard  = [isoThCard.alertaVel*0.63,  isoThCard.alertaVel,  isoThCard.criticoVel];
-  const dispThCard = [isoThCard.alertaDisp*0.5,  isoThCard.alertaDisp, isoThCard.criticoDisp];
-  const hfThCard   = [isoThCard.alertaHF*0.5,    isoThCard.alertaHF,   isoThCard.criticoHF];
+  const TkCard = isoTripletsFor(k);
+  const velThCard  = TkCard.vel_rms;
+  const dispThCard = TkCard.disp_rms;
+  const hfThCard   = TkCard.hf_peak;
 
   return`<div class="mcard" onclick="openModal('${k}')">
     <div class="mcard-header">
@@ -3973,8 +4075,8 @@ function buildCard(k){
           : `<div class="mmet"><div class="mmet-lbl">Vel. RMS</div><div class="mmet-val s-${metStatus(vRms,velThCard)}">${fmt(vRms,3)}<span class="mmet-unit"> mm/s</span></div></div>`
         }
         <div class="mmet"><div class="mmet-lbl">HF Peak</div><div class="mmet-val s-${metStatus(hfPk,hfThCard)}">${fmt(hfPk,2)}<span class="mmet-unit"> g</span></div></div>
-        <div class="mmet"><div class="mmet-lbl">Temp</div><div class="mmet-val s-${metStatus(tmp,T.temp)}">${fmt(tmp,1)}<span class="mmet-unit"> °C</span></div></div>
-        <div class="mmet"><div class="mmet-lbl">CF+</div><div class="mmet-val s-${metStatus(cf,T.cfplus)}">${fmt(cf,2)}</div></div>
+        <div class="mmet"><div class="mmet-lbl">Temp</div><div class="mmet-val s-${metStatus(tmp,TkCard.temp)}">${fmt(tmp,1)}<span class="mmet-unit"> °C</span></div></div>
+        <div class="mmet"><div class="mmet-lbl">CF+</div><div class="mmet-val s-${metStatus(cf,TkCard.cfplus)}">${fmt(cf,2)}</div></div>
       </div>
     </div>
     <div class="mdiag">${diagnosis}</div>
@@ -4022,6 +4124,12 @@ function buildMetricsSection(r, k){
   // los globales T.* — comportamiento previo. Los callers openModal y
   // loadAnalysis ya tienen `k` en scope y lo propagan.
   const isoTh = k ? getISOThresholdsForKey(k) : null;
+  // [T-FIX] Acc_Peak/Temp/CF+ decían "siguen con los globales" pero apuntaban
+  // a la tabla vieja fija `T`, no a `thresholds`/TH (el cuadro editable real
+  // en Config) — si cambiabas el umbral en Config, esta grilla no se enteraba.
+  // isoTripletsFor(k) ya deriva Acc_Peak/Temp de `thresholds` y CF+ con la
+  // tolerancia hfTol por tecnología, igual que el resto del motor.
+  const TkMet = k ? isoTripletsFor(k) : T;
 
   // Bandas [elevado, alerta, crítico]. Vel y HF siguen el grupo ISO +
   // tecnología; Temp y CF+ siguen con los globales porque ISO 10816 no los
@@ -4035,14 +4143,14 @@ function buildMetricsSection(r, k){
   const metrics=[
     {lbl:'Vel. RMS',    val:r.ov_vel_rms_mms,  unit:'mm/s', d:4, th:velTh},
     {lbl:'Vel. Peak',   val:r.ov_vel_peak_mms, unit:'mm/s', d:4, th:velTh},
-    {lbl:'Acc. Peak',   val:r.ov_acc_peak_g,   unit:'g',    d:4, th:T.acc_peak},
-    {lbl:'Acc. RMS',    val:r.ov_acc_rms_g,    unit:'g',    d:4, th:T.acc_peak},
+    {lbl:'Acc. Peak',   val:r.ov_acc_peak_g,   unit:'g',    d:4, th:TkMet.acc_peak},
+    {lbl:'Acc. RMS',    val:r.ov_acc_rms_g,    unit:'g',    d:4, th:TkMet.acc_peak},
     {lbl:'HF Acc. Peak',val:r.hf_acc_peak_g,   unit:'g',    d:2, th:hfTh},
     {lbl:'HF Acc. RMS', val:r.hf_acc_rms_g,    unit:'g',    d:3, th:hfTh},
     {lbl:'Disp. Peak',  val:r.ov_disp_peak_um, unit:'µm',   d:2, th:dispThPeak},
     {lbl:'Disp. RMS',   val:r.ov_disp_rms_um,  unit:'µm',   d:2, th:dispThRMS},
-    {lbl:'Temperatura', val:r.temp_c,          unit:'°C',   d:1, th:T.temp},
-    {lbl:'CF+',         val:r.cfplus,          unit:'',     d:2, th:T.cfplus},
+    {lbl:'Temperatura', val:r.temp_c,          unit:'°C',   d:1, th:TkMet.temp},
+    {lbl:'CF+',         val:r.cfplus,          unit:'',     d:2, th:TkMet.cfplus},
   ];
   return`<div class="msection"><div class="msection-title">📊 Métricas – Última Lectura</div>
     <div class="metrics-grid">${metrics.map(m=>{
@@ -4253,11 +4361,15 @@ function buildDiagnosticsSection(k,lvl,r){
   }
 
   // Always show individual parameter exceedances (ISO 10816 reference)
-  const vl=levelOf(r.ov_vel_rms_mms,T.vel_rms);
-  const hl=levelOf(r.hf_acc_peak_g,T.hf_peak);
-  const tl=levelOf(r.temp_c,T.temp);
-  const cl=levelOf(r.cfplus,T.cfplus);
-  const al=levelOf(r.ov_acc_peak_g,T.acc_peak);
+  // [T-FIX] Antes comparaba contra la tabla fija T (igual para un soplador de
+  // 5.5kW que uno de 160kW). Ahora usa isoTripletsFor(k), que sí distingue
+  // Grupo ISO/tecnología/RPM — coherente con lo que ya calcula diagnoseMachine().
+  const Tk = isoTripletsFor(k);
+  const vl=levelOf(r.ov_vel_rms_mms,Tk.vel_rms);
+  const hl=levelOf(r.hf_acc_peak_g,Tk.hf_peak);
+  const tl=levelOf(r.temp_c,Tk.temp);
+  const cl=levelOf(r.cfplus,Tk.cfplus);
+  const al=levelOf(r.ov_acc_peak_g,Tk.acc_peak);
 
   const isoItems=[];
   if(vl>=2) isoItems.push({cls:STATUS[vl],msg:`<strong>Vibración ISO 10816:</strong> Vel. RMS = ${fmt(r.ov_vel_rms_mms,4)} mm/s — ${vl===3?'Zona D (inaceptable)':'Zona C (insatisfactoria)'}.`});
@@ -4343,6 +4455,9 @@ function buildHistoryTable(k, isoGroupOverride){
   const velT_iso  = isoTh.useDisp ? T.vel_rms
                   : [isoTh.alertaVel*0.63, isoTh.alertaVel, isoTh.criticoVel];
   const dispT_iso = [isoTh.alertaDisp*0.5, isoTh.alertaDisp, isoTh.criticoDisp];
+  // [T-FIX] Acc_Peak/HF_Peak/Temp/CF+ de esta tabla comparaban contra la T fija;
+  // Vel_RMS ya era dinámico (arriba). Unifica con isoTripletsFor.
+  const Tk_hist   = isoTripletsFor(k, isoGroupOverride);
   // [RPM-FIX] Columna normalizada para equipos de velocidad variable.
   const isVarSpeedHist = isBlower;
   const refRPMHist     = isVarSpeedHist ? getReferenceRPM(k) : 0;
@@ -4397,10 +4512,10 @@ function buildHistoryTable(k, isoGroupOverride){
           const hfNorm= isVarSpeedHist ? normalizeParam('HF_Peak',  hf, rpmVal, refRPMHist) : hf;
           const lv = Math.max(
             levelOf(vNorm, velT_iso),
-            levelOf(apNorm, T.acc_peak),
-            levelOf(hfNorm, T.hf_peak),
-            levelOf(tp, T.temp),
-            levelOf(cf, T.cfplus),
+            levelOf(apNorm, Tk_hist.acc_peak),
+            levelOf(hfNorm, Tk_hist.hf_peak),
+            levelOf(tp, Tk_hist.temp),
+            levelOf(cf, Tk_hist.cfplus),
             isoTh.useDisp ? levelOf(dr, dispT_iso) : 0
           );
           // Bearing diagnosis per row (mismos umbrales técnicos que diagnoseMachine(),
@@ -4422,10 +4537,10 @@ function buildHistoryTable(k, isoGroupOverride){
           return `<tr>
             <td>${fmtDate(d.dates[ri])}</td>
             <td class="s-${metStatus(vNorm,velT_iso)}" title="${isVarSpeedHist?`Cruda: ${fmt(vr,4)} mm/s`:''}">${fmt(vr,4)}</td>
-            <td class="s-${metStatus(apNorm,T.acc_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(apNorm,3)} g`:''}">${fmt(ap,3)}</td>
-            <td class="s-${metStatus(hfNorm,T.hf_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(hfNorm,2)} g`:''}">${fmt(hf,2)}</td>
-            <td class="s-${metStatus(tp,T.temp)}">${fmt(tp,1)}</td>
-            <td class="s-${metStatus(cf,T.cfplus)}">${fmt(cf,2)}</td>
+            <td class="s-${metStatus(apNorm,Tk_hist.acc_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(apNorm,3)} g`:''}">${fmt(ap,3)}</td>
+            <td class="s-${metStatus(hfNorm,Tk_hist.hf_peak)}" title="${isVarSpeedHist?`Normalizada: ${fmt(hfNorm,2)} g`:''}">${fmt(hf,2)}</td>
+            <td class="s-${metStatus(tp,Tk_hist.temp)}">${fmt(tp,1)}</td>
+            <td class="s-${metStatus(cf,Tk_hist.cfplus)}">${fmt(cf,2)}</td>
             <td>${fmt(dr,1)}</td>
             ${isVarSpeedHist ? `<td class="s-${metStatus(vNorm, velT_iso)}" title="Cruda: ${fmt(vr,4)} mm/s @ ${isNaN(rpmVal)?'—':rpmVal} RPM">${fmt(vNorm,4)}</td>` : ''}
             ${isBlower ? `<td contenteditable="true" class="editable-rpm" data-idx="${ri}" data-key="${escHtml(k)}" title="Clic para editar RPM">${(rpmVal == null || isNaN(rpmVal)) ? '—' : rpmVal}</td>` : ''}
@@ -6815,47 +6930,63 @@ function diagnoseEquipment(equipId){
   const keys = [...machinesData.keys()].filter(k => k.startsWith(equipId + '/'));
   if(!keys.length) return null;
 
-  // Per-point diagnoses
+  // Per-point diagnoses (para la tabla comparativa punto-por-punto; cada eje
+  // se muestra individualmente ahí, así que esto se mantiene como estaba)
   const ptResults = keys.map(k => {
     const {diagnosis, health, level, faults=[]} = diagnoseMachine(k);
     const r = getLastRecord(k);
     return { k, ptCode: getPointCode(k), diagnosis, health, level, faults, r };
   });
 
-  // Equipment-level health = weighted average (worst points weigh more)
-  // Weight: critical=4, warning=3, elevated=2, good=1
-  const W = {critical:4, warning:3, elevated:2, good:1};
-  const totalW = ptResults.reduce((s,p) => s + W[p.level], 0);
-  const equipHealth = Math.round(ptResults.reduce((s,p) => s + p.health * W[p.level], 0) / (totalW||1));
-
-  // Worst level across all points
+  // [DIAGEQUIP-FIX] El health/nivel/fallas del EQUIPO ahora se agregan por
+  // RODAMIENTO vía diagnoseLocation() — el mismo agrupador que ya usa el
+  // detalle de abajo en esta misma pantalla — en vez de leer diagnoseMachine()
+  // eje por eje. Antes esta función tenía su propia agregación plana que:
+  // (a) nunca pasaba por el arbitraje cruzado H/V/A (vive en diagnoseLocation),
+  //     así que el header/badge del equipo podía mostrar un fault sin filtrar
+  //     mientras el detalle de abajo ya lo mostraba corregido; y
+  // (b) mezclaba en una sola entrada de faultMap rodamientos físicamente
+  //     distintos del mismo equipo que compartían código de falla (ej. un
+  //     'BEARING' en ML y otro en BA quedaban como un solo hallazgo con
+  //     pts:['MLX','BAY'], como si fuera un único rodamiento).
+  const locGroups  = groupKeysByLocation(keys);
+  const locResults = [...locGroups.values()].map(ks => diagnoseLocation(ks)).filter(Boolean);
   const RANK = {good:0, elevated:1, warning:2, critical:3};
-  const worstPt = ptResults.reduce((a,b) => RANK[b.level] > RANK[a.level] ? b : a, ptResults[0]);
+  const W    = {critical:4, warning:3, elevated:2, good:1};
 
-  // Aggregate faults: sum scores across all points, keep max severity per fault code
-  const faultMap = new Map(); // code → {label, totalScore, severity, pts:[]}
-  for(const pt of ptResults){
-    for(const f of pt.faults){
-      if(!faultMap.has(f.code)){
-        faultMap.set(f.code, {label:f.label, totalScore:0, severity:f.severity, pts:[]});
-      }
-      const entry = faultMap.get(f.code);
-      entry.totalScore += f.score;
-      // Escalate severity if this point is worse
-      if(RANK[f.severity] > RANK[entry.severity]) entry.severity = f.severity;
-      entry.pts.push(getPointCode(pt.k));
+  // Equipment-level health = promedio ponderado por severidad de cada rodamiento
+  const totalW = locResults.reduce((s,l) => s + (W[l.locLevel]||1), 0);
+  const equipHealth = locResults.length
+    ? Math.round(locResults.reduce((s,l) => s + l.locHealth * (W[l.locLevel]||1), 0) / (totalW||1))
+    : 0;
+
+  const worstLoc = locResults.length
+    ? locResults.reduce((a,b) => RANK[b.locLevel] > RANK[a.locLevel] ? b : a, locResults[0])
+    : null;
+  const worstPt = worstLoc
+    ? { ...worstLoc.worstAxis, ptCode: worstLoc.worstAxis.pt }
+    : (ptResults[0] || {ptCode:'—', level:'good'});
+
+  // Aggregate faults: uno por (rodamiento, código) — ya consolidado y
+  // arbitrado por diagnoseLocation(), no vuelve a mezclarse acá.
+  const aggregateFaults = [];
+  for(const loc of locResults){
+    for(const f of loc.faults){
+      aggregateFaults.push({
+        code: f.code, label: f.label, severity: f.severity,
+        avgScore: f.avgScore, pts: [loc.locLabel],
+        confirmed: f.confirmed, patternMatch: f.patternMatch
+      });
     }
   }
-  const aggregateFaults = [...faultMap.entries()]
-    .map(([code,v]) => ({code, ...v, avgScore: v.totalScore/v.pts.length}))
-    .sort((a,b) => b.totalScore - a.totalScore);
+  aggregateFaults.sort((a,b) => RANK[b.severity]-RANK[a.severity] || b.avgScore-a.avgScore);
 
   // Overall equipment level
   const equipLevel = equipHealth < 40 ? 'critical'
     : equipHealth < 65 ? 'warning'
     : equipHealth < 85 ? 'elevated' : 'good';
 
-  return { equipId, ptResults, equipHealth, equipLevel, worstPt, aggregateFaults, keys };
+  return { equipId, ptResults, equipHealth, equipLevel, worstPt, aggregateFaults, keys, locResults };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6936,21 +7067,62 @@ function diagnoseLocation(ptKeys){
 
   // Pista direccional: compara amplitud de Vel.RMS entre H/V/A
   let directionalHint = null;
+  let dirPattern = null; // 'axial' | 'radial' | 'concentrated' | null
   const velByAxis = {};
   for(const a of axes) velByAxis[a.axis] = a.r ? a.r.ov_vel_rms_mms : undefined;
   const h = velByAxis.Horizontal, v = velByAxis.Vertical, ax = velByAxis.Axial;
   if(typeof h==='number' && typeof v==='number' && typeof ax==='number' && ![h,v,ax].some(isNaN)){
     const radial = Math.max(h,v);
     if(ax > radial*1.5 && ax > 1.0){
+      dirPattern = 'axial';
       directionalHint = 'Predominio de vibración AXIAL sobre radial → sugiere desalineación angular o empuje axial, más que desgaste puro de rodamiento.';
     } else if(radial > ax*2 && Math.abs(h-v) < radial*0.35 && radial > 1.0){
+      dirPattern = 'radial';
       directionalHint = 'Predominio de vibración RADIAL similar en horizontal y vertical → patrón típico de desbalanceo.';
     } else {
       const mx = Math.max(h,v,ax);
       if(mx > 1.0 && [h,v,ax].filter(x=>x > mx*0.6).length === 1){
+        dirPattern = 'concentrated';
         directionalHint = 'Elevación concentrada en un solo eje → verificar montaje del sensor o soltura localizada antes de intervenir.';
       }
     }
+  }
+
+  // ── Arbitraje cruzado UNBALANCE / MISALIGN contra el patrón direccional ──
+  // Antes el patrón H/V/A quedaba solo en directionalHint (texto suelto) sin
+  // tocar faults[] — un eje podía marcar "Desbalanceo" aunque el patrón real
+  // fuera axial-dominante (que es desalineación), como pasó a mano con
+  // Motor LL. Ahora el patrón confirma (sube severidad) o contradice (baja
+  // severidad + marca confirmed:false + nota en el label) el fault ya
+  // calculado por eje en diagnoseMachine, en vez de reemplazarlo a ciegas.
+  if(dirPattern === 'axial' || dirPattern === 'radial'){
+    const SEV_UP   = {elevated:'warning', warning:'critical', critical:'critical'};
+    const SEV_DOWN = {critical:'warning', warning:'elevated', elevated:'elevated'};
+    for(const f of faults){
+      if(f.code==='UNBALANCE'){
+        if(dirPattern==='radial'){
+          f.severity = SEV_UP[f.severity]||f.severity;
+          f.patternMatch = true;
+        } else { // axial
+          f.severity = SEV_DOWN[f.severity]||f.severity;
+          f.confirmed = false;
+          f.patternMatch = false;
+          f.label += ' (patrón axial-dominante: revisar, podría ser desalineación)';
+        }
+      } else if(f.code==='MISALIGN'){
+        if(dirPattern==='axial'){
+          f.severity = SEV_UP[f.severity]||f.severity;
+          f.patternMatch = true;
+        } else { // radial
+          f.severity = SEV_DOWN[f.severity]||f.severity;
+          f.confirmed = false;
+          f.patternMatch = false;
+          f.label += ' (patrón radial simétrico: revisar, podría ser desbalanceo)';
+        }
+      }
+    }
+    // Re-ordenar: la severidad pudo cambiar tras el arbitraje
+    faults.sort((a,b)=> (b.confirmed - a.confirmed) || (RANK[b.severity]-RANK[a.severity]) || (b.avgScore-a.avgScore));
   }
 
   // Texto de recomendación consolidada por código de falla (a nivel rodamiento, no por eje)
@@ -6971,10 +7143,14 @@ function diagnoseLocation(ptKeys){
   };
   const recommendations = faults.map(f=>{
     const fn = FAULT_TXT[f.code];
+    let text = fn ? fn(f.confirmed) : (f.label || f.code);
+    if(f.patternMatch === false){
+      text += ' ⚠️ El patrón direccional H/V/A contradice esta clasificación — revisar antes de intervenir.';
+    }
     return {
       code: f.code, severity: f.severity, confirmed: f.confirmed,
       axesCount: f.axesCount, totalAxes: f.totalAxes,
-      text: fn ? fn(f.confirmed) : (f.label || f.code)
+      text
     };
   });
   if(directionalHint) recommendations.push({code:'_HINT', severity:'elevated', confirmed:true, text:directionalHint});
@@ -7075,7 +7251,7 @@ function renderEaContent(equipId){
       <div class="ea-stat"><div class="ea-stat-val" style="color:var(--accent)">${res.keys.length}</div><div class="ea-stat-lbl">Puntos medidos</div></div>
       <div class="ea-stat"><div class="ea-stat-val" style="color:var(--accent)">${totalReadings}</div><div class="ea-stat-lbl">Lecturas totales</div></div>
       <div class="ea-stat"><div class="ea-stat-val" style="color:${col}">${aggregateFaults.length||'0'}</div><div class="ea-stat-lbl">Fallas detectadas</div></div>
-      <div class="ea-stat"><div class="ea-stat-val" style="color:LEVEL_COLOR[worstPt.level]">${escHtml(worstPt.ptCode)}</div><div class="ea-stat-lbl">Punto más crítico</div></div>
+      <div class="ea-stat"><div class="ea-stat-val" style="color:${LEVEL_COLOR[worstPt.level]}">${escHtml(worstPt.ptCode)}</div><div class="ea-stat-lbl">Punto más crítico</div></div>
     </div>`;
 
   // ── Fault matrix ────────────────────────────────────────
@@ -7107,6 +7283,7 @@ function renderEaContent(equipId){
     const faultTags = pt.faults.length
       ? pt.faults.map(f=>`<span class="ea-pt-fault-tag ${f.severity}">${f.code}</span>`).join('')
       : `<span class="ea-pt-fault-tag good">OK</span>`;
+    const TkPt = isoTripletsFor(pt.k); // [T-FIX] dinámico por punto, antes T fijo
     return `<tr class="${rc}">
       <td><span class="ea-pt-name">${pt.ptCode}</span></td>
       <td class="ea-pt-desc">${escHtml(ptLabel)}</td>
@@ -7116,11 +7293,11 @@ function renderEaContent(equipId){
           <div style="width:${pt.health}%;height:4px;border-radius:2px;background:${hCol}"></div>
         </div>
       </td>
-      <td class="ea-pt-val s-${metStatus(r.ov_vel_rms_mms,T.vel_rms)}">${fmt(r.ov_vel_rms_mms,3)}</td>
-      <td class="ea-pt-val s-${metStatus(r.hf_acc_peak_g,T.hf_peak)}">${fmt(r.hf_acc_peak_g,2)}</td>
-      <td class="ea-pt-val s-${metStatus(r.ov_acc_peak_g,T.acc_peak)}">${fmt(r.ov_acc_peak_g,3)}</td>
-      <td class="ea-pt-val s-${metStatus(r.temp_c,T.temp)}">${fmt(r.temp_c,1)}</td>
-      <td class="ea-pt-val s-${metStatus(r.cfplus,T.cfplus)}">${fmt(r.cfplus,2)}</td>
+      <td class="ea-pt-val s-${metStatus(r.ov_vel_rms_mms,TkPt.vel_rms)}">${fmt(r.ov_vel_rms_mms,3)}</td>
+      <td class="ea-pt-val s-${metStatus(r.hf_acc_peak_g,TkPt.hf_peak)}">${fmt(r.hf_acc_peak_g,2)}</td>
+      <td class="ea-pt-val s-${metStatus(r.ov_acc_peak_g,TkPt.acc_peak)}">${fmt(r.ov_acc_peak_g,3)}</td>
+      <td class="ea-pt-val s-${metStatus(r.temp_c,TkPt.temp)}">${fmt(r.temp_c,1)}</td>
+      <td class="ea-pt-val s-${metStatus(r.cfplus,TkPt.cfplus)}">${fmt(r.cfplus,2)}</td>
       <td><span class="mbadge badge-${pt.level}">${STATUS_LABELS[STATUS.indexOf(pt.level)]}</span></td>
       <td><div class="ea-pt-fault-list">${faultTags}</div></td>
     </tr>`;
@@ -7230,22 +7407,22 @@ function renderEaContent(equipId){
           <th>Fecha/Hora</th><th>Vel.RMS mm/s</th><th>Acc.Pk g</th><th>HF Pk g</th><th>Temp °C</th><th>CF+</th><th>Disp.RMS µm</th><th>Estado</th>
         </tr></thead>
         <tbody>
-          ${[...d.dates].map((_,i)=>{
+          ${(()=>{ const Tk = isoTripletsFor(pt.k); /* [T-FIX] dinámico por equipo, antes T fijo */ return [...d.dates].map((_,i)=>{
             const ri = d.dates.length-1-i;
             const vr=d.params.Vel_RMS[ri], ap=d.params.Acc_Peak[ri], hf=d.params.HF_Peak[ri];
             const tp=d.params.Temp[ri], cf=d.params.CFPlus[ri], dr=d.params.Disp_RMS[ri];
-            const lv=Math.max(levelOf(vr,T.vel_rms),levelOf(ap,T.acc_peak),levelOf(hf,T.hf_peak),levelOf(tp,T.temp),levelOf(cf,T.cfplus));
+            const lv=Math.max(levelOf(vr,Tk.vel_rms),levelOf(ap,Tk.acc_peak),levelOf(hf,Tk.hf_peak),levelOf(tp,Tk.temp),levelOf(cf,Tk.cfplus));
             return `<tr>
               <td>${fmtDate(d.dates[ri])}</td>
-              <td class="s-${metStatus(vr,T.vel_rms)}">${fmt(vr,4)}</td>
-              <td class="s-${metStatus(ap,T.acc_peak)}">${fmt(ap,3)}</td>
-              <td class="s-${metStatus(hf,T.hf_peak)}">${fmt(hf,2)}</td>
-              <td class="s-${metStatus(tp,T.temp)}">${fmt(tp,1)}</td>
-              <td class="s-${metStatus(cf,T.cfplus)}">${fmt(cf,2)}</td>
+              <td class="s-${metStatus(vr,Tk.vel_rms)}">${fmt(vr,4)}</td>
+              <td class="s-${metStatus(ap,Tk.acc_peak)}">${fmt(ap,3)}</td>
+              <td class="s-${metStatus(hf,Tk.hf_peak)}">${fmt(hf,2)}</td>
+              <td class="s-${metStatus(tp,Tk.temp)}">${fmt(tp,1)}</td>
+              <td class="s-${metStatus(cf,Tk.cfplus)}">${fmt(cf,2)}</td>
               <td>${fmt(dr,2)}</td>
               <td class="s-${STATUS[lv]}">${STATUS_LABELS[lv]}</td>
             </tr>`;
-          }).join('')}
+          }).join(''); })()}
         </tbody>
       </table>
       </div>
@@ -7440,11 +7617,14 @@ function buildPrintReport(equipId){
   }).join('') : `<tr><td colspan="5" style="padding:14px;text-align:center;color:#6b7280;font-size:13px;">Sin puntos agrupables.</td></tr>`;
 
   // Build point rows with trend arrows
-  const T_local = T;
+  // [T-FIX] T_local era solo un alias de la tabla fija T (mismo umbral para
+  // cualquier kW/tecnología). Ahora cada fila usa isoTripletsFor(pt.k), el
+  // umbral real de ESE punto/equipo.
   const ptRows = [...ptResults].sort((a,b)=>LEVEL_ORDER[b.level]-LEVEL_ORDER[a.level]).map(pt=>{
     const r = pt.r||{};
     const fc = LEVEL_CFG[pt.level];
     const ptLabel = POINT_LABELS[pt.ptCode]||pt.ptCode;
+    const T_local = isoTripletsFor(pt.k);
     const metC = (v,th)=>{ const lv=levelOf(v,th); return LEVEL_CFG[STATUS[lv]]?.hex||'#374151'; };
     const velTrend = getTrend(pt.k,'Vel_RMS');
     const hfTrend  = getTrend(pt.k,'HF_Peak');
@@ -7475,19 +7655,20 @@ function buildPrintReport(equipId){
     const d = machinesData.get(pt.k); if(!d) continue;
     const ptLabel = POINT_LABELS[pt.ptCode]||pt.ptCode;
     const fc = LEVEL_CFG[pt.level];
+    const Tk = isoTripletsFor(pt.k); // [T-FIX] dinámico por equipo, antes T fijo
     const rows = [...d.dates].map((_,idx)=>{
       const i = d.dates.length-1-idx;
       const vr=d.params.Vel_RMS[i],ap=d.params.Acc_Peak[i],hf=d.params.HF_Peak[i];
       const tp=d.params.Temp[i],cf=d.params.CFPlus[i],dr=d.params.Disp_RMS?.[i];
-      const lv=Math.max(levelOf(vr,T.vel_rms),levelOf(ap,T.acc_peak),levelOf(hf,T.hf_peak),levelOf(tp,T.temp),levelOf(cf,T.cfplus));
+      const lv=Math.max(levelOf(vr,Tk.vel_rms),levelOf(ap,Tk.acc_peak),levelOf(hf,Tk.hf_peak),levelOf(tp,Tk.temp),levelOf(cf,Tk.cfplus));
       const rc = LEVEL_CFG[STATUS[lv]]||LEVEL_CFG.good;
       return `<tr style="background:${i===d.dates.length-1?'#fafbff':''}">
         <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:#6b7280;">${fmtDate(d.dates[i])}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(vr,T.vel_rms)]]?.hex||'#374151'};font-weight:600;">${fmt(vr,4)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(hf,T.hf_peak)]]?.hex||'#374151'};font-weight:600;">${fmt(hf,2)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(ap,T.acc_peak)]]?.hex||'#374151'};font-weight:600;">${fmt(ap,3)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(tp,T.temp)]]?.hex||'#374151'};font-weight:600;">${fmt(tp,1)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(cf,T.cfplus)]]?.hex||'#374151'};font-weight:600;">${fmt(cf,2)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(vr,Tk.vel_rms)]]?.hex||'#374151'};font-weight:600;">${fmt(vr,4)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(hf,Tk.hf_peak)]]?.hex||'#374151'};font-weight:600;">${fmt(hf,2)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(ap,Tk.acc_peak)]]?.hex||'#374151'};font-weight:600;">${fmt(ap,3)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(tp,Tk.temp)]]?.hex||'#374151'};font-weight:600;">${fmt(tp,1)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:${LEVEL_CFG[STATUS[levelOf(cf,Tk.cfplus)]]?.hex||'#374151'};font-weight:600;">${fmt(cf,2)}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-family:'Courier New',monospace;font-size:11px;color:#6b7280;">${fmt(dr,2)}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;text-align:center;">
           <span style="display:inline-block;padding:1px 7px;border-radius:3px;font-size:9px;font-weight:700;background:${rc.bg};color:${rc.hex};border:1px solid ${rc.border};">${rc.label}</span>
@@ -8224,15 +8405,16 @@ function offRenderReport(data, repType, scope){
                   const fTags = pt.faults.slice(0,3).map(f=>
                     `<span class="ea-pt-fault-tag ${f.severity}">${f.label.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s.°:()→↗📈💧🔩⚖️🧴🌡🔄]/gu,'')}</span>`
                   ).join('');
+                  const TkOff = isoTripletsFor(pt.k); // [T-FIX] dinámico por punto, antes T fijo
                   return `<tr>
                     <td><span class="mpoint-badge">${pt.pt}</span></td>
                     <td style="font-size:.76rem;">${escHtml(pt.desc)}</td>
                     <td style="text-align:center;"><span style="color:${lc};font-family:'Share Tech Mono';font-weight:700;">${pt.health}</span></td>
-                    <td class="s-${metStatus(pt.lastReading.vel_rms,T.vel_rms)}">${fmt(pt.lastReading.vel_rms,4)}</td>
-                    <td class="s-${metStatus(pt.lastReading.hf_peak,T.hf_peak)}">${fmt(pt.lastReading.hf_peak,2)}</td>
-                    <td class="s-${metStatus(pt.lastReading.acc_peak,T.acc_peak)}">${fmt(pt.lastReading.acc_peak,3)}</td>
-                    <td class="s-${metStatus(pt.lastReading.temp,T.temp)}">${fmt(pt.lastReading.temp,1)}</td>
-                    <td class="s-${metStatus(pt.lastReading.cfplus,T.cfplus)}">${fmt(pt.lastReading.cfplus,2)}</td>
+                    <td class="s-${metStatus(pt.lastReading.vel_rms,TkOff.vel_rms)}">${fmt(pt.lastReading.vel_rms,4)}</td>
+                    <td class="s-${metStatus(pt.lastReading.hf_peak,TkOff.hf_peak)}">${fmt(pt.lastReading.hf_peak,2)}</td>
+                    <td class="s-${metStatus(pt.lastReading.acc_peak,TkOff.acc_peak)}">${fmt(pt.lastReading.acc_peak,3)}</td>
+                    <td class="s-${metStatus(pt.lastReading.temp,TkOff.temp)}">${fmt(pt.lastReading.temp,1)}</td>
+                    <td class="s-${metStatus(pt.lastReading.cfplus,TkOff.cfplus)}">${fmt(pt.lastReading.cfplus,2)}</td>
                     <td><span class="mbadge badge-${pt.level}">${STATUS_LABELS[STATUS.indexOf(pt.level)]}</span></td>
                     <td><div class="ea-pt-fault-list" style="min-width:120px;">${fTags||'<span style="color:var(--muted);font-size:.72rem;">Sin fallas</span>'}</div></td>
                   </tr>`;
