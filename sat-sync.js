@@ -740,8 +740,26 @@
     if (error) throw error;
   }
 
+  // Verifica que Supabase responda de verdad (consulta mínima, sin traer filas).
+  // Devuelve { ok: true } o { ok: false, motivo }. Nunca lanza.
+  async function ping(timeoutMs = 6000) {
+    if (!client) return { ok: false, motivo: 'sin-cliente' };
+    let timer;
+    try {
+      const consulta = client.from('equipos').select('id', { head: true, count: 'exact' }).limit(1);
+      const limite = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), timeoutMs); });
+      const { error } = await Promise.race([consulta, limite]);
+      if (error) return { ok: false, motivo: error.message || String(error.code || 'error') };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, motivo: e.message || 'red' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   global.SatSync = {
-    init, estaConfigurado, guardarConfig, leerConfig,
+    init, estaConfigurado, ping, guardarConfig, leerConfig,
     listarEquipos, buscarOCrearEquipo, actualizarEquipo, archivarEquipo,
     guardarAnalisis, listarAnalisis, subirImagen,
     guardarCaptura, listarCapturasPendientes, marcarCapturaProcesada,
