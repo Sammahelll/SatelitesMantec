@@ -1092,8 +1092,10 @@ function showToast(msg, type='info'){
 }
 
 function csvEscape(v){
-  const s = (v === null || v === undefined) ? '' : String(v);
-  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  let s = (v === null || v === undefined) ? '' : String(v);
+  // Evitar inyección de fórmulas al abrir el CSV en Excel (nombres/TAGs vienen de la nube o de un Excel importado)
+  if (typeof v === 'string' && /^[=+@\t\r]/.test(s)) s = "'" + s;
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
   return s;
 }
 
@@ -1139,7 +1141,7 @@ async function cargarEquiposCache(){
   const fEquipo = document.getElementById('fEquipo');
   const seleccionPrevia = fEquipo.value;
   fEquipo.innerHTML = '<option value="">Todos los equipos</option>' +
-    equiposCache.map(e => `<option value="${e.id}">${e.tag} — ${e.nombre}</option>`).join('');
+    equiposCache.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.tag)} — ${escapeHtml(e.nombre)}</option>`).join('');
   fEquipo.value = seleccionPrevia;
 }
 
@@ -1219,15 +1221,15 @@ function renderEquiposTable(){
         : `<span class="global-pill na">sin datos</span>`;
       return `
       <tr class="${e.activo ? '' : 'archivada'}">
-        <td class="tag-mono">${e.tag}</td>
-        <td>${e.nombre || ''}</td>
-        <td>${e.tipo || '—'}</td>
-        <td>${e.ubicacion || '—'}</td>
+        <td class="tag-mono">${escapeHtml(e.tag)}</td>
+        <td>${escapeHtml(e.nombre || '')}</td>
+        <td>${escapeHtml(e.tipo || '—')}</td>
+        <td>${escapeHtml(e.ubicacion || '—')}</td>
         ${MODULOS.map(m => {
           const r = fila[m.key];
           const cls = r && r.severidad ? r.severidad : '';
           const tip = r ? `${m.name}: ${({ok:'OK',atencion:'ATENCIÓN',critico:'CRÍTICO'})[r.severidad]||'s/d'} · ${fmtFecha(r.fecha)}${r.resumen ? ' · ' + r.resumen : ''}` : `${m.name}: sin datos`;
-          return `<td class="health-cell"><span class="mini-badge ${cls}" title="${tip.replace(/"/g,'&quot;')}"></span></td>`;
+          return `<td class="health-cell"><span class="mini-badge ${escapeHtml(cls)}" title="${escapeHtml(tip)}"></span></td>`;
         }).join('')}
         <td>${globalHtml}</td>
         <td class="actions-cell">
@@ -1421,7 +1423,7 @@ function abrirBorrarEquipo(id){
   const eq = equiposCache.find(e => e.id === id);
   if (!eq) return;
   borrandoEquipoId = id;
-  document.getElementById('borrarOrigenMsg').innerHTML = `Vas a borrar <span class="tag-mono">${eq.tag}</span> junto con todo su historial de análisis, mediciones y capturas de campo.`;
+  document.getElementById('borrarOrigenMsg').innerHTML = `Vas a borrar <span class="tag-mono">${escapeHtml(eq.tag)}</span> junto con todo su historial de análisis, mediciones y capturas de campo.`;
   const input = document.getElementById('borrarTagConfirm');
   input.value = '';
   input.placeholder = eq.tag;
@@ -1952,7 +1954,7 @@ try{
   const tabGuardada = localStorage.getItem('mantec_hub_tab');
   if (tabGuardada && document.getElementById('tabPanel-'+tabGuardada)) cambiarTabPrincipal(tabGuardada);
 }catch(e){}
-if (SatSync.init()) {
+if (typeof SatSync !== 'undefined' && SatSync.init()) {
   refrescarTodo();
 } else {
   actualizarEstadoConexion();
