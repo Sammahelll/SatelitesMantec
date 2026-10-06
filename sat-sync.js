@@ -190,8 +190,12 @@
 
   async function subirImagen(archivo, carpeta = 'general') {
     if (!client) throw new Error('[SatSync] no inicializado');
-    const nombre = `${carpeta}/${Date.now()}-${archivo.name}`;
-    const { error } = await client.storage.from('analisis-media').upload(nombre, archivo);
+    // Storage rechaza claves con tildes, ñ, corchetes, etc. ("Invalid key"): fotos como
+    // "Fotografía (1).jpg" fallaban. Se normaliza a ASCII seguro.
+    const limpio = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+    const base = limpio(archivo.name).slice(-80) || 'imagen';
+    const nombre = `${limpio(carpeta) || 'general'}/${Date.now()}-${base}`;
+    const { error } = await client.storage.from('analisis-media').upload(nombre, archivo, archivo.type ? { contentType: archivo.type } : undefined);
     if (error) throw error;
     const { data } = client.storage.from('analisis-media').getPublicUrl(nombre);
     return data.publicUrl;
