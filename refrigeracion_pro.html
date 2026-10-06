@@ -2671,6 +2671,9 @@ function copiarCapturaAFormulario(i){
   openManualEntry(); // resetea el form, arma los selects y lo abre
 
   const eqId = buscarOCrearEquipoPorTag(tag);
+  // Datos del equipo que viajan en la captura del Hub de Campo: solo completan lo que falta, nunca pisan
+  { const eqx = equiposRegistry.get(eqId);
+    if (eqx){ if (!eqx.refrigerante && d.refrigerante) eqx.refrigerante = d.refrigerante; if (!(eqx.fla > 0) && d.fla > 0) eqx.fla = d.fla; } }
   saveState();
 
   const eqSel = document.getElementById('me_eqSel');
@@ -2685,6 +2688,11 @@ function copiarCapturaAFormulario(i){
   if (d.tempAmb!=null) document.getElementById('me_tempAmb').value = d.tempAmb;
   if (d.presAlta!=null) document.getElementById('me_presAlta').value = d.presAlta;
   if (d.presBaja!=null) document.getElementById('me_presBaja').value = d.presBaja;
+  if (d.tempSuccion!=null) document.getElementById('me_tempSuccion').value = d.tempSuccion;
+  if (d.tempLiquido!=null) document.getElementById('me_tempLiquido').value = d.tempLiquido;
+  if (d.tempAguaRetorno!=null) document.getElementById('me_tempAguaRetorno').value = d.tempAguaRetorno;
+  if (d.tempAguaSuministro!=null) document.getElementById('me_tempAguaSuministro').value = d.tempAguaSuministro;
+  if (d.caudalAgua!=null) document.getElementById('me_caudalAgua').value = d.caudalAgua;
   if (d.iR!=null) document.getElementById('me_iR').value = d.iR;
   if (d.iS!=null) document.getElementById('me_iS').value = d.iS;
   if (d.iT!=null) document.getElementById('me_iT').value = d.iT;
