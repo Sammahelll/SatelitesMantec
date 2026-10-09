@@ -774,6 +774,8 @@ let _sucia = false, _cfgSucia = false, _pend = [], _migrar = false;
 let _ver = 0, _subiendo = false, _tSubida = null, _ultimaBajada = 0;
 let _hashes = new Map();       // 'f:TAG' / 'm:TAG|fecha' -> JSON de lo último sincronizado
 let _equipoIds = new Map();    // TAG (nombre de tablero) -> equipos.id
+// Contexto del equipo traído de la BD: TAG -> {specs:{motor,bomba,tablero..}, analisis:{modulo:{severidad,resumen,fecha}}}
+let ctxPorTag = new Map();
 const isN = v => typeof v === 'number' && isFinite(v);
 const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
 // Parámetros numéricos de una lectura de circuito vs. el único campo de texto (fase con temp. máxima).
@@ -988,9 +990,21 @@ async function subirCambios(opts = {}){
 // ── Descarga: reconstruye todo desde Supabase ──
 async function bajarTodo(){
   nubeEstado('bajando');
-  const [equipos, meds, cfg] = await Promise.all([
-    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO)
+  const [equipos, meds, cfg, specsPorId, analisisPorId] = await Promise.all([
+    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO),
+    // contexto del equipo: si falla no debe romper la bajada principal
+    SatSync.listarSpecsTodos().catch(err => { console.warn('[SatSync] sin specs', err); return null; }),
+    SatSync.ultimosAnalisis().catch(err => { console.warn('[SatSync] sin análisis de otros módulos', err); return null; })
   ]);
+  if (specsPorId || analisisPorId){           // si ambas fallaron se conserva el contexto anterior
+    ctxPorTag = new Map();
+    for (const e of equipos){
+      ctxPorTag.set(e.tag, {
+        specs:    (specsPorId && specsPorId.get(e.id)) || {},
+        analisis: (analisisPorId && analisisPorId.get(e.id)) || {}
+      });
+    }
+  }
   const panels = new Map(), circuits = new Map(), tagDePanel = new Map(), ids = new Map(), panelIdDeTag = new Map();
   for (const e of equipos){
     const f = e.ficha && e.ficha[MODULO];
@@ -1139,9 +1153,39 @@ function levelOf(value, band, inverse){
 }
 
 // Calcula los sub-niveles y nivel global para una lectura puntual (índice n de una serie)
-function evalReading(params, n){
+// ── Normalización por carga ──
+// El calentamiento de un contacto crece aprox. con I^1.5–I² (exponente empírico, no normativo). Se lleva el ΔT
+// medido a su equivalente a plena carga SOLO si hay corriente nominal y la carga es >= LOAD_MIN; por encima
+// de 100 % no se corrige (conservador).
+const LOAD_EXP = 1.5, LOAD_MIN = 0.3;
+const _num = v => { const x = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : NaN; };
+function _primerNum(obj, claves){ for (const c of claves){ const x = _num(obj?.[c]); if (x > 0) return x; } return NaN; }
+// Corriente nominal de referencia de un TAG, desde la BD (equipos_specs): motor → tablero → respaldo legado de la ficha.
+function inomDeTag(tag){
+  const sp = ctxPorTag.get(tag)?.specs || {};
+  let v = _primerNum(sp.motor, ['corriente_a','corriente_fla','corriente_nominal_a']);
+  if (isFinite(v)) return {inom:v, fuente:'ficha motor (BD)'};
+  v = _primerNum(sp.tablero, ['corriente_nominal_a','corriente_nominal']);
+  if (isFinite(v)) return {inom:v, fuente:'ficha tablero (BD)'};
+  for (const p of panelsRegistry.values()){
+    if (p.name === tag && p.ampNominal > 0) return {inom:p.ampNominal, fuente:'respaldo local'};
+  }
+  return {inom:NaN, fuente:''};
+}
+function ctxCarga(k){ return inomDeTag(getPanelName(getPanelId(k))); }
+
+function evalReading(params, n, ctx){
   const p = params;
-  const deltaT = (p.TempMax?.[n] - p.TempAmb?.[n]);
+  const deltaTRaw = (p.TempMax?.[n] - p.TempAmb?.[n]);
+  // corriente de la fase caliente si se conoce (R/S/T); si no, promedio de las fases medidas
+  const fm = String(p.FaseMax?.[n] || '').trim().toUpperCase().charAt(0);
+  const iFase = ({R:p.I_R, S:p.I_S, T:p.I_T})[fm]?.[n];
+  const iProm = [p.I_R?.[n], p.I_S?.[n], p.I_T?.[n]].filter(isN);
+  const iRef = isN(iFase) ? iFase : (iProm.length ? iProm.reduce((a,b)=>a+b,0)/iProm.length : NaN);
+  const inom = ctx && ctx.inom > 0 ? ctx.inom : NaN;
+  const cargaPct = (isFinite(iRef) && isFinite(inom)) ? iRef / inom : NaN;
+  const normalizado = isFinite(cargaPct) && cargaPct >= LOAD_MIN && isFinite(deltaTRaw);
+  const deltaT = normalizado ? deltaTRaw / Math.pow(Math.min(cargaPct, 1), LOAD_EXP) : deltaTRaw;
   const desbV  = p.DesbV?.[n];
   const desbI  = p.DesbI?.[n];
   const thdV   = p.THD_V?.[n];
@@ -1161,7 +1205,8 @@ function evalReading(params, n){
   };
   let overall = 0;
   for (const k in subs) if (subs[k] > overall) overall = subs[k];
-  return { subs, overall, deltaT, desbV, desbI, thdV, fp, rAisl, faseMax,
+  return { subs, overall, deltaT, deltaTRaw, cargaPct, normalizado, inom, fuenteInom: ctx?.fuente || '',
+           desbV, desbI, thdV, fp, rAisl, faseMax,
            vRS, vST, vTR, vRN, vSN, vTN };
 }
 
@@ -1196,8 +1241,13 @@ function diagnoseCircuit(k){
   const d = readingsData.get(k);
   if (!d || !d.dates.length) return null;
   const n = lastValidIdx(d);
-  const ev = evalReading(d.params, n);
-  return { ...ev, date: d.dates[n] };
+  const ev = evalReading(d.params, n, ctxCarga(k));
+  // lo que dicen los OTROS módulos del mismo TAG (motor, vibraciones, etc.) — viene de la BD
+  const tag = getPanelName(getPanelId(k));
+  const otros = Object.entries(ctxPorTag.get(tag)?.analisis || {})
+    .filter(([mod, a]) => mod !== MODULO && a && a.severidad && a.severidad !== 'ok')
+    .map(([mod, a]) => ({modulo: mod, severidad: a.severidad, resumen: a.resumen || '', fecha: a.fecha}));
+  return { ...ev, otros, date: d.dates[n] };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1668,7 +1718,7 @@ function diagnosisMessages(diag){
 
   if (diag.subs.deltaT >= 2){
     push(diag.subs.deltaT===3?'critical':'warning', '🔥 Punto caliente detectado por termografía',
-      `ΔT de ${fmt(diag.deltaT,1)}°C sobre ambiente${diag.subs.desbI>=1?' coincidiendo con desbalance de corriente':''}.${diag.faseMax?` Punto caliente en fase ${escHtml(diag.faseMax)}.`:''} Probable conexión floja, terminal oxidado o sobrecarga${diag.faseMax?` en dicha fase`:''}. Revisar torque de bornes y estado del contacto; si es crítico, intervenir antes de la próxima ronda.`);
+      `ΔT de ${fmt(diag.deltaTRaw,1)}°C sobre ambiente${diag.normalizado?` a ${fmt(diag.cargaPct*100,0)}% de carga (≈${fmt(diag.deltaT,1)}°C a plena carga; nominal ${fmt(diag.inom,1)} A, ${diag.fuenteInom})`:' — sin dato de carga: el nivel puede estar subestimado'}${diag.subs.desbI>=1?' coincidiendo con desbalance de corriente':''}.${diag.faseMax?` Punto caliente en fase ${escHtml(diag.faseMax)}.`:''} Probable conexión floja, terminal oxidado o sobrecarga${diag.faseMax?` en dicha fase`:''}. Revisar torque de bornes y estado del contacto; si es crítico, intervenir antes de la próxima ronda.`);
   } else if (diag.subs.deltaT === 1){
     push('elevated', '🌡️ ΔT levemente elevada', 'Deficiencia incipiente. Monitorear en la próxima medición programada; no requiere intervención inmediata.');
   }
@@ -1694,6 +1744,10 @@ function diagnosisMessages(diag){
       `${fmt(diag.rAisl,0)} MΩ medidos. Riesgo de fuga o falla dieléctrica. Revisar humedad/condensación dentro del tablero, estado de cables y sellado IP. Priorizar según tensión de operación.`);
   }
 
+  for (const o of (diag.otros || [])){
+    push(o.severidad==='critico'?'critical':'warning', `🔗 ${escHtml(o.modulo)} del mismo TAG: ${escHtml(o.severidad)}`,
+      `${escHtml(o.resumen || 'Sin resumen')}${o.fecha?` (${escHtml(fmtDate(new Date(o.fecha)))})`:''}. Considerar este hallazgo al priorizar la intervención del tablero/alimentación.`);
+  }
   if (!msgs.length){
     push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros dentro de rango normal. Continuar con el plan de monitoreo establecido.');
   }
@@ -1720,7 +1774,8 @@ function openDetail(k){
   <div class="mgrid">
     <div class="mstat"><div class="mstat-lbl">Estado</div><div class="mstat-val"><span class="mbadge ${badgeClass}">${level<0?'Sin datos':STATUS_LABELS[level]}</span></div></div>
     <div class="mstat"><div class="mstat-lbl">Salud</div><div class="mstat-val">${health===null?'—':health+'%'}</div></div>
-    <div class="mstat"><div class="mstat-lbl">ΔT</div><div class="mstat-val">${fmt(diag.deltaT,1)}°C</div></div>
+    <div class="mstat"><div class="mstat-lbl">ΔT</div><div class="mstat-val">${fmt(diag.deltaTRaw,1)}°C</div></div>
+    <div class="mstat"><div class="mstat-lbl">Carga</div><div class="mstat-val">${!isNaN(diag.cargaPct)?fmt(diag.cargaPct*100,0)+'%':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Desb. Corriente</div><div class="mstat-val">${!isNaN(diag.desbI)?fmt(diag.desbI,1)+'%':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Desb. Tensión</div><div class="mstat-val">${!isNaN(diag.desbV)?fmt(diag.desbV,1)+'%':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Factor de Potencia</div><div class="mstat-val">${!isNaN(diag.fp)?fmt(diag.fp,2):'—'}</div></div>
@@ -1740,10 +1795,10 @@ function openDetail(k){
     <table class="rtable">
       <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th><th>Observaciones</th><th>Acciones</th></tr></thead>
       <tbody>${d.dates.map((dt,i)=>{
-        const ev = evalReading(d.params, i);
+        const ev = evalReading(d.params, i, ctxCarga(k));
         return `<tr>
           <td data-label="Fecha">${fmtDate(dt)}</td>
-          <td data-label="ΔT (°C)">${fmt(ev.deltaT,1)}</td>
+          <td data-label="ΔT (°C)">${fmt(ev.deltaTRaw,1)}${ev.normalizado?` <span style="color:var(--muted);font-size:.75rem;" title="ΔT equivalente a plena carga (${fmt(ev.cargaPct*100,0)}% de carga)">→ ${fmt(ev.deltaT,1)}</span>`:''}</td>
           <td data-label="Fase Máx.">${escHtml(ev.faseMax||'—')}</td>
           <td data-label="V_RS (V)">${!isNaN(ev.vRS)?fmt(ev.vRS,1):'—'}</td>
           <td data-label="V_ST (V)">${!isNaN(ev.vST)?fmt(ev.vST,1):'—'}</td>
@@ -2022,7 +2077,7 @@ function exportCSV(){
     const panel = panelsRegistry.get(getPanelId(k)) || {};
     const circuit = circuitsMeta.get(k) || {};
     for (let n=0;n<d.dates.length;n++){
-      const ev = evalReading(d.params, n);
+      const ev = evalReading(d.params, n, ctxCarga(k));
       const estado = ev.overall>=0 ? STATUS_LABELS[ev.overall] : '—';
       const dt = d.dates[n];
       const fecha = (dt instanceof Date && !isNaN(dt)) ? dt.toISOString().slice(0,10) : '';
@@ -2400,7 +2455,7 @@ function buildAIPayload(){
     const ultimas = [];
     const N_ULT = Math.min(5, d.dates.length);
     for (let i = d.dates.length - N_ULT; i < d.dates.length; i++){
-      const ev = evalReading(d.params, i);
+      const ev = evalReading(d.params, i, ctxCarga(k));
       ultimas.push({
         fecha: fmtDate(d.dates[i]),
         deltaT_c: isN(ev.deltaT) ? +ev.deltaT.toFixed(1) : null,
@@ -3194,7 +3249,7 @@ function abrirHistorialTablero(id){
     if (getPanelId(k) !== id) continue;
     const e = readingsData.get(k); if (!e || !e.dates.length) continue;
     nCirc++;
-    e.dates.forEach((dt,i) => filas.push({k, i, dt, ev: evalReading(e.params, i), obs: (e.obs && e.obs[i]) || ''}));
+    e.dates.forEach((dt,i) => filas.push({k, i, dt, ev: evalReading(e.params, i, ctxCarga(k)), obs: (e.obs && e.obs[i]) || ''}));
   }
   filas.sort((a,b) => b.dt - a.dt);
   document.getElementById('modalTitle').textContent = p.name;
@@ -3235,7 +3290,8 @@ function editarTablero(id){
     <div class="fld"><label>Nombre (TAG)</label><input value="${escHtml(p.name)}" disabled></div>
     <div class="fld"><label>Tipo</label><select id="em_type">${tipos.map(t=>`<option ${t===p.type?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
     <div class="fld"><label>Ubicación</label><input id="em_loc" value="${escHtml(p.location||'')}"></div>
-    <div class="fld"><label>Corriente nominal (A)</label><input id="em_amp" type="number" value="${p.ampNominal||''}"></div>`;
+    ${(() => { const r = inomDeTag(p.name), deBD = r.fuente.includes('BD');
+      return `<div class="fld"><label>Corriente nominal (A)${deBD?' · desde la BD':''}</label><input id="em_amp" type="number" value="${deBD?r.inom:(p.ampNominal||'')}" ${deBD?'disabled title="Se edita en la ficha del equipo (hub), no acá"':''}></div>`; })()}`;
   document.getElementById('em_hint').textContent = 'El nombre es el TAG compartido con el hub y los demás módulos, por eso no se cambia desde acá.';
   document.getElementById('editMetaOverlay').classList.add('open');
 }
@@ -3259,7 +3315,8 @@ function guardarEditMeta(){
     const p = panelsRegistry.get(_editMeta.id); if (!p){ cerrarEditMeta(); return; }
     p.type = document.getElementById('em_type').value;
     p.location = document.getElementById('em_loc').value.trim();
-    p.ampNominal = parseFloat(document.getElementById('em_amp').value) || 0;
+    const _amp = document.getElementById('em_amp');
+    if (!_amp.disabled) p.ampNominal = parseFloat(_amp.value) || 0;
   } else {
     const k = _editMeta.k, c = circuitsMeta.get(k); if (!c){ cerrarEditMeta(); return; }
     const name = document.getElementById('em_cname').value.trim();

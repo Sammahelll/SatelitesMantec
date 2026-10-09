@@ -409,6 +409,49 @@
     });
   }
 
+  // ---- Contexto compartido por TAG ----
+  // Todas las specs de una vez: Map equipo_id -> { motor:{...}, bomba:{...}, tablero:{...} }.
+  // Si equipos_specs aún no existe (42P01) devuelve un Map vacío.
+  async function listarSpecsTodos() {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    let filas;
+    try {
+      filas = await _paginar(() => client.from('equipos_specs')
+        .select('equipo_id, tipo_espec, spec_data').order('equipo_id'));
+    } catch (e) {
+      if (e && e.code === '42P01') return new Map();
+      throw e;
+    }
+    const out = new Map();
+    for (const f of filas) {
+      if (!out.has(f.equipo_id)) out.set(f.equipo_id, {});
+      out.get(f.equipo_id)[f.tipo_espec] = f.spec_data || {};
+    }
+    return out;
+  }
+
+  // Último análisis de cada (equipo, módulo): Map equipo_id -> { motor_pro:{severidad,resumen,fecha,datos}, ... }
+  // Recorre `analisis` de más nuevo a más viejo; ventana en días y tope de páginas para no traer todo el histórico.
+  async function ultimosAnalisis({ dias = 180, maxPaginas = 10 } = {}) {
+    if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
+    const desdeISO = new Date(Date.now() - dias * 864e5).toISOString();
+    const out = new Map(), tam = 1000;
+    for (let p = 0; p < maxPaginas; p++) {
+      const { data, error } = await client.from('analisis')
+        .select('equipo_id, modulo, severidad, resumen, fecha, datos')
+        .gte('fecha', desdeISO).order('fecha', { ascending: false })
+        .range(p * tam, p * tam + tam - 1);
+      if (error) throw error;
+      for (const a of data) {
+        if (!out.has(a.equipo_id)) out.set(a.equipo_id, {});
+        const porMod = out.get(a.equipo_id);
+        if (!porMod[a.modulo]) porMod[a.modulo] = { severidad: a.severidad, resumen: a.resumen, fecha: a.fecha, datos: a.datos || {} };
+      }
+      if (data.length < tam) break;
+    }
+    return out;
+  }
+
   async function cargarConfigApp(modulo) {
     if (!client) throw new Error('[SatSync] no inicializado — llamá a SatSync.init() primero');
     const { data, error } = await client.from('config_apps').select('config').eq('modulo', modulo).maybeSingle();
@@ -770,6 +813,7 @@
     buscarEquipoPorTag, guardarFichas, quitarModuloDeEquipo, renombrarEquipo,
     listarMediciones, guardarMediciones, borrarMedicion, cargarConfigApp, guardarConfigApp,
     guardarSpec, obtenerSpecsEquipo, listarEquiposConSpecs,
+    listarSpecsTodos, ultimosAnalisis,
 
     // ── NUEVAS: import multi-hoja, borrado de specs y validación post-import ──
     importarPlantillaEquipos,
