@@ -367,6 +367,18 @@ header{
 .ai-prompt-box,.ai-response-box{width:100%;min-height:140px;font-family:'Share Tech Mono',monospace;font-size:.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;resize:vertical;}
 .ai-response-box{min-height:120px;font-size:.78rem;}
 .ai-status{font-size:.8rem;color:var(--muted);margin-left:8px;}
+
+/* ── HISTORIAL / EDICIÓN ── */
+.hist-scroll{max-height:380px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+.hist-scroll .rtable th{position:sticky;top:0;background:var(--surface);z-index:1;}
+.act-btn{background:var(--card);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:2px 8px;font-size:.8rem;cursor:pointer;margin-right:4px;transition:all .2s;}
+.act-btn:hover{border-color:var(--accent);color:var(--accent);}
+.act-btn.del:hover{border-color:var(--critical);color:var(--critical);}
+.hist-obs{max-width:180px;white-space:normal;font-family:'Rajdhani',sans-serif;color:var(--muted);}
+.chip-circ{display:inline-flex;align-items:center;gap:6px;margin:2px 4px 2px 0;}
+.chip-circ a{cursor:pointer;color:var(--accent2);}
+.btn-small:disabled{opacity:.4;cursor:not-allowed;}
+#manualOverlay,#editMetaOverlay{z-index:1100;}
 </style>
 </head>
 <body>
@@ -554,8 +566,8 @@ header{
   <div class="modal-box">
     <div class="modal-head">
       <div>
-        <div class="modal-title">✍️ Cargar medición manual</div>
-        <div class="modal-sub">Registrá una lectura puntual sin necesidad de Excel</div>
+        <div class="modal-title" id="me_title">✍️ Cargar medición manual</div>
+        <div class="modal-sub" id="me_sub">Registrá una lectura puntual sin necesidad de Excel</div>
       </div>
       <button class="modal-close" onclick="closeManualEntry()">✕</button>
     </div>
@@ -637,8 +649,29 @@ header{
       <div class="fld"><textarea id="me_obs" rows="2" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-family:'Rajdhani',sans-serif;font-size:.92rem;outline:none;resize:vertical;" placeholder="Opcional"></textarea></div>
 
       <div style="display:flex;gap:10px;margin-top:20px;">
-        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="saveManualReading()">💾 Guardar medición</button>
+        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" id="me_saveBtn" onclick="saveManualReading()">💾 Guardar medición</button>
         <button class="btn-small" onclick="closeManualEntry()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL EDITAR TABLERO / CIRCUITO ═══ -->
+<div class="modal-overlay" id="editMetaOverlay" onclick="if(event.target===this)cerrarEditMeta()">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="em_title">Editar</div>
+        <div class="modal-sub" id="em_sub"></div>
+      </div>
+      <button class="modal-close" onclick="cerrarEditMeta()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" id="em_fields"></div>
+      <div id="em_hint" style="font-size:.78rem;color:var(--muted);margin-bottom:14px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-small" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;" onclick="guardarEditMeta()">💾 Guardar cambios</button>
+        <button class="btn-small" onclick="cerrarEditMeta()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -901,6 +934,18 @@ async function subirCambios(opts = {}){
         const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
         if (eq) await SatSync.quitarModuloDeEquipo(MODULO, eq.id);
         _equipoIds.delete(p.tag);
+      } else if (p.t === 'med'){
+        // Lectura eliminada/movida de fecha. Si el tablero todavía tiene otros circuitos en esa
+        // fecha, el paso 3 reescribe la fila sola (cambió su hash). Si ya no queda ninguno,
+        // se deja la fila vacía ({circuits:{}}): bajarTodo() la ignora, así no reaparece.
+        const pid = [...panelsRegistry.keys()].find(id => getPanelName(id) === p.tag);
+        if (pid && !Object.keys(medicionesDePanel(pid).get(p.fecha) || {}).length){
+          const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+          if (eq){
+            await SatSync.guardarMediciones(MODULO, [{equipo_id:eq.id, fecha:p.fecha, datos:{circuits:{}}, obs:null}]);
+            _hashes.set('m:' + p.tag + '|' + p.fecha, JSON.stringify({circuits:{}}));
+          }
+        }
       }
       _pend.shift(); escribirCache();
     }
@@ -1345,6 +1390,7 @@ function mergeReadings(existing, incoming){
 //  6. MANUAL ENTRY
 // ═══════════════════════════════════════════════════════════
 function openManualEntry(){
+  salirModoEdicion();
   const panelSel = document.getElementById('me_panelSel');
   panelSel.innerHTML = `<option value="__new">➕ Crear nuevo tablero…</option>` +
     Array.from(panelsRegistry.entries()).map(([id,p])=>`<option value="${id}">${escHtml(p.name)}</option>`).join('');
@@ -1363,7 +1409,7 @@ function openManualEntry(){
   onManualPanelChange();
   document.getElementById('manualOverlay').classList.add('open');
 }
-function closeManualEntry(){ document.getElementById('manualOverlay').classList.remove('open'); }
+function closeManualEntry(){ document.getElementById('manualOverlay').classList.remove('open'); salirModoEdicion(); }
 
 function onManualPanelChange(){
   const sel = document.getElementById('me_panelSel');
@@ -1394,6 +1440,7 @@ function numOrUndef(id){
 }
 
 function saveManualReading(){
+  if (_edit){ guardarLecturaEditada(); return; }
   const panelSel = document.getElementById('me_panelSel').value;
   const fechaStr = document.getElementById('me_fecha').value;
   if (!fechaStr){ alert('Ingresá la fecha de la medición.'); return; }
@@ -1655,6 +1702,7 @@ function diagnosisMessages(diag){
 
 function openDetail(k){
   currentKey = k;
+  _vista = {t:'circuito', k};
   const d = readingsData.get(k);
   const diag = diagnoseCircuit(k);
   if (!d || !diag) return;
@@ -1687,10 +1735,10 @@ function openDetail(k){
   <div class="modal-section-title">Tendencia (ΔT y Corriente)</div>
   <div class="chart-wrap"><canvas id="modalChart"></canvas></div>
 
-  <div class="modal-section-title">Historial reciente</div>
-  <div style="overflow-x:auto;">
+  <div class="modal-section-title" style="display:flex;justify-content:space-between;align-items:center;">Historial completo (${d.dates.length} lectura${d.dates.length===1?'':'s'})<button class="act-btn" onclick="agregarLecturaA('${escJs(k)}')">➕ Agregar lectura</button></div>
+  <div class="hist-scroll">
     <table class="rtable">
-      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th><th>Observaciones</th><th>Acciones</th></tr></thead>
       <tbody>${d.dates.map((dt,i)=>{
         const ev = evalReading(d.params, i);
         return `<tr>
@@ -1705,8 +1753,10 @@ function openDetail(k){
           <td data-label="FP">${!isNaN(ev.fp)?fmt(ev.fp,2):'—'}</td>
           <td data-label="THD_V (%)">${!isNaN(ev.thdV)?fmt(ev.thdV,1):'—'}</td>
           <td data-label="R.Aisl (MΩ)">${!isNaN(ev.rAisl)?fmt(ev.rAisl,0):'—'}</td>
+          <td data-label="Observaciones" class="hist-obs">${escHtml((d.obs&&d.obs[i])||'—')}</td>
+          <td data-label="Acciones" style="white-space:nowrap;"><button class="act-btn" title="Editar lectura" onclick="editarLectura('${escJs(k)}',${i})">✏️</button><button class="act-btn del" title="Eliminar lectura" onclick="eliminarLectura('${escJs(k)}',${i})">🗑️</button></td>
         </tr>`;
-      }).reverse().slice(0,15).join('')}</tbody>
+      }).reverse().join('')}</tbody>
     </table>
   </div>`;
 
@@ -1755,7 +1805,7 @@ function openDetail(k){
     });
   }, 30);
 }
-function closeDetail(){ document.getElementById('detailOverlay').classList.remove('open'); }
+function closeDetail(){ document.getElementById('detailOverlay').classList.remove('open'); _vista = null; }
 
 // ═══════════════════════════════════════════════════════════
 //  8. TABLEROS / CIRCUITOS TAB
@@ -1802,12 +1852,23 @@ function renderPanelsList(){
   }
   el.innerHTML = Array.from(panelsRegistry.entries()).map(([id, p])=>{
     const circuits = Array.from(circuitsMeta.entries()).filter(([k])=>getPanelId(k)===id);
+    const nLect = circuits.reduce((s,[k])=>s+(readingsData.get(k)?.dates.length||0),0);
+    const eid = escJs(id);
     return `<div class="panel-box">
       <div class="panel-box-title"><span>🗄️ ${escHtml(p.name)} <span style="color:var(--muted);font-weight:400;font-size:.8rem;">— ${escHtml(p.type||'')}${p.location?' · '+escHtml(p.location):''}</span></span>
-        <button class="btn-small danger" onclick="deletePanel('${escJs(id)}')">Eliminar</button>
+        <span style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-small" ${nLect?'':'disabled'} onclick="abrirHistorialTablero('${eid}')">📜 Historial (${nLect})</button>
+          <button class="btn-small" onclick="editarTablero('${eid}')">✏️ Editar</button>
+          <button class="btn-small danger" onclick="deletePanel('${eid}')">Eliminar</button>
+        </span>
       </div>
       <div style="font-size:.82rem;color:var(--muted);">
-        ${circuits.length ? circuits.map(([k,c])=>`<div class="mpoint-badge" style="margin:2px 4px 2px 0;display:inline-block;">${escHtml(c.name)} — ${escHtml(c.type||'')} (${readingsData.get(k)?.dates.length||0} lecturas)</div>`).join('') : 'Sin circuitos con datos aún.'}
+        ${circuits.length ? circuits.map(([k,c])=>{
+          const n = readingsData.get(k)?.dates.length||0, ek = escJs(k);
+          const lbl = `${escHtml(c.name)} — ${escHtml(c.type||'')} (${n} lecturas)`;
+          return `<div class="mpoint-badge chip-circ">${n?`<a onclick="openDetail('${ek}')" title="Ver historial del circuito">${lbl}</a>`:`<span>${lbl}</span>`}
+            <button class="act-btn" title="Editar circuito" onclick="editarCircuito('${ek}')">✏️</button><button class="act-btn del" title="Eliminar circuito y sus lecturas" onclick="eliminarCircuito('${ek}')">🗑️</button></div>`;
+        }).join('') : 'Sin circuitos con datos aún.'}
       </div>
     </div>`;
   }).join('');
@@ -2982,6 +3043,249 @@ function initIATab(){
   if (empty) empty.style.display = hasData ? 'none' : 'block';
   if (!hasData) document.getElementById('aiReportOutput').style.display = 'none';
   document.querySelectorAll('#tab-ia .ai-step-box').forEach(b => b.style.display = hasData ? '' : 'none');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  12b. HISTORIAL · EDICIÓN · ELIMINACIÓN
+// ═══════════════════════════════════════════════════════════
+let _edit = null;      // {k, fechaKey} mientras el modal manual edita una lectura existente
+let _vista = null;     // {t:'circuito',k} | {t:'tablero',id} — historial abierto en el modal de detalle
+let _editMeta = null;  // {t:'panel',id} | {t:'circuito',k}
+const fechaIso = d => keyOfDate(d) + 'Z';   // misma clave que usa medicionesDePanel()
+const aInputFecha = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+// Anota que la fila (tablero, fecha) de Supabase tiene que reescribirse/vaciarse en la próxima subida.
+function marcarMedicionPendiente(k, d){
+  const tag = getPanelName(getPanelId(k)), fecha = fechaIso(d);
+  if (!_pend.some(p => p.t === 'med' && p.tag === tag && p.fecha === fecha)) _pend.push({t:'med', tag, fecha});
+}
+function normalizarObs(e){ while (e.obs.length < e.dates.length) e.obs.push(''); }
+function quitarIndice(e, i){
+  normalizarObs(e);
+  e.dates.splice(i,1); e.obs.splice(i,1);
+  for (const pk of Object.keys(e.params)) e.params[pk].splice(i,1);
+}
+function ordenarPorFecha(e){
+  normalizarObs(e);
+  const idx = e.dates.map((_,j)=>j).sort((a,b)=>e.dates[a]-e.dates[b]);
+  e.dates = idx.map(j=>e.dates[j]); e.obs = idx.map(j=>e.obs[j]);
+  for (const pk of Object.keys(e.params)) e.params[pk] = idx.map(j=>e.params[pk][j]);
+}
+function avisoEstado(msg){
+  const st = document.getElementById('loadStatus'); if (!st) return;
+  st.className = 'load-status ok'; st.textContent = msg;
+}
+function postCambioLectura(k){
+  saveState(); renderAll(); refrescarVista();
+  if (readingsData.has(k)) publicarAnalisisTablero(k).catch(()=>{});
+}
+function refrescarVista(){
+  if (!_vista) return;
+  if (_vista.t === 'circuito'){ if (readingsData.has(_vista.k)) openDetail(_vista.k); else closeDetail(); }
+  else if (_vista.t === 'tablero') abrirHistorialTablero(_vista.id);
+}
+
+// ── Eliminar una lectura ──
+function eliminarLectura(k, i){
+  const e = readingsData.get(k); if (!e || i < 0 || i >= e.dates.length) return;
+  if (!confirm(`¿Eliminar la lectura del ${fmtDate(e.dates[i])} de «${getDisplayName(k)}»?\nEsta acción no se puede deshacer.`)) return;
+  marcarMedicionPendiente(k, e.dates[i]);
+  quitarIndice(e, i);
+  if (!e.dates.length) readingsData.delete(k);   // el circuito queda registrado, sin lecturas
+  postCambioLectura(k);
+  avisoEstado(`🗑️ Lectura eliminada: ${getDisplayName(k)}`);
+}
+
+// ── Editar una lectura (reusa el modal de carga manual) ──
+function salirModoEdicion(){
+  _edit = null;
+  const ps = document.getElementById('me_panelSel'), cs = document.getElementById('me_circuitSel');
+  if (ps) ps.disabled = false; if (cs) cs.disabled = false;
+  const t = document.getElementById('me_title'), s = document.getElementById('me_sub'), b = document.getElementById('me_saveBtn');
+  if (t) t.textContent = '✍️ Cargar medición manual';
+  if (s) s.textContent = 'Registrá una lectura puntual sin necesidad de Excel';
+  if (b) b.textContent = '💾 Guardar medición';
+}
+function editarLectura(k, i){
+  const e = readingsData.get(k); if (!e || i < 0 || i >= e.dates.length) return;
+  const fechaKey = keyOfDate(e.dates[i]), P = e.params;
+  openManualEntry();
+  const ps = document.getElementById('me_panelSel'), cs = document.getElementById('me_circuitSel');
+  ps.value = getPanelId(k); onManualPanelChange();
+  cs.value = k; onManualCircuitChange();
+  ps.disabled = true; cs.disabled = true;     // tablero y circuito no se cambian al editar
+  const setN = (id, v) => { document.getElementById(id).value = isN(v) ? v : ''; };
+  document.getElementById('me_fecha').value = aInputFecha(e.dates[i]);
+  setN('me_tempAmb', P.TempAmb?.[i]); setN('me_tempMax', P.TempMax?.[i]);
+  document.getElementById('me_faseMax').value = P.FaseMax?.[i] || '';
+  setN('me_iR', P.I_R?.[i]); setN('me_iS', P.I_S?.[i]); setN('me_iT', P.I_T?.[i]);
+  setN('me_vRS', P.V_RS?.[i]); setN('me_vST', P.V_ST?.[i]); setN('me_vTR', P.V_TR?.[i]);
+  setN('me_vRN', P.V_RN?.[i]); setN('me_vSN', P.V_SN?.[i]); setN('me_vTN', P.V_TN?.[i]);
+  setN('me_fp', P.FP?.[i]); setN('me_thdV', P.THD_V?.[i]); setN('me_rAisl', P.R_Aisl?.[i]);
+  document.getElementById('me_obs').value = (e.obs && e.obs[i]) || '';
+  document.getElementById('me_title').textContent = '✏️ Editar medición';
+  document.getElementById('me_sub').textContent = `${getDisplayName(k)} · ${fmtDate(e.dates[i])}`;
+  document.getElementById('me_saveBtn').textContent = '💾 Guardar cambios';
+  _edit = {k, fechaKey};
+}
+function guardarLecturaEditada(){
+  const {k, fechaKey} = _edit;
+  const e = readingsData.get(k);
+  const i = e ? e.dates.findIndex(d => keyOfDate(d) === fechaKey) : -1;
+  if (i < 0){ alert('La lectura ya no existe (se actualizó desde la nube). Cerrá y volvé a abrir el historial.'); closeManualEntry(); return; }
+
+  const fechaStr = document.getElementById('me_fecha').value;
+  if (!fechaStr){ alert('Ingresá la fecha de la medición.'); return; }
+  const oldDate = e.dates[i];
+  // Si la fecha no se tocó se conserva el instante original (puede tener hora, si vino de una captura de campo).
+  const newDate = fechaStr === aInputFecha(oldDate) ? oldDate : new Date(fechaStr + 'T12:00:00');
+  if (isNaN(newDate)){ alert('Fecha inválida.'); return; }
+  if (newDate !== oldDate && e.dates.some((d,j) => j !== i && keyOfDate(d) === keyOfDate(newDate))){
+    alert('Este circuito ya tiene otra lectura con esa fecha. Editá esa o elegí otra fecha.'); return;
+  }
+
+  const tempAmb = numOrUndef('me_tempAmb'), tempMax = numOrUndef('me_tempMax');
+  const faseMax = document.getElementById('me_faseMax').value;
+  const iR = numOrUndef('me_iR'), iS = numOrUndef('me_iS'), iT = numOrUndef('me_iT');
+  const vRS = numOrUndef('me_vRS'), vST = numOrUndef('me_vST'), vTR = numOrUndef('me_vTR');
+  const vRN = numOrUndef('me_vRN'), vSN = numOrUndef('me_vSN'), vTN = numOrUndef('me_vTN');
+  if (vRS && vRN){
+    const ratio = vRS / vRN;
+    if (Math.abs(ratio - 1.732) / 1.732 > 0.15){
+      if (!confirm(`La relación V_RS / V_RN = ${ratio.toFixed(3)} se aleja del esperado ≈1.732 (>15%). Posible neutro flojo o carga monofásica concentrada. ¿Confirmás que los valores son correctos?`)) return;
+    }
+  }
+  const fp = numOrUndef('me_fp'), thdV = numOrUndef('me_thdV'), rAisl = numOrUndef('me_rAisl');
+  const obs = document.getElementById('me_obs').value.trim();
+  const tri = isTrifasico(k);
+  const nuevo = {
+    TempAmb:tempAmb, TempMax:tempMax, FaseMax:faseMax,
+    I_R:iR, I_S:iS, I_T:iT, V_RS:vRS, V_ST:vST, V_TR:vTR, V_RN:vRN, V_SN:vSN, V_TN:vTN,
+    DesbI: tri ? computeDesbalance(iR,iS,iT) : NaN, DesbV: tri ? computeDesbalance(vRS,vST,vTR) : NaN,
+    FP:fp, THD_V:thdV, R_Aisl:rAisl
+  };
+
+  if (keyOfDate(newDate) !== fechaKey) marcarMedicionPendiente(k, oldDate);   // cambió de fecha: la fila vieja debe vaciarse
+  for (const [pk, v] of Object.entries(nuevo)){
+    if (!e.params[pk]) e.params[pk] = new Array(e.dates.length).fill(NaN);
+    e.params[pk][i] = v;
+  }
+  normalizarObs(e);
+  e.dates[i] = newDate; e.obs[i] = obs;
+  ordenarPorFecha(e);
+
+  closeManualEntry();
+  postCambioLectura(k);
+  avisoEstado(`✅ Lectura actualizada: ${getDisplayName(k)}`);
+}
+function agregarLecturaA(k){
+  openManualEntry();
+  document.getElementById('me_panelSel').value = getPanelId(k); onManualPanelChange();
+  document.getElementById('me_circuitSel').value = k; onManualCircuitChange();
+}
+
+// ── Historial de un tablero completo (todos sus circuitos) ──
+function abrirHistorialTablero(id){
+  const p = panelsRegistry.get(id);
+  if (!p){ closeDetail(); return; }
+  _vista = {t:'tablero', id};
+  const filas = []; let nCirc = 0;
+  for (const [k] of circuitsMeta.entries()){
+    if (getPanelId(k) !== id) continue;
+    const e = readingsData.get(k); if (!e || !e.dates.length) continue;
+    nCirc++;
+    e.dates.forEach((dt,i) => filas.push({k, i, dt, ev: evalReading(e.params, i), obs: (e.obs && e.obs[i]) || ''}));
+  }
+  filas.sort((a,b) => b.dt - a.dt);
+  document.getElementById('modalTitle').textContent = p.name;
+  document.getElementById('modalSub').textContent = `${p.type||''}${p.location?' · '+p.location:''} · ${filas.length} lectura(s) en ${nCirc} circuito(s)`;
+  const body = filas.length ? `
+    <div class="modal-section-title">Historial completo del tablero (más reciente primero)</div>
+    <div class="hist-scroll"><table class="rtable">
+      <thead><tr><th>Fecha</th><th>Circuito</th><th>Estado</th><th>ΔT (°C)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th><th>Observaciones</th><th>Acciones</th></tr></thead>
+      <tbody>${filas.map(({k,i,dt,ev,obs}) => {
+        const hay = Object.values(ev.subs).some(s => s >= 0), lv = hay ? ev.overall : -1;
+        return `<tr>
+          <td data-label="Fecha">${fmtDate(dt)}</td>
+          <td data-label="Circuito" style="font-family:'Rajdhani',sans-serif;"><a style="cursor:pointer;color:var(--accent2);" onclick="openDetail('${escJs(k)}')">${escHtml(getCircuitName(k))}</a></td>
+          <td data-label="Estado"><span class="mbadge ${lv<0?'':'badge-'+STATUS[lv]}">${lv<0?'Sin datos':STATUS_LABELS[lv]}</span></td>
+          <td data-label="ΔT (°C)">${fmt(ev.deltaT,1)}</td>
+          <td data-label="Desb.I (%)">${!isNaN(ev.desbI)?fmt(ev.desbI,1):'—'}</td>
+          <td data-label="FP">${!isNaN(ev.fp)?fmt(ev.fp,2):'—'}</td>
+          <td data-label="THD_V (%)">${!isNaN(ev.thdV)?fmt(ev.thdV,1):'—'}</td>
+          <td data-label="R.Aisl (MΩ)">${!isNaN(ev.rAisl)?fmt(ev.rAisl,0):'—'}</td>
+          <td data-label="Observaciones" class="hist-obs">${escHtml(obs||'—')}</td>
+          <td data-label="Acciones" style="white-space:nowrap;"><button class="act-btn" title="Editar lectura" onclick="editarLectura('${escJs(k)}',${i})">✏️</button><button class="act-btn del" title="Eliminar lectura" onclick="eliminarLectura('${escJs(k)}',${i})">🗑️</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div class="empty-state"><div class="ei">📜</div>Este tablero ya no tiene lecturas.</div>`;
+  document.getElementById('modalBody').innerHTML = body;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+// ── Editar / eliminar tableros y circuitos ──
+function cerrarEditMeta(){ document.getElementById('editMetaOverlay').classList.remove('open'); _editMeta = null; }
+function editarTablero(id){
+  const p = panelsRegistry.get(id); if (!p) return;
+  _editMeta = {t:'panel', id};
+  const tipos = PANEL_TYPES.includes(p.type) ? PANEL_TYPES : [p.type, ...PANEL_TYPES];
+  document.getElementById('em_title').textContent = '✏️ Editar tablero';
+  document.getElementById('em_sub').textContent = p.name;
+  document.getElementById('em_fields').innerHTML = `
+    <div class="fld"><label>Nombre (TAG)</label><input value="${escHtml(p.name)}" disabled></div>
+    <div class="fld"><label>Tipo</label><select id="em_type">${tipos.map(t=>`<option ${t===p.type?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
+    <div class="fld"><label>Ubicación</label><input id="em_loc" value="${escHtml(p.location||'')}"></div>
+    <div class="fld"><label>Corriente nominal (A)</label><input id="em_amp" type="number" value="${p.ampNominal||''}"></div>`;
+  document.getElementById('em_hint').textContent = 'El nombre es el TAG compartido con el hub y los demás módulos, por eso no se cambia desde acá.';
+  document.getElementById('editMetaOverlay').classList.add('open');
+}
+function editarCircuito(k){
+  const c = circuitsMeta.get(k); if (!c) return;
+  _editMeta = {t:'circuito', k};
+  const tipos = CIRCUIT_TYPES.includes(c.type) ? CIRCUIT_TYPES : [c.type, ...CIRCUIT_TYPES].filter(Boolean);
+  const sis = c.sistema || 'Trifásico';
+  document.getElementById('em_title').textContent = '✏️ Editar circuito';
+  document.getElementById('em_sub').textContent = getPanelName(getPanelId(k));
+  document.getElementById('em_fields').innerHTML = `
+    <div class="fld"><label>Nombre del circuito</label><input id="em_cname" value="${escHtml(c.name)}"></div>
+    <div class="fld"><label>Tipo</label><select id="em_ctype">${tipos.map(t=>`<option ${t===c.type?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
+    <div class="fld"><label>Sistema eléctrico</label><select id="em_csis">${CIRCUIT_SYSTEMS.map(t=>`<option ${t===sis?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>`;
+  document.getElementById('em_hint').textContent = 'Si cambiás el sistema eléctrico, el desbalance de corriente y tensión de las lecturas existentes se recalcula.';
+  document.getElementById('editMetaOverlay').classList.add('open');
+}
+function guardarEditMeta(){
+  if (!_editMeta) return;
+  if (_editMeta.t === 'panel'){
+    const p = panelsRegistry.get(_editMeta.id); if (!p){ cerrarEditMeta(); return; }
+    p.type = document.getElementById('em_type').value;
+    p.location = document.getElementById('em_loc').value.trim();
+    p.ampNominal = parseFloat(document.getElementById('em_amp').value) || 0;
+  } else {
+    const k = _editMeta.k, c = circuitsMeta.get(k); if (!c){ cerrarEditMeta(); return; }
+    const name = document.getElementById('em_cname').value.trim();
+    if (!name){ alert('El circuito necesita un nombre.'); return; }
+    const sisAntes = c.sistema || 'Trifásico';
+    c.name = name; c.type = document.getElementById('em_ctype').value;
+    c.sistema = document.getElementById('em_csis').value;
+    if (c.sistema !== sisAntes){
+      const e = readingsData.get(k), tri = isTrifasico(k);
+      if (e) for (let i = 0; i < e.dates.length; i++){
+        e.params.DesbI[i] = tri ? computeDesbalance(e.params.I_R[i], e.params.I_S[i], e.params.I_T[i]) : NaN;
+        e.params.DesbV[i] = tri ? computeDesbalance(e.params.V_RS[i], e.params.V_ST[i], e.params.V_TR[i]) : NaN;
+      }
+    }
+  }
+  cerrarEditMeta();
+  saveState(); renderAll(); refrescarVista();
+}
+function eliminarCircuito(k){
+  const c = circuitsMeta.get(k); if (!c) return;
+  const e = readingsData.get(k), n = e ? e.dates.length : 0;
+  if (!confirm(`¿Eliminar el circuito «${c.name}» de ${getPanelName(getPanelId(k))} y sus ${n} lectura(s)?\nEsta acción no se puede deshacer.`)) return;
+  if (e) e.dates.forEach(d => marcarMedicionPendiente(k, d));
+  readingsData.delete(k); circuitsMeta.delete(k);
+  saveState(); renderAll(); refrescarVista();
+  avisoEstado(`🗑️ Circuito eliminado: ${c.name}`);
 }
 
 // ═══════════════════════════════════════════════════════════
