@@ -611,9 +611,14 @@ header{
       <div class="modal-section-title">🌡️ Termografía</div>
       <div class="form-grid">
         <div class="fld"><label>Temp. ambiente (°C)</label><input type="number" step="0.1" id="me_tempAmb"></div>
-        <div class="fld"><label>Temp. máxima medida (°C)</label><input type="number" step="0.1" id="me_tempMax"></div>
-        <div class="fld"><label>Fase con temperatura máxima</label>
-          <select id="me_faseMax"><option value="">—</option><option value="R">R</option><option value="S">S</option><option value="T">T</option><option value="N">Neutro</option></select>
+        <div class="fld"><label>Temp. fase R (°C)</label><input type="number" step="0.1" id="me_tempR"></div>
+        <div class="fld"><label>Temp. fase S (°C)</label><input type="number" step="0.1" id="me_tempS"></div>
+        <div class="fld"><label>Temp. fase T (°C)</label><input type="number" step="0.1" id="me_tempT"></div>
+        <div class="fld"><label>Punto caliente fuera de fases (°C) · opcional</label><input type="number" step="0.1" id="me_tempOtro"></div>
+        <div class="fld" style="grid-column:1/-1;font-size:.75rem;color:var(--muted);">Medí el mismo punto (p. ej. borne de entrada) en las tres fases. La temperatura máxima y la fase caliente se calculan solas a partir de estos valores.</div>
+        <div class="fld"><label>Temp. máxima (solo si no hay dato por fase)</label><input type="number" step="0.1" id="me_tempMax"></div>
+        <div class="fld"><label>Fase con temp. máxima (solo si no hay dato por fase)</label>
+          <select id="me_faseMax"><option value="">—</option><option value="R">R</option><option value="S">S</option><option value="T">T</option><option value="N">Neutro</option><option value="Otro">Otro</option></select>
         </div>
       </div>
 
@@ -779,7 +784,7 @@ let ctxPorTag = new Map();
 const isN = v => typeof v === 'number' && isFinite(v);
 const keyOfDate = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
 // Parámetros numéricos de una lectura de circuito vs. el único campo de texto (fase con temp. máxima).
-const NUM_PARAM_KEYS = ['TempAmb','TempMax','I_R','I_S','I_T',
+const NUM_PARAM_KEYS = ['TempAmb','TempMax','Temp_R','Temp_S','Temp_T','Temp_Otro','I_R','I_S','I_T',
   'V_RS','V_ST','V_TR','V_RN','V_SN','V_TN',
   'DesbI','DesbV','FP','THD_V','R_Aisl'];
 const STR_PARAM_KEYS = ['FaseMax'];
@@ -1174,24 +1179,71 @@ function inomDeTag(tag){
 }
 function ctxCarga(k){ return inomDeTag(getPanelName(getPanelId(k))); }
 
+// Temperaturas por fase: TempMax/FaseMax se DERIVAN de Temp_R/S/T (+ Temp_Otro = punto caliente fuera de las
+// fases: neutro, barra, bobina). Las lecturas viejas, que solo traen TempMax/FaseMax, siguen siendo válidas.
+const SPREAD_PAREJO = 3;   // °C: dispersión entre fases por debajo de la cual se consideran "parejas"
+const SPREAD_INFO   = 5;   // °C: dispersión entre fases que se informa (aviso informativo, sin umbral de severidad aún)
+function derivarTempMax(tR, tS, tT, tOtro){
+  const c = [['R',tR],['S',tS],['T',tT],['Otro',tOtro]].filter(([,v]) => isN(v));
+  if (!c.length) return {tempMax:NaN, faseMax:''};
+  const m = c.reduce((a,b) => b[1] > a[1] ? b : a);
+  return {tempMax:m[1], faseMax:m[0]};
+}
+
 function evalReading(params, n, ctx){
   const p = params;
-  const deltaTRaw = (p.TempMax?.[n] - p.TempAmb?.[n]);
-  // corriente de la fase caliente si se conoce (R/S/T); si no, promedio de las fases medidas
-  const fm = String(p.FaseMax?.[n] || '').trim().toUpperCase().charAt(0);
-  const iFase = ({R:p.I_R, S:p.I_S, T:p.I_T})[fm]?.[n];
-  const iProm = [p.I_R?.[n], p.I_S?.[n], p.I_T?.[n]].filter(isN);
-  const iRef = isN(iFase) ? iFase : (iProm.length ? iProm.reduce((a,b)=>a+b,0)/iProm.length : NaN);
+  const amb = p.TempAmb?.[n];
+  const iFases = {R:p.I_R?.[n], S:p.I_S?.[n], T:p.I_T?.[n]};
+  const iProm = [iFases.R, iFases.S, iFases.T].filter(isN);
+  const iPromV = iProm.length ? iProm.reduce((a,b)=>a+b,0)/iProm.length : NaN;
   const inom = ctx && ctx.inom > 0 ? ctx.inom : NaN;
-  const cargaPct = (isFinite(iRef) && isFinite(inom)) ? iRef / inom : NaN;
-  const normalizado = isFinite(cargaPct) && cargaPct >= LOAD_MIN && isFinite(deltaTRaw);
-  const deltaT = normalizado ? deltaTRaw / Math.pow(Math.min(cargaPct, 1), LOAD_EXP) : deltaTRaw;
+  const cargaDe = i => (isFinite(i) && isFinite(inom)) ? i / inom : NaN;
+  const normDT = (dtRaw, carga) => (isFinite(carga) && carga >= LOAD_MIN && isFinite(dtRaw))
+    ? dtRaw / Math.pow(Math.min(carga, 1), LOAD_EXP) : dtRaw;
+
+  const tFase = {R:p.Temp_R?.[n], S:p.Temp_S?.[n], T:p.Temp_T?.[n], Otro:p.Temp_Otro?.[n]};
+  const hayFases = Object.values(tFase).some(isN);
+  let deltaTRaw, deltaT, cargaPct, normalizado, faseMax, porFase = null, spreadFases = NaN, parejas = false;
+
+  if (hayFases){
+    // Cada fase se normaliza con SU corriente; el "otro punto" con el promedio de fases. Manda la peor.
+    porFase = {};
+    let best = null;
+    for (const f of ['R','S','T','Otro']){
+      const t = tFase[f]; if (!isN(t)) continue;
+      const carga = cargaDe(f === 'Otro' ? iPromV : iFases[f]);
+      const dtRaw = t - amb;
+      const norm = isFinite(carga) && carga >= LOAD_MIN && isFinite(dtRaw);
+      const dt = normDT(dtRaw, carga);
+      porFase[f] = {temp:t, dtRaw, carga, dt, norm};
+      if (isFinite(dt) && (!best || dt > best.dt)) best = {f, ...porFase[f]};
+    }
+    if (best){
+      deltaTRaw = best.dtRaw; deltaT = best.dt; cargaPct = best.carga; normalizado = best.norm; faseMax = best.f;
+    } else {                       // sin ambiente: no hay ΔT, pero sí la fase más caliente
+      const d = derivarTempMax(tFase.R, tFase.S, tFase.T, tFase.Otro);
+      deltaTRaw = NaN; deltaT = NaN; cargaPct = cargaDe(iPromV); normalizado = false; faseMax = d.faseMax;
+    }
+    // Comparación entre fases (independiente del ambiente). Solo informativa.
+    const tf = ['R','S','T'].map(f => tFase[f]).filter(isN);
+    if (tf.length >= 2) spreadFases = Math.max(...tf) - Math.min(...tf);
+    parejas = tf.length === 3 && spreadFases < SPREAD_PAREJO && isFinite(deltaTRaw) && deltaTRaw >= thresholds.deltaT[0];
+  } else {
+    // Lectura vieja: solo TempMax + FaseMax. Corriente de la fase caliente si se conoce; si no, promedio.
+    deltaTRaw = (p.TempMax?.[n] - p.TempAmb?.[n]);
+    const fm = String(p.FaseMax?.[n] || '').trim().toUpperCase().charAt(0);
+    const iFase = iFases[fm];
+    const iRef = isN(iFase) ? iFase : iPromV;
+    cargaPct = cargaDe(iRef);
+    normalizado = isFinite(cargaPct) && cargaPct >= LOAD_MIN && isFinite(deltaTRaw);
+    deltaT = normDT(deltaTRaw, cargaPct);
+    faseMax = p.FaseMax?.[n] || '';
+  }
   const desbV  = p.DesbV?.[n];
   const desbI  = p.DesbI?.[n];
   const thdV   = p.THD_V?.[n];
   const fp     = p.FP?.[n];
   const rAisl  = p.R_Aisl?.[n];
-  const faseMax = p.FaseMax?.[n] || '';
   const vRS = p.V_RS?.[n], vST = p.V_ST?.[n], vTR = p.V_TR?.[n];
   const vRN = p.V_RN?.[n], vSN = p.V_SN?.[n], vTN = p.V_TN?.[n];
 
@@ -1206,7 +1258,7 @@ function evalReading(params, n, ctx){
   let overall = 0;
   for (const k in subs) if (subs[k] > overall) overall = subs[k];
   return { subs, overall, deltaT, deltaTRaw, cargaPct, normalizado, inom, fuenteInom: ctx?.fuente || '',
-           desbV, desbI, thdV, fp, rAisl, faseMax,
+           desbV, desbI, thdV, fp, rAisl, faseMax, tFase, hayFases, porFase, spreadFases, parejas,
            vRS, vST, vTR, vRN, vSN, vTN };
 }
 
@@ -1254,7 +1306,7 @@ function diagnoseCircuit(k){
 //  5. IMPORT (Excel / CSV)
 // ═══════════════════════════════════════════════════════════
 const TEMPLATE_HEADERS = ['Tablero','TipoTablero','Circuito','TipoCircuito','Sistema','Fecha',
-  'Temp_Ambiente_C','Temp_Max_C','Fase_Max',
+  'Temp_Ambiente_C','Temp_Max_C','Fase_Max','Temp_R_C','Temp_S_C','Temp_T_C','Temp_Otro_C',
   'I_R_A','I_S_A','I_T_A',
   'V_RS_V','V_ST_V','V_TR_V',
   'V_RN_V','V_SN_V','V_TN_V',
@@ -1264,7 +1316,7 @@ function downloadTemplate(){
   const sample = [
     TEMPLATE_HEADERS,
     ['TAB-GENERAL-PLANTA','Tablero General (TGBT)','Alimentador Principal','Alimentador Principal','Trifásico','2026-08-01',
-     32,38,'R',
+     32,38,'R',38,35,34,'',
      180,175,182,
      380,381,379,
      220,221,219,
@@ -1364,8 +1416,11 @@ function importRows(rows){
     }
 
     const tempAmb = numOrNaN(findCol(row,['Temp_Ambiente_C','TempAmbiente']));
-    const tempMax = numOrNaN(findCol(row,['Temp_Max_C','TempMax']));
-    const faseMax = String(findCol(row,['Fase_Max']) || '');
+    let tempMax = numOrNaN(findCol(row,['Temp_Max_C','TempMax']));
+    let faseMax = String(findCol(row,['Fase_Max']) || '');
+    const tempR = numOrNaN(findCol(row,['Temp_R_C','Temp_R'])), tempS = numOrNaN(findCol(row,['Temp_S_C','Temp_S']));
+    const tempT = numOrNaN(findCol(row,['Temp_T_C','Temp_T'])), tempOtro = numOrNaN(findCol(row,['Temp_Otro_C','Temp_Otro']));
+    { const dv = derivarTempMax(tempR, tempS, tempT, tempOtro); if (isN(dv.tempMax)){ tempMax = dv.tempMax; faseMax = dv.faseMax; } }
     const iR = numOrNaN(findCol(row,['I_R_A']));
     const iS = numOrNaN(findCol(row,['I_S_A']));
     const iT = numOrNaN(findCol(row,['I_T_A']));
@@ -1387,7 +1442,7 @@ function importRows(rows){
     const desbV = isTrifasico(key) ? computeDesbalance(vRS,vST,vTR) : NaN;
 
     if (!touched.has(key)) touched.set(key, {dates:[], params:{
-      TempAmb:[],TempMax:[],FaseMax:[],
+      TempAmb:[],TempMax:[],FaseMax:[],Temp_R:[],Temp_S:[],Temp_T:[],Temp_Otro:[],
       I_R:[],I_S:[],I_T:[],
       V_RS:[],V_ST:[],V_TR:[],V_RN:[],V_SN:[],V_TN:[],
       DesbI:[],DesbV:[],FP:[],THD_V:[],R_Aisl:[]
@@ -1395,6 +1450,7 @@ function importRows(rows){
     const t = touched.get(key);
     t.dates.push(fecha);
     t.params.TempAmb.push(tempAmb); t.params.TempMax.push(tempMax); t.params.FaseMax.push(faseMax);
+    t.params.Temp_R.push(tempR); t.params.Temp_S.push(tempS); t.params.Temp_T.push(tempT); t.params.Temp_Otro.push(tempOtro);
     t.params.I_R.push(iR); t.params.I_S.push(iS); t.params.I_T.push(iT);
     t.params.V_RS.push(vRS); t.params.V_ST.push(vST); t.params.V_TR.push(vTR);
     t.params.V_RN.push(vRN); t.params.V_SN.push(vSN); t.params.V_TN.push(vTN);
@@ -1452,7 +1508,7 @@ function openManualEntry(){
   if (!newCircuitSystem.dataset.filled){ newCircuitSystem.innerHTML = CIRCUIT_SYSTEMS.map(t=>`<option value="${t}">${t}</option>`).join(''); newCircuitSystem.dataset.filled='1'; }
 
   // limpiar campos
-  ['me_tempAmb','me_tempMax','me_iR','me_iS','me_iT','me_vRS','me_vST','me_vTR','me_vRN','me_vSN','me_vTN','me_fp','me_thdV','me_rAisl','me_newPanelName','me_newCircuitName','me_obs'].forEach(id=>document.getElementById(id).value='');
+  ['me_tempAmb','me_tempMax','me_tempR','me_tempS','me_tempT','me_tempOtro','me_iR','me_iS','me_iT','me_vRS','me_vST','me_vTR','me_vRN','me_vSN','me_vTN','me_fp','me_thdV','me_rAisl','me_newPanelName','me_newCircuitName','me_obs'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('me_faseMax').value = '';
   document.getElementById('me_fecha').value = new Date().toISOString().slice(0,10);
 
@@ -1523,8 +1579,11 @@ function saveManualReading(){
   }
 
   const tempAmb = numOrUndef('me_tempAmb');
-  const tempMax = numOrUndef('me_tempMax');
-  const faseMax = document.getElementById('me_faseMax').value;
+  const tempR = numOrUndef('me_tempR'), tempS = numOrUndef('me_tempS'), tempT = numOrUndef('me_tempT'), tempOtro = numOrUndef('me_tempOtro');
+  let tempMax = numOrUndef('me_tempMax');
+  let faseMax = document.getElementById('me_faseMax').value;
+  const der = derivarTempMax(tempR, tempS, tempT, tempOtro);
+  if (isN(der.tempMax)){ tempMax = der.tempMax; faseMax = der.faseMax; }   // con datos por fase, el máximo se calcula
   const iR = numOrUndef('me_iR'), iS = numOrUndef('me_iS'), iT = numOrUndef('me_iT');
   const vRS = numOrUndef('me_vRS'), vST = numOrUndef('me_vST'), vTR = numOrUndef('me_vTR');
   const vRN = numOrUndef('me_vRN'), vSN = numOrUndef('me_vSN'), vTN = numOrUndef('me_vTN');
@@ -1546,6 +1605,7 @@ function saveManualReading(){
     dates:[fecha],
     params:{
       TempAmb:[tempAmb], TempMax:[tempMax], FaseMax:[faseMax],
+      Temp_R:[tempR], Temp_S:[tempS], Temp_T:[tempT], Temp_Otro:[tempOtro],
       I_R:[iR], I_S:[iS], I_T:[iT],
       V_RS:[vRS], V_ST:[vST], V_TR:[vTR],
       V_RN:[vRN], V_SN:[vSN], V_TN:[vTN],
@@ -1718,7 +1778,7 @@ function diagnosisMessages(diag){
 
   if (diag.subs.deltaT >= 2){
     push(diag.subs.deltaT===3?'critical':'warning', '🔥 Punto caliente detectado por termografía',
-      `ΔT de ${fmt(diag.deltaTRaw,1)}°C sobre ambiente${diag.normalizado?` a ${fmt(diag.cargaPct*100,0)}% de carga (≈${fmt(diag.deltaT,1)}°C a plena carga; nominal ${fmt(diag.inom,1)} A, ${diag.fuenteInom})`:' — sin dato de carga: el nivel puede estar subestimado'}${diag.subs.desbI>=1?' coincidiendo con desbalance de corriente':''}.${diag.faseMax?` Punto caliente en fase ${escHtml(diag.faseMax)}.`:''} Probable conexión floja, terminal oxidado o sobrecarga${diag.faseMax?` en dicha fase`:''}. Revisar torque de bornes y estado del contacto; si es crítico, intervenir antes de la próxima ronda.`);
+      `ΔT de ${fmt(diag.deltaTRaw,1)}°C sobre ambiente${diag.normalizado?` a ${fmt(diag.cargaPct*100,0)}% de carga (≈${fmt(diag.deltaT,1)}°C a plena carga; nominal ${fmt(diag.inom,1)} A, ${diag.fuenteInom})`:' — sin dato de carga: el nivel puede estar subestimado'}${diag.subs.desbI>=1?' coincidiendo con desbalance de corriente':''}.${diag.faseMax?` Punto caliente en ${diag.faseMax==='Otro'?'un punto fuera de las fases':'fase '+escHtml(diag.faseMax)}.`:''}${diag.hayFases?` Temperaturas: ${['R','S','T','Otro'].filter(f=>isN(diag.tFase[f])).map(f=>`${f==='Otro'?'otro':f} ${fmt(diag.tFase[f],1)}°C`).join(' · ')}.`:''} Probable conexión floja, terminal oxidado o sobrecarga${diag.faseMax?` en dicha fase`:''}. Revisar torque de bornes y estado del contacto; si es crítico, intervenir antes de la próxima ronda.`);
   } else if (diag.subs.deltaT === 1){
     push('elevated', '🌡️ ΔT levemente elevada', 'Deficiencia incipiente. Monitorear en la próxima medición programada; no requiere intervención inmediata.');
   }
@@ -1751,6 +1811,17 @@ function diagnosisMessages(diag){
   if (!msgs.length){
     push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros dentro de rango normal. Continuar con el plan de monitoreo establecido.');
   }
+  // Avisos informativos de termografía por fase (no cambian el nivel; aún sin umbrales propios de ΔT entre fases).
+  if (diag.hayFases && diag.parejas){
+    push('good', 'ℹ️ Las tres fases están calientes y parejas',
+      `Dispersión entre fases de ${fmt(diag.spreadFases,1)}°C con ΔT de ${fmt(diag.deltaTRaw,1)}°C sobre ambiente. Esto apunta más a ambiente, ventilación o carga general alta que a una conexión floja puntual. Verificar carga y ventilación del tablero.`);
+  } else if (diag.hayFases && isFinite(diag.spreadFases) && diag.spreadFases >= SPREAD_INFO){
+    const fs = ['R','S','T'].filter(f => isN(diag.tFase[f]));
+    const hot = fs.reduce((a,b) => diag.tFase[b] > diag.tFase[a] ? b : a);
+    const cold = fs.reduce((a,b) => diag.tFase[b] < diag.tFase[a] ? b : a);
+    push('good', '↔️ Diferencia de temperatura entre fases',
+      `La fase ${hot} está ${fmt(diag.spreadFases,1)}°C sobre la ${cold}. Informativo: la comparación entre fases a igual carga no depende del ambiente. Confirmar que se midió el mismo punto en las tres fases. Aún no hay umbral de severidad para este criterio.`);
+  }
   return msgs;
 }
 
@@ -1782,6 +1853,8 @@ function openDetail(k){
     <div class="mstat"><div class="mstat-lbl">THD Tensión</div><div class="mstat-val">${!isNaN(diag.thdV)?fmt(diag.thdV,1)+'%':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">R. Aislación</div><div class="mstat-val">${!isNaN(diag.rAisl)?fmt(diag.rAisl,0)+' MΩ':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Fase Máx.</div><div class="mstat-val">${diag.faseMax?escHtml(diag.faseMax):'—'}</div></div>
+    ${diag.hayFases?`<div class="mstat"><div class="mstat-lbl">Temp. R / S / T (°C)</div><div class="mstat-val">${['R','S','T'].map(f=>isN(diag.tFase[f])?fmt(diag.tFase[f],1):'—').join(' / ')}</div></div>
+    <div class="mstat"><div class="mstat-lbl">Dispersión entre fases</div><div class="mstat-val">${isFinite(diag.spreadFases)?fmt(diag.spreadFases,1)+'°C':'—'}</div></div>`:''}
   </div>
 
   <div class="modal-section-title">Diagnóstico</div>
@@ -1793,13 +1866,16 @@ function openDetail(k){
   <div class="modal-section-title" style="display:flex;justify-content:space-between;align-items:center;">Historial completo (${d.dates.length} lectura${d.dates.length===1?'':'s'})<button class="act-btn" onclick="agregarLecturaA('${escJs(k)}')">➕ Agregar lectura</button></div>
   <div class="hist-scroll">
     <table class="rtable">
-      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th><th>Observaciones</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>T_R</th><th>T_S</th><th>T_T</th><th>Fase Máx.</th><th>V_RS (V)</th><th>V_ST (V)</th><th>V_TR (V)</th><th>Desb.V (%)</th><th>Desb.I (%)</th><th>FP</th><th>THD_V (%)</th><th>R.Aisl (MΩ)</th><th>Observaciones</th><th>Acciones</th></tr></thead>
       <tbody>${d.dates.map((dt,i)=>{
         const ev = evalReading(d.params, i, ctxCarga(k));
         return `<tr>
           <td data-label="Fecha">${fmtDate(dt)}</td>
           <td data-label="ΔT (°C)">${fmt(ev.deltaTRaw,1)}${ev.normalizado?` <span style="color:var(--muted);font-size:.75rem;" title="ΔT equivalente a plena carga (${fmt(ev.cargaPct*100,0)}% de carga)">→ ${fmt(ev.deltaT,1)}</span>`:''}</td>
-          <td data-label="Fase Máx.">${escHtml(ev.faseMax||'—')}</td>
+          <td data-label="T_R (°C)">${isN(ev.tFase.R)?fmt(ev.tFase.R,1):'—'}</td>
+          <td data-label="T_S (°C)">${isN(ev.tFase.S)?fmt(ev.tFase.S,1):'—'}</td>
+          <td data-label="T_T (°C)">${isN(ev.tFase.T)?fmt(ev.tFase.T,1):'—'}</td>
+          <td data-label="Fase Máx.">${escHtml(ev.faseMax||'—')}${isN(ev.tFase.Otro)?` <span style="color:var(--muted);font-size:.75rem;" title="Punto caliente fuera de fases">(otro ${fmt(ev.tFase.Otro,1)}°C)</span>`:''}</td>
           <td data-label="V_RS (V)">${!isNaN(ev.vRS)?fmt(ev.vRS,1):'—'}</td>
           <td data-label="V_ST (V)">${!isNaN(ev.vST)?fmt(ev.vST,1):'—'}</td>
           <td data-label="V_TR (V)">${!isNaN(ev.vTR)?fmt(ev.vTR,1):'—'}</td>
@@ -1834,12 +1910,21 @@ function openDetail(k){
     // Eje X numérico (índice de la lectura) en vez de categorías de texto: es lo
     // que exige el plugin de decimation (necesita parsing:false + datos {x,y}),
     // sin depender de un adapter de fechas — mismo criterio que Motor Pro.
-    const deltaTSeries = d.dates.map((_,i)=> ({x:i, y:(d.params.TempMax[i] - d.params.TempAmb[i])}));
+    const deltaTSeries = d.dates.map((_,i)=> ({x:i, y:evalReading(d.params, i, ctxCarga(k)).deltaTRaw}));
     const iRSeries = d.params.I_R.map((v,i)=>({x:i, y:v}));
+    // ΔT por fase (sin normalizar): permite ver de un vistazo cuál fase se despega de las otras.
+    const evs = d.dates.map((_,i)=> evalReading(d.params, i, ctxCarga(k)));
+    const fasesCfg = [['R','#ef4444'],['S','#eab308'],['T','#22d3ee']];
+    const faseSeries = fasesCfg.map(([f,color]) => ({
+      label:'ΔT fase '+f+' (°C)', borderColor:color, backgroundColor:'transparent', borderDash:[5,4], borderWidth:1.5, pointRadius:2,
+      yAxisID:'y', tension:.3, spanGaps:true, hidden:false,
+      data: evs.map((e,i)=>({x:i, y: (e.porFase && e.porFase[f] && isFinite(e.porFase[f].dtRaw)) ? e.porFase[f].dtRaw : null}))
+    })).filter(ds => ds.data.some(p => p.y !== null));
     detailChart = new Chart(ctx, {
       type:'line',
       data:{ datasets:[
         { label:'ΔT (°C)', data:deltaTSeries, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,.1)', yAxisID:'y', tension:.3 },
+        ...faseSeries,
         { label:'Corriente R (A)', data:iRSeries, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.1)', yAxisID:'y1', tension:.3 }
       ]},
       options:{
@@ -2316,7 +2401,7 @@ async function abrirCapturasPendientes(){
     return `<div class="fld" style="border:1px solid var(--border,#26374f);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;">${escHtml(tag)}</div>
-        <div style="font-size:.75rem;color:var(--muted);">${escHtml(d.fecha||'')} · ${deltaT}Temp.máx ${d.tempMax??'—'}°C</div>
+        <div style="font-size:.75rem;color:var(--muted);">${escHtml(d.fecha||'')} · ${deltaT}${(d.tempR!=null||d.tempS!=null||d.tempT!=null)?`R ${d.tempR??'—'} / S ${d.tempS??'—'} / T ${d.tempT??'—'}°C`:`Temp.máx ${d.tempMax??'—'}°C`}</div>
       </div>
       <button class="btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="copiarCapturaAFormulario(${i})">📋 Copiar a formulario</button>
     </div>`;
@@ -2392,6 +2477,10 @@ function copiarCapturaAFormulario(i){
   if (d.tempAmb!=null) document.getElementById('me_tempAmb').value = d.tempAmb;
   if (d.tempMax!=null) document.getElementById('me_tempMax').value = d.tempMax;
   if (d.faseMax) document.getElementById('me_faseMax').value = d.faseMax;
+  if (d.tempR!=null) document.getElementById('me_tempR').value = d.tempR;
+  if (d.tempS!=null) document.getElementById('me_tempS').value = d.tempS;
+  if (d.tempT!=null) document.getElementById('me_tempT').value = d.tempT;
+  if (d.tempOtro!=null) document.getElementById('me_tempOtro').value = d.tempOtro;
   if (d.iR!=null) document.getElementById('me_iR').value = d.iR;
   if (d.iS!=null) document.getElementById('me_iS').value = d.iS;
   if (d.iT!=null) document.getElementById('me_iT').value = d.iT;
@@ -2483,6 +2572,12 @@ function buildAIPayload(){
         temp_ambiente_c: isN(d.TempAmb?.[n]) ? +d.TempAmb[n].toFixed(1) : null,
         temp_maxima_c: isN(d.TempMax?.[n]) ? +d.TempMax[n].toFixed(1) : null,
         fase_max_temp: diag.faseMax || null,
+        temp_fase_r_c: isN(d.Temp_R?.[n]) ? +d.Temp_R[n].toFixed(1) : null,
+        temp_fase_s_c: isN(d.Temp_S?.[n]) ? +d.Temp_S[n].toFixed(1) : null,
+        temp_fase_t_c: isN(d.Temp_T?.[n]) ? +d.Temp_T[n].toFixed(1) : null,
+        temp_otro_punto_c: isN(d.Temp_Otro?.[n]) ? +d.Temp_Otro[n].toFixed(1) : null,
+        dispersion_fases_c: isN(diag.spreadFases) ? +diag.spreadFases.toFixed(1) : null,
+        carga_pct: isN(diag.cargaPct) ? +(diag.cargaPct*100).toFixed(0) : null,
         // Tensiones de línea (obligatorias, usadas para desbalance NEMA MG-1)
         tension_rs_v: isN(diag.vRS) ? +diag.vRS.toFixed(1) : null,
         tension_st_v: isN(diag.vST) ? +diag.vST.toFixed(1) : null,
@@ -3172,6 +3267,7 @@ function editarLectura(k, i){
   const setN = (id, v) => { document.getElementById(id).value = isN(v) ? v : ''; };
   document.getElementById('me_fecha').value = aInputFecha(e.dates[i]);
   setN('me_tempAmb', P.TempAmb?.[i]); setN('me_tempMax', P.TempMax?.[i]);
+  setN('me_tempR', P.Temp_R?.[i]); setN('me_tempS', P.Temp_S?.[i]); setN('me_tempT', P.Temp_T?.[i]); setN('me_tempOtro', P.Temp_Otro?.[i]);
   document.getElementById('me_faseMax').value = P.FaseMax?.[i] || '';
   setN('me_iR', P.I_R?.[i]); setN('me_iS', P.I_S?.[i]); setN('me_iT', P.I_T?.[i]);
   setN('me_vRS', P.V_RS?.[i]); setN('me_vST', P.V_ST?.[i]); setN('me_vTR', P.V_TR?.[i]);
@@ -3199,8 +3295,12 @@ function guardarLecturaEditada(){
     alert('Este circuito ya tiene otra lectura con esa fecha. Editá esa o elegí otra fecha.'); return;
   }
 
-  const tempAmb = numOrUndef('me_tempAmb'), tempMax = numOrUndef('me_tempMax');
-  const faseMax = document.getElementById('me_faseMax').value;
+  const tempAmb = numOrUndef('me_tempAmb');
+  const tempR = numOrUndef('me_tempR'), tempS = numOrUndef('me_tempS'), tempT = numOrUndef('me_tempT'), tempOtro = numOrUndef('me_tempOtro');
+  let tempMax = numOrUndef('me_tempMax');
+  let faseMax = document.getElementById('me_faseMax').value;
+  const der = derivarTempMax(tempR, tempS, tempT, tempOtro);
+  if (isN(der.tempMax)){ tempMax = der.tempMax; faseMax = der.faseMax; }
   const iR = numOrUndef('me_iR'), iS = numOrUndef('me_iS'), iT = numOrUndef('me_iT');
   const vRS = numOrUndef('me_vRS'), vST = numOrUndef('me_vST'), vTR = numOrUndef('me_vTR');
   const vRN = numOrUndef('me_vRN'), vSN = numOrUndef('me_vSN'), vTN = numOrUndef('me_vTN');
@@ -3214,7 +3314,7 @@ function guardarLecturaEditada(){
   const obs = document.getElementById('me_obs').value.trim();
   const tri = isTrifasico(k);
   const nuevo = {
-    TempAmb:tempAmb, TempMax:tempMax, FaseMax:faseMax,
+    TempAmb:tempAmb, TempMax:tempMax, FaseMax:faseMax, Temp_R:tempR, Temp_S:tempS, Temp_T:tempT, Temp_Otro:tempOtro,
     I_R:iR, I_S:iS, I_T:iT, V_RS:vRS, V_ST:vST, V_TR:vTR, V_RN:vRN, V_SN:vSN, V_TN:vTN,
     DesbI: tri ? computeDesbalance(iR,iS,iT) : NaN, DesbV: tri ? computeDesbalance(vRS,vST,vTR) : NaN,
     FP:fp, THD_V:thdV, R_Aisl:rAisl
