@@ -240,6 +240,116 @@
     h1{font-size:26px;}
   }
 
+  /* ---------- equipos: vista tarjetas ---------- */
+  .eq-resumen{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px;}
+  .eq-sum{
+    display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line);
+    border-radius:8px; padding:7px 12px; cursor:pointer; color:var(--text); font-family:'Inter',sans-serif; font-size:12.5px;
+  }
+  .eq-sum:hover{border-color:var(--accent);}
+  .eq-sum.active{border-color:var(--accent); background:rgba(59,130,246,.10);}
+  .eq-sum .n{font-family:'Rajdhani',sans-serif; font-weight:700; font-size:20px; line-height:1;}
+  .eq-sum .d{width:9px; height:9px; border-radius:50%; background:var(--muted);}
+  .eq-sum.critico .d{background:var(--crit); box-shadow:0 0 6px var(--crit);} .eq-sum.critico .n{color:var(--crit);}
+  .eq-sum.atencion .d{background:var(--warn);} .eq-sum.atencion .n{color:var(--warn);}
+  .eq-sum.ok .d{background:var(--ok);} .eq-sum.ok .n{color:var(--ok);}
+  .view-toggle{display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .view-toggle button{background:transparent; border:none; color:var(--muted); padding:7px 12px; font-size:12.5px; cursor:pointer; font-family:'Inter',sans-serif;}
+  .view-toggle button.active{background:var(--panel-2); color:var(--accent);}
+
+  .eq-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:14px;}
+  .eq-card{
+    position:relative; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--muted);
+    border-radius:10px; padding:14px 16px 12px; display:flex; flex-direction:column; gap:10px;
+    transition:border-color .15s, transform .15s;
+  }
+  .eq-card:hover{border-color:var(--accent); transform:translateY(-2px);}
+  .eq-card.critico{border-left-color:var(--crit);}
+  .eq-card.atencion{border-left-color:var(--warn);}
+  .eq-card.ok{border-left-color:var(--ok);}
+  .eq-card.archivada{opacity:.55;}
+  .eq-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; cursor:pointer;}
+  .eq-tag{font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:13px; font-weight:600;}
+  .eq-nombre{font-family:'Rajdhani',sans-serif; font-weight:600; font-size:18px; line-height:1.2; margin-top:2px; word-break:break-word;}
+  .eq-meta{display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px; color:var(--muted);}
+  .eq-meta span{display:inline-flex; align-items:center; gap:4px;}
+  .eq-chips{display:flex; flex-wrap:wrap; gap:5px;}
+  .eq-chip{
+    display:inline-flex; align-items:center; gap:4px; font-family:'JetBrains Mono',monospace; font-size:10.5px;
+    padding:3px 7px; border-radius:5px; border:1px dashed var(--line); color:var(--muted); opacity:.55; cursor:default;
+  }
+  .eq-chip.ok, .eq-chip.atencion, .eq-chip.critico, .eq-chip.intervencion{opacity:1; border-style:solid;}
+  .eq-chip.ok{background:rgba(16,201,138,.12); color:var(--ok); border-color:rgba(16,201,138,.35);}
+  .eq-chip.atencion{background:rgba(240,180,41,.14); color:var(--warn); border-color:rgba(240,180,41,.4);}
+  .eq-chip.critico{background:rgba(239,68,68,.14); color:var(--crit); border-color:rgba(239,68,68,.45);}
+  .eq-chip.intervencion{background:rgba(59,130,246,.12); color:var(--accent); border-color:rgba(59,130,246,.35);}
+  .eq-alertas{display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.35;}
+  .eq-alerta{padding:5px 8px; border-radius:6px; background:rgba(124,139,163,.08);}
+  .eq-alerta.critico{background:rgba(239,68,68,.10);}
+  .eq-alerta.atencion{background:rgba(240,180,41,.10);}
+  .eq-alerta b{font-weight:600;}
+  .eq-foot{display:flex; align-items:center; gap:6px; margin-top:auto; padding-top:10px; border-top:1px dashed var(--line);}
+  .eq-foot .ult{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted); margin-right:auto;}
+  .eq-more{position:relative;}
+  .eq-more summary{list-style:none; cursor:pointer; border:1px solid var(--line); border-radius:6px; padding:4px 9px; font-size:13px; color:var(--text);}
+  .eq-more summary::-webkit-details-marker{display:none;}
+  .eq-more summary:hover, .eq-more[open] summary{border-color:var(--accent); color:var(--accent);}
+  .eq-menu{
+    position:fixed; z-index:70; min-width:140px; display:flex; flex-direction:column;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  .eq-menu button{background:transparent; border:none; color:var(--text); text-align:left; padding:7px 10px; font-size:12.5px; border-radius:5px; cursor:pointer; font-family:'Inter',sans-serif;}
+  .eq-menu button:hover{background:rgba(59,130,246,.12);}
+  .eq-menu button.danger{color:var(--crit);}
+  .eq-menu button.danger:hover{background:rgba(239,68,68,.12);}
+  @media (max-width:640px){ .eq-grid{grid-template-columns:1fr;} }
+
+  /* ---------- equipos: vista tabla mejorada ---------- */
+  #equiposTableWrap.eq-scroll{
+    max-height:72vh; overflow:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel);
+  }
+  table.eq-table{border-collapse:separate; border-spacing:0; width:100%; font-size:13px;}
+  .eq-table thead th{
+    position:sticky; top:0; z-index:3; background:#0f1626; border-bottom:2px solid var(--line);
+    padding:10px 10px; text-align:left; user-select:none;
+  }
+  .eq-table thead th[data-sort]{cursor:pointer;}
+  .eq-table thead th[data-sort]:hover{color:var(--accent);}
+  .eq-table thead th.sorted{color:var(--accent);}
+  .eq-table thead th .arr{font-size:9px; margin-left:3px;}
+  .eq-table thead th.mod{text-align:center; padding:6px 4px; min-width:44px;}
+  .eq-table thead th.mod .mi{display:block; font-size:15px; line-height:1.1;}
+  .eq-table thead th.mod .ms{display:block; font-size:9.5px; letter-spacing:.05em;}
+  .eq-table td{background:var(--panel); border-bottom:1px solid var(--line); padding:8px 10px; vertical-align:middle;}
+  .eq-table tbody tr:nth-child(even) td{background:#16213a;}
+  .eq-table tbody tr{cursor:pointer;}
+  .eq-table tbody tr:hover td{background:#1c2c4a;}
+  .eq-table tbody tr:last-child td{border-bottom:none;}
+  .eq-table th.sticky, .eq-table td.sticky{position:sticky; left:0; z-index:2;}
+  .eq-table thead th.sticky{z-index:4;}
+  .eq-table td.sticky{box-shadow:inset 4px 0 0 var(--line), 2px 0 6px rgba(0,0,0,.25); padding-left:14px; font-weight:600;}
+  .eq-table tr.row-critico td.sticky{box-shadow:inset 4px 0 0 var(--crit), 2px 0 6px rgba(0,0,0,.25);}
+  .eq-table tr.row-atencion td.sticky{box-shadow:inset 4px 0 0 var(--warn), 2px 0 6px rgba(0,0,0,.25);}
+  .eq-table tr.row-ok td.sticky{box-shadow:inset 4px 0 0 var(--ok), 2px 0 6px rgba(0,0,0,.25);}
+  .eq-table td.nombre{white-space:normal; min-width:160px; max-width:260px; font-weight:500;}
+  .eq-table td.ubic{color:var(--muted); font-size:12.5px;}
+  .eq-table .tipo-chip{display:inline-block; font-size:11.5px; padding:2px 8px; border-radius:20px; background:rgba(124,139,163,.14); color:var(--text);}
+  .eq-table td.ult{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);}
+  .eq-table tr.archivada td{opacity:.5;}
+  .eq-table td.health-cell{padding:8px 3px;}
+  .st{
+    display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px;
+    font-size:12px; font-weight:700; font-family:'JetBrains Mono',monospace;
+    background:rgba(124,139,163,.08); color:var(--muted); border:1px dashed var(--line); cursor:default;
+  }
+  .st.ok{background:rgba(16,201,138,.15); color:var(--ok); border:1px solid rgba(16,201,138,.45);}
+  .st.atencion{background:rgba(240,180,41,.16); color:var(--warn); border:1px solid rgba(240,180,41,.5);}
+  .st.critico{background:rgba(239,68,68,.2); color:var(--crit); border:1px solid rgba(239,68,68,.6); box-shadow:0 0 8px rgba(239,68,68,.35);}
+  .st.intervencion{background:rgba(59,130,246,.15); color:var(--accent); border:1px solid rgba(59,130,246,.45);}
+  .eq-table .actions-cell{display:flex; gap:5px; align-items:center; justify-content:flex-end;}
+  .eq-leyenda{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin:0 0 10px; align-items:center;}
+  .eq-leyenda .st{width:18px; height:18px; font-size:10px; margin-right:4px; vertical-align:middle;}
+
   /* informe de equipo */
   .modal.xwide{width:min(920px,94vw);}
   .informe-toolbar{display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;}
@@ -339,8 +449,25 @@
       </div>
       <div class="toolbar">
         <input id="eqBusqueda" type="search" placeholder="Buscar por TAG o nombre…">
+        <select id="eqFiltroEstado" title="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="critico">Crítico</option>
+          <option value="atencion">Atención</option>
+          <option value="ok">OK</option>
+          <option value="sin">Sin datos</option>
+        </select>
+        <select id="eqFiltroTipo" title="Filtrar por tipo"><option value="">Todos los tipos</option></select>
+        <select id="eqOrden" title="Ordenar">
+          <option value="criticidad">Orden: más críticos primero</option>
+          <option value="tag">Orden: TAG (A-Z)</option>
+          <option value="reciente">Orden: última lectura</option>
+        </select>
         <label class="chk"><input type="checkbox" id="eqMostrarArchivados"> mostrar archivados</label>
         <div class="spacer"></div>
+        <div class="view-toggle" id="eqVistaToggle">
+          <button type="button" data-vista="cards" class="active">▦ Tarjetas</button>
+          <button type="button" data-vista="tabla">☰ Tabla</button>
+        </div>
         <button class="ghost" id="btnPlantillaEquipos">Descargar plantilla</button>
         <button class="ghost" id="btnImportEquipos">Importar Excel</button>
         <input type="file" id="equiposFileInput" accept=".xlsx,.xls,.csv" style="display:none">
@@ -348,6 +475,7 @@
         <button class="ghost" id="btnRefreshEquipos">Actualizar</button>
       </div>
       <div id="importEquiposStatus" style="margin:0 0 10px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;"></div>
+      <div class="eq-resumen" id="eqResumen"></div>
       <div class="table-scroll" id="equiposTableWrap"></div>
     </section>
   </div>
@@ -1181,68 +1309,269 @@ function estadoGlobalEquipo(fila){
   return peor; // null si no hay ningún dato todavía
 }
 
+// ---------------- vista de equipos (tarjetas / tabla) ----------------
+let eqVista = 'cards';
+try { eqVista = localStorage.getItem('mantec_eq_vista') || 'cards'; } catch(e){}
+
+const SEV_LABEL = {ok:'OK', atencion:'ATENCIÓN', critico:'CRÍTICO'};
+const SEV_RANK_ORDEN = {critico:0, atencion:1, ok:2};   // menor = primero; sin datos va al final
+
+function ultimaLecturaEquipo(fila){
+  let max = null;
+  for (const m of MODULOS){
+    const r = fila[m.key];
+    if (r && r.fecha && (!max || r.fecha > max)) max = r.fecha;
+  }
+  return max;
+}
+
+function tarjetaEquipo(e, fila){
+  const global = estadoGlobalEquipo(fila);
+  const cls = global || 'na';
+  const pill = global
+    ? `<span class="global-pill ${global}">${SEV_LABEL[global]}</span>`
+    : `<span class="global-pill na">sin datos</span>`;
+  const ult = ultimaLecturaEquipo(fila);
+  const ultTxt = ult ? 'últ. lectura ' + new Date(ult).toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'2-digit'}) : 'sin lecturas';
+
+  const chips = MODULOS.map(m => {
+    const r = fila[m.key];
+    const sev = r && r.severidad ? r.severidad : '';
+    const tip = r
+      ? `${m.name}: ${SEV_LABEL[r.severidad] || 's/d'} · ${fmtFecha(r.fecha)}${r.resumen ? ' · ' + r.resumen : ''}`
+      : `${m.name}: sin datos`;
+    return `<span class="eq-chip ${escapeHtml(sev)}" title="${escapeHtml(tip)}">${m.icon} ${escapeHtml(m.short)}</span>`;
+  }).join('');
+
+  // los módulos en crítico/atención se explican en la propia tarjeta (máx. 3)
+  const alertas = MODULOS
+    .filter(m => fila[m.key] && (fila[m.key].severidad === 'critico' || fila[m.key].severidad === 'atencion'))
+    .sort((a,b) => SEV_RANK_ORDEN[fila[a.key].severidad] - SEV_RANK_ORDEN[fila[b.key].severidad])
+    .slice(0,3)
+    .map(m => {
+      const r = fila[m.key];
+      const txt = r.resumen ? String(r.resumen) : SEV_LABEL[r.severidad];
+      return `<div class="eq-alerta ${r.severidad}"><b>${m.icon} ${escapeHtml(m.name)}:</b> ${escapeHtml(txt.length > 110 ? txt.slice(0,107) + '…' : txt)}</div>`;
+    }).join('');
+
+  return `
+  <div class="eq-card ${cls} ${e.activo ? '' : 'archivada'}">
+    <div class="eq-head" onclick="abrirDetalleEquipo('${e.id}')" title="Ver historial completo">
+      <div>
+        <div class="eq-tag">${escapeHtml(e.tag)}</div>
+        <div class="eq-nombre">${escapeHtml(e.nombre || 'Sin nombre')}</div>
+      </div>
+      ${pill}
+    </div>
+    <div class="eq-meta">
+      ${e.tipo ? `<span>🏷️ ${escapeHtml(e.tipo)}</span>` : ''}
+      ${e.ubicacion ? `<span>📍 ${escapeHtml(e.ubicacion)}</span>` : ''}
+      ${(!e.tipo && !e.ubicacion) ? '<span>—</span>' : ''}
+    </div>
+    <div class="eq-chips">${chips}</div>
+    ${alertas ? `<div class="eq-alertas">${alertas}</div>` : ''}
+    <div class="eq-foot">
+      <span class="ult">${ultTxt}</span>
+      <button class="ghost small" onclick="abrirDetalleEquipo('${e.id}')">Ver</button>
+      <button class="ghost small" onclick="abrirInforme('${e.id}')">Informe</button>
+      <button class="ghost small" onclick="abrirEditarEquipo('${e.id}')">Editar</button>
+      <details class="eq-more">
+        <summary title="Más acciones">⋯</summary>
+        <div class="eq-menu">
+          <button onclick="abrirDuplicarEquipo('${e.id}')">Duplicar</button>
+          <button class="${e.activo ? 'danger' : ''}" onclick="confirmarArchivar('${e.id}', ${e.activo})">${e.activo ? 'Archivar' : 'Reactivar'}</button>
+          <button class="danger" onclick="abrirBorrarEquipo('${e.id}')">Borrar</button>
+        </div>
+      </details>
+    </div>
+  </div>`;
+}
+
+let eqSortCol = null, eqSortDir = 1;
+const ST_SIMBOLO = {ok:'✓', atencion:'!', critico:'✕', intervencion:'●'};
+const COLS_ORDENABLES = ['tag','nombre','tipo','ubicacion','estado','ultima'];
+
+function cmpColumna(a, b, matriz, estadoDe){
+  const fa = matriz[a.id] || {}, fb = matriz[b.id] || {};
+  const str = (x,y) => String(x||'').localeCompare(String(y||''),'es',{numeric:true});
+  let r = 0;
+  if (eqSortCol === 'tag') r = str(a.tag,b.tag);
+  else if (eqSortCol === 'nombre') r = str(a.nombre,b.nombre);
+  else if (eqSortCol === 'tipo') r = str(a.tipo,b.tipo);
+  else if (eqSortCol === 'ubicacion') r = str(a.ubicacion,b.ubicacion);
+  else if (eqSortCol === 'estado') r = (SEV_RANK_ORDEN[estadoDe(a)] ?? 3) - (SEV_RANK_ORDEN[estadoDe(b)] ?? 3);
+  else if (eqSortCol === 'ultima') r = str(ultimaLecturaEquipo(fa), ultimaLecturaEquipo(fb));
+  else if (eqSortCol && eqSortCol.startsWith('mod:')){
+    const k = eqSortCol.slice(4);
+    const rk = f => { const x = f[k]; return x && x.severidad ? (SEV_RANK_ORDEN[x.severidad] ?? 3) : 4; };
+    r = rk(fa) - rk(fb);
+  }
+  return (r * eqSortDir) || str(a.tag,b.tag);
+}
+
+function ordenarPorColumna(col){
+  if (eqSortCol === col) eqSortDir = -eqSortDir;
+  else { eqSortCol = col; eqSortDir = (col === 'ultima') ? -1 : 1; }
+  renderEquiposTable();
+}
+
+function clickFilaEquipo(ev, id){
+  if (ev.target.closest('button, details, summary, a')) return;
+  abrirDetalleEquipo(id);
+}
+
+// menú "⋯" con posición fija: se abre hacia arriba o abajo según el espacio y no se recorta por el scroll de la tabla
+function posicionarMenuEq(det){
+  const menu = det.querySelector('.eq-menu'), sum = det.querySelector('summary');
+  if (!menu || !sum) return;
+  const r = sum.getBoundingClientRect(), h = menu.offsetHeight, w = menu.offsetWidth;
+  const abajo = (r.bottom + 6 + h) <= window.innerHeight || (r.top - 6 - h) < 0;
+  menu.style.top = (abajo ? r.bottom + 6 : r.top - 6 - h) + 'px';
+  menu.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+}
+document.addEventListener('toggle', ev => {
+  const d = ev.target;
+  if (d && d.classList && d.classList.contains('eq-more') && d.open) posicionarMenuEq(d);
+}, true);
+function cerrarMenusEq(){ document.querySelectorAll('details.eq-more[open]').forEach(d => d.removeAttribute('open')); }
+window.addEventListener('scroll', cerrarMenusEq, true);
+window.addEventListener('resize', cerrarMenusEq);
+
+// cierra el menú "⋯" al hacer click fuera
+document.addEventListener('click', ev => {
+  document.querySelectorAll('details.eq-more[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
+});
+
 function renderEquiposTable(){
   const wrap = document.getElementById('equiposTableWrap');
+  const resumenEl = document.getElementById('eqResumen');
   if (!SatSync.estaConfigurado()){
     wrap.innerHTML = `<div class="empty">Conectá Supabase para ver y cargar equipos. Usá <b>Configurar Supabase</b> arriba a la derecha.</div>`;
+    resumenEl.innerHTML = '';
     actualizarBadgeEquiposCriticos({});
     return;
   }
   const busqueda = document.getElementById('eqBusqueda').value.trim().toLowerCase();
-  const lista = equiposCache.filter(e => {
+  // opciones del filtro de tipo (se reconstruyen conservando la selección)
+  const selTipo = document.getElementById('eqFiltroTipo');
+  const tipoPrevio = selTipo.value;
+  const tipos = [...new Set(equiposCache.map(e => (e.tipo || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
+  selTipo.innerHTML = '<option value="">Todos los tipos</option>' + tipos.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  selTipo.value = tipos.includes(tipoPrevio) ? tipoPrevio : '';
+
+  const filtroTipo = selTipo.value;
+  const listaBase = equiposCache.filter(e => {
+    if (filtroTipo && (e.tipo || '').trim() !== filtroTipo) return false;
     if (!busqueda) return true;
     return e.tag.toLowerCase().includes(busqueda) || (e.nombre||'').toLowerCase().includes(busqueda);
   });
 
   if (!equiposCache.length){
     wrap.innerHTML = `<div class="empty">Todavía no hay equipos cargados. Agregá el primero arriba — <b>TAG</b> es el único campo obligatorio.</div>`;
+    resumenEl.innerHTML = '';
     actualizarBadgeEquiposCriticos({});
-    return;
-  }
-  if (!lista.length){
-    wrap.innerHTML = `<div class="empty">Ningún equipo coincide con "<b>${busqueda}</b>".</div>`;
     return;
   }
 
   const matriz = construirMatrizSalud();
   actualizarBadgeEquiposCriticos(matriz);
 
-  wrap.innerHTML = `<table>
+  // contadores por estado (sobre búsqueda + tipo, antes de filtrar por estado) — sirven también como filtro rápido
+  const estadoDe = e => estadoGlobalEquipo(matriz[e.id] || {}) || 'sin';
+  const cuenta = {critico:0, atencion:0, ok:0, sin:0};
+  listaBase.forEach(e => cuenta[estadoDe(e)]++);
+  const filtroEstado = document.getElementById('eqFiltroEstado').value;
+  const chipRes = (k, label) => `<button type="button" class="eq-sum ${k} ${filtroEstado === k ? 'active' : ''}" data-estado="${k}"><span class="d"></span><span class="n">${cuenta[k]}</span>${label}</button>`;
+  resumenEl.innerHTML =
+    `<button type="button" class="eq-sum ${filtroEstado === '' ? 'active' : ''}" data-estado=""><span class="n">${listaBase.length}</span>Todos</button>` +
+    chipRes('critico','Crítico') + chipRes('atencion','Atención') + chipRes('ok','OK') + chipRes('sin','Sin datos');
+  resumenEl.querySelectorAll('.eq-sum').forEach(b => b.onclick = () => {
+    document.getElementById('eqFiltroEstado').value = b.dataset.estado;
+    renderEquiposTable();
+  });
+
+  let lista = filtroEstado ? listaBase.filter(e => estadoDe(e) === filtroEstado) : listaBase.slice();
+
+  const orden = document.getElementById('eqOrden').value;
+  lista.sort(eqSortCol ? ((a,b) => cmpColumna(a,b,matriz,estadoDe)) : (a,b) => {
+    if (orden === 'tag') return a.tag.localeCompare(b.tag,'es',{numeric:true});
+    if (orden === 'reciente'){
+      const fa = ultimaLecturaEquipo(matriz[a.id] || {}) || '', fb = ultimaLecturaEquipo(matriz[b.id] || {}) || '';
+      return fb.localeCompare(fa) || a.tag.localeCompare(b.tag,'es',{numeric:true});
+    }
+    const ra = SEV_RANK_ORDEN[estadoDe(a)] ?? 3, rb = SEV_RANK_ORDEN[estadoDe(b)] ?? 3;
+    return ra - rb || a.tag.localeCompare(b.tag,'es',{numeric:true});
+  });
+
+  if (!lista.length){
+    wrap.innerHTML = `<div class="empty">Ningún equipo coincide con los filtros${busqueda ? ` (búsqueda: "<b>${escapeHtml(busqueda)}</b>")` : ''}.</div>`;
+    return;
+  }
+
+  document.querySelectorAll('#eqVistaToggle button').forEach(b => b.classList.toggle('active', b.dataset.vista === eqVista));
+  wrap.classList.toggle('eq-scroll', eqVista !== 'cards');
+  if (eqVista === 'cards'){
+    wrap.innerHTML = `<div class="eq-grid">${lista.map(e => tarjetaEquipo(e, matriz[e.id] || {})).join('')}</div>`;
+    return;
+  }
+
+  const thOrd = (col, label, extra='') => {
+    const act = eqSortCol === col;
+    return `<th class="${extra} ${act ? 'sorted' : ''}" data-sort="${col}" title="Ordenar por ${label}">${label}${act ? `<span class="arr">${eqSortDir > 0 ? '▲' : '▼'}</span>` : ''}</th>`;
+  };
+  wrap.innerHTML = `<div class="eq-leyenda" style="padding:10px 12px 0;">
+      <span><span class="st ok">✓</span>OK</span><span><span class="st atencion">!</span>Atención</span>
+      <span><span class="st critico">✕</span>Crítico</span><span><span class="st intervencion">●</span>Intervención</span>
+      <span><span class="st">–</span>Sin datos</span><span style="margin-left:auto;">click en un encabezado para ordenar · click en una fila para ver el historial</span>
+    </div>
+    <table class="eq-table">
     <thead><tr>
-      <th>TAG</th><th>Nombre</th><th>Tipo</th><th>Ubicación</th>
-      ${MODULOS.map(m => `<th title="${m.name}">${m.short}</th>`).join('')}
-      <th>Estado</th><th>Acciones</th>
+      ${thOrd('tag','TAG','sticky')}${thOrd('nombre','Nombre')}${thOrd('tipo','Tipo')}${thOrd('ubicacion','Ubicación')}
+      ${MODULOS.map(m => {
+        const col = 'mod:' + m.key, act = eqSortCol === col;
+        return `<th class="mod ${act ? 'sorted' : ''}" data-sort="${col}" title="${escapeHtml(m.name)} — ordenar"><span class="mi">${m.icon}</span><span class="ms">${escapeHtml(m.short)}${act ? (eqSortDir > 0 ? ' ▲' : ' ▼') : ''}</span></th>`;
+      }).join('')}
+      ${thOrd('estado','Estado')}${thOrd('ultima','Últ. lectura')}<th></th>
     </tr></thead>
     <tbody>${lista.map(e => {
       const fila = matriz[e.id] || {};
       const global = estadoGlobalEquipo(fila);
       const globalHtml = global
-        ? `<span class="global-pill ${global}">${({ok:'OK',atencion:'ATENCIÓN',critico:'CRÍTICO'})[global]}</span>`
+        ? `<span class="global-pill ${global}">${SEV_LABEL[global]}</span>`
         : `<span class="global-pill na">sin datos</span>`;
+      const ult = ultimaLecturaEquipo(fila);
+      const ultTxt = ult ? new Date(ult).toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
       return `
-      <tr class="${e.activo ? '' : 'archivada'}">
-        <td class="tag-mono">${escapeHtml(e.tag)}</td>
-        <td>${escapeHtml(e.nombre || '')}</td>
-        <td>${escapeHtml(e.tipo || '—')}</td>
-        <td>${escapeHtml(e.ubicacion || '—')}</td>
+      <tr class="row-${global || 'na'} ${e.activo ? '' : 'archivada'}" onclick="clickFilaEquipo(event,'${e.id}')">
+        <td class="tag-mono sticky">${escapeHtml(e.tag)}</td>
+        <td class="nombre">${escapeHtml(e.nombre || '')}</td>
+        <td>${e.tipo ? `<span class="tipo-chip">${escapeHtml(e.tipo)}</span>` : '—'}</td>
+        <td class="ubic">${escapeHtml(e.ubicacion || '—')}</td>
         ${MODULOS.map(m => {
           const r = fila[m.key];
-          const cls = r && r.severidad ? r.severidad : '';
-          const tip = r ? `${m.name}: ${({ok:'OK',atencion:'ATENCIÓN',critico:'CRÍTICO'})[r.severidad]||'s/d'} · ${fmtFecha(r.fecha)}${r.resumen ? ' · ' + r.resumen : ''}` : `${m.name}: sin datos`;
-          return `<td class="health-cell"><span class="mini-badge ${escapeHtml(cls)}" title="${escapeHtml(tip)}"></span></td>`;
+          const sev = r && r.severidad ? r.severidad : '';
+          const tip = r ? `${m.name}: ${SEV_LABEL[r.severidad]||'s/d'} · ${fmtFecha(r.fecha)}${r.resumen ? ' · ' + r.resumen : ''}` : `${m.name}: sin datos`;
+          return `<td class="health-cell"><span class="st ${escapeHtml(sev)}" title="${escapeHtml(tip)}">${ST_SIMBOLO[sev] || '–'}</span></td>`;
         }).join('')}
         <td>${globalHtml}</td>
-        <td class="actions-cell">
+        <td class="ult">${ultTxt}</td>
+        <td><div class="actions-cell">
           <button class="ghost small" onclick="abrirDetalleEquipo('${e.id}')">Ver</button>
           <button class="ghost small" onclick="abrirInforme('${e.id}')">Informe</button>
           <button class="ghost small" onclick="abrirEditarEquipo('${e.id}')">Editar</button>
-          <button class="ghost small" onclick="abrirDuplicarEquipo('${e.id}')">Duplicar</button>
-          <button class="ghost small ${e.activo ? 'danger' : ''}" onclick="confirmarArchivar('${e.id}', ${e.activo})">${e.activo ? 'Archivar' : 'Reactivar'}</button>
-          <button class="ghost small danger" onclick="abrirBorrarEquipo('${e.id}')">Borrar</button>
-        </td>
+          <details class="eq-more">
+            <summary title="Más acciones">⋯</summary>
+            <div class="eq-menu">
+              <button onclick="abrirDuplicarEquipo('${e.id}')">Duplicar</button>
+              <button class="${e.activo ? 'danger' : ''}" onclick="confirmarArchivar('${e.id}', ${e.activo})">${e.activo ? 'Archivar' : 'Reactivar'}</button>
+              <button class="danger" onclick="abrirBorrarEquipo('${e.id}')">Borrar</button>
+            </div>
+          </details>
+        </div></td>
       </tr>`;
     }).join('')}
     </tbody></table>`;
+  wrap.querySelectorAll('th[data-sort]').forEach(th => th.onclick = () => ordenarPorColumna(th.dataset.sort));
 }
 
 function abrirDetalleEquipo(id){
@@ -1739,6 +2068,14 @@ async function confirmarBorrarEquipo(){
 document.getElementById('btnBorrarConfirmar').onclick = confirmarBorrarEquipo;
 document.getElementById('borrarTagConfirm').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !document.getElementById('btnBorrarConfirmar').disabled) confirmarBorrarEquipo(); });
 document.getElementById('eqBusqueda').oninput = renderEquiposTable;
+document.getElementById('eqFiltroEstado').onchange = renderEquiposTable;
+document.getElementById('eqFiltroTipo').onchange = renderEquiposTable;
+document.getElementById('eqOrden').onchange = () => { eqSortCol = null; renderEquiposTable(); };
+document.querySelectorAll('#eqVistaToggle button').forEach(b => b.onclick = () => {
+  eqVista = b.dataset.vista;
+  try { localStorage.setItem('mantec_eq_vista', eqVista); } catch(e){}
+  renderEquiposTable();
+});
 document.getElementById('eqMostrarArchivados').onchange = async () => { await cargarEquiposCache(); renderEquiposTable(); };
 document.getElementById('btnRefreshEquipos').onclick = async () => { await cargarEquiposCache(); renderEquiposTable(); };
 document.getElementById('btnExportSalud').onclick = exportarSaludCSV;
