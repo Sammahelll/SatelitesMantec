@@ -212,6 +212,8 @@ header{
 .diag-box.warning{border-left-color:var(--warning);}
 .diag-box.critical{border-left-color:var(--critical);}
 .diag-box.elevated{border-left-color:var(--elevated);}
+.diag-box.info{border-left-color:var(--muted);}
+.diag-box.info .diag-title{color:var(--muted);}
 .trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
 .trend-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 12px;}
 .trend-lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
@@ -509,13 +511,14 @@ header{
       <div class="fld"><label>Capacidad</label>
         <div style="display:flex;gap:6px;">
           <input id="newEqCapacidad" type="number" step="0.1" placeholder="Ej: 5" style="flex:1;">
-          <select id="newEqCapUnidad" style="width:80px;"></select>
+          <select id="newEqCapUnidad" style="width:90px;"></select>
         </div>
       </div>
       <div class="fld"><label>Refrigerante</label>
         <select id="newEqRefrigerante"></select>
       </div>
       <div class="fld"><label>FLA/RLA del compresor (A)</label><input id="newEqFLA" type="number" step="0.1" placeholder="Ej: 8.5 — de la placa del motor/compresor"></div>
+      <div class="fld"><label>Corriente nominal en refrigeración (A)</label><input id="newEqFlaRef" type="number" step="0.1" placeholder="Opcional — ej: 4.8 (placa, modo frío). Si se carga, se evalúa contra este valor"></div>
       <div class="fld"><label>Alimentación</label>
         <select id="newEqAlimentacion"><option value="Trifásico">Trifásico</option><option value="Monofásico">Monofásico</option></select>
       </div>
@@ -743,6 +746,22 @@ header{
           <label>Tipo</label>
           <select id="me_newEqTipo" onchange="updateAguaFieldsVisibility()"></select>
         </div>
+        <div class="fld hidden" id="me_newEqAliWrap">
+          <label>Alimentación</label>
+          <select id="me_newEqAli" onchange="updateFasesVisibility()"><option value="Trifásico">Trifásico</option><option value="Monofásico">Monofásico</option></select>
+        </div>
+        <div class="fld hidden" id="me_newEqVNomWrap">
+          <label>Tensión nominal (V)</label>
+          <input type="number" step="1" id="me_newEqVNom" placeholder="Ej: 220 o 380">
+        </div>
+        <div class="fld hidden" id="me_newEqTecWrap">
+          <label>Tecnología del compresor</label>
+          <select id="me_newEqTec"><option value="Convencional">Convencional (on/off)</option><option value="Inverter">Inverter</option></select>
+        </div>
+        <div class="fld hidden" id="me_newEqFlaRefWrap">
+          <label>I nominal refrigeración (A) — opcional</label>
+          <input type="number" step="0.1" id="me_newEqFlaRef" placeholder="Ej: 4.8">
+        </div>
         <div class="fld">
           <label>Fecha de medición</label>
           <input type="date" id="me_fecha">
@@ -787,7 +806,7 @@ header{
 
       <div class="modal-section-title" id="me_tVfn">🔻 Tensión fase-neutro (opcional, si hay neutro)</div>
       <div class="form-grid">
-        <div class="fld"><label>R-N (V)</label><input type="number" step="0.1" id="me_vRN"></div>
+        <div class="fld"><label id="me_lblVRN">R-N (V)</label><input type="number" step="0.1" id="me_vRN"></div>
         <div class="fld"><label>S-N (V)</label><input type="number" step="0.1" id="me_vSN"></div>
         <div class="fld"><label>T-N (V)</label><input type="number" step="0.1" id="me_vTN"></div>
       </div>
@@ -858,7 +877,16 @@ header{
 const TIPOS_EQUIPO = ['AC Split','AC Precisión','Chiller','Otro'];
 const TIPOS_INTERVENCION = ['Preventivo','Correctivo','Cambio de filtro','Carga de refrigerante','Limpieza','Reparación eléctrica','Cambio de repuesto','Otro'];
 const REFRIGERANTES = ['R410A','R22','R134a','R407C','R404A','Otro'];
-const CAP_UNIDADES = ['TR','kW'];
+const CAP_UNIDADES = ['TR','kW','BTU/h'];
+// Normaliza la unidad de capacidad escrita en Excel (tr, KW, btu, Btu/h…) a las del selector.
+function normCapUnidad(v){
+  const t = String(v||'').trim().toLowerCase();
+  if (!t) return 'TR';
+  if (t.startsWith('btu')) return 'BTU/h';
+  if (t === 'kw') return 'kW';
+  if (t === 'tr') return 'TR';
+  return String(v).trim();
+}
 
 // ═══════════════════════════════════════════════════════════
 //  1b. TABLAS PRESIÓN-TEMPERATURA DE SATURACIÓN POR REFRIGERANTE
@@ -1106,7 +1134,7 @@ function fichaNube(eqId){
   // equipos.tipo es una columna compartida entre módulos: el tipo propio vive solo en la ficha.
   return { tag:e.tag, tipo:null, ubicacion:e.ubicacion || null, criticidad:null,
     ficha:{tipo:e.tipo||'', ambiente:e.ambiente||'', ubicacion:e.ubicacion||'', capacidad:e.capacidad||0,
-           capUnidad:e.capUnidad||'TR', refrigerante:e.refrigerante||'', fla:e.fla||0,
+           capUnidad:e.capUnidad||'TR', refrigerante:e.refrigerante||'', fla:e.fla||0, flaRef:e.flaRef||0,
            alimentacion:e.alimentacion||'Trifásico', vNominal:e.vNominal||0, tecnologia:e.tecnologia||'Convencional'} };
 }
 function datosDeLectura(params, i){
@@ -1212,7 +1240,7 @@ async function bajarTodo(){
     registro.set(id, {
       tag:e.tag, tipo:f.tipo || e.tipo || 'AC Split', ambiente:f.ambiente || '',
       ubicacion: e.ubicacion != null ? e.ubicacion : (f.ubicacion || ''),
-      capacidad:f.capacidad || 0, capUnidad:f.capUnidad || 'TR', refrigerante:f.refrigerante || '', fla:f.fla || 0,
+      capacidad:f.capacidad || 0, capUnidad:f.capUnidad || 'TR', refrigerante:f.refrigerante || '', fla:f.fla || 0, flaRef:f.flaRef || 0,
       alimentacion:f.alimentacion || 'Trifásico', vNominal:f.vNominal || 0, tecnologia:f.tecnologia || 'Convencional'
     });
     ids.set(e.tag, e.id); tagDeEq.set(e.id, e.tag); idLocalDeEq.set(e.id, id);
@@ -1368,20 +1396,30 @@ function computeCargaPct(iAvg, fla){
 // Calcula los sub-niveles y nivel global para una lectura puntual (índice n de una serie)
 // fla: corriente nominal de placa (FLA/RLA, en A) del equipo — opcional, habilita % de Carga.
 const TENSION_MONO_BAND = [10, 15, 20];   // |desvío| % de la tensión nominal: ≤10 normal, ≤15 atención, ≤20 alerta, >20 crítico
+// Corriente nominal en refrigeración (flaRef): desvío % de la corriente medida contra ese valor.
+// |desvío| ≤15 normal, ≤22.5 atención, ≤30 alerta, >30 crítico. Reemplaza al % de FLA cuando está cargada.
+const DESVIO_I_REF_BAND = [15, 22.5, 30];
+const flaRefDe = eq => (eq?.flaRef > 0 ? eq.flaRef : NaN);
 const esMono = eq => eq?.alimentacion === 'Monofásico';
 const esInverter = eq => eq?.tecnologia === 'Inverter';
 function evalReading(params, n, fla, refrigerante, tipo, eq){
   const p = params;
   const mono = esMono(eq), inv = esInverter(eq);
   const deltaT  = (p.TempEntrada?.[n] - p.TempSalida?.[n]);
-  const desbV   = mono ? NaN : p.DesbV?.[n];   // monofásico: no hay desbalance entre fases
-  const desbI   = mono ? NaN : p.DesbI?.[n];
+  // Desbalances: se recalculan siempre desde las lecturas crudas (no del valor guardado), así una
+  // corrección hecha desde "Editar" se refleja en el diagnóstico. Monofásico: no hay desbalance entre fases.
+  const desbV   = mono ? NaN : computeDesbalance(p.V_RS?.[n], p.V_ST?.[n], p.V_TR?.[n]);
+  const desbI   = mono ? NaN : computeDesbalance(p.I_R?.[n], p.I_S?.[n], p.I_T?.[n]);
   const velAire = p.VelAire?.[n];
   const presAlta = p.PresAlta?.[n];
   const presBaja = p.PresBaja?.[n];
   const filtro  = p.Filtro?.[n] || '';
   const iAvg    = avgCorriente(p.I_R?.[n], p.I_S?.[n], p.I_T?.[n]);
-  const cargaPct = computeCargaPct(iAvg, fla);
+  const flaRef = flaRefDe(eq);
+  const usaFlaRef = isN(flaRef);
+  // Con flaRef cargada, el 100 % es la corriente nominal de refrigeración; si no, el FLA/RLA de placa.
+  const cargaPct = computeCargaPct(iAvg, usaFlaRef ? flaRef : fla);
+  const desvioIRefPct = (usaFlaRef && isN(cargaPct)) ? (cargaPct - 100) : NaN;
 
   const tempSuccion = p.TempSuccion?.[n];
   const tempLiquido = p.TempLiquido?.[n];
@@ -1411,7 +1449,8 @@ function evalReading(params, n, fla, refrigerante, tipo, eq){
     deltaT:  levelOf(deltaT, thresholds.deltaT, true),
     desbV:   levelOf(desbV,  thresholds.desbV,  false),
     desbI:   levelOf(desbI,  thresholds.desbI,  false),
-    cargaPct: levelOf(cargaPct, thresholds.cargaPct, false),
+    // Con flaRef: se evalúa el desvío contra la nominal (la banda de FLA no se usa, para no marcar dos veces).
+    cargaPct: usaFlaRef ? levelOf(Math.abs(desvioIRefPct), DESVIO_I_REF_BAND, false) : levelOf(cargaPct, thresholds.cargaPct, false),
     velAire: levelOf(velAire, thresholds.velAire, true),
     presAlta: ptSupported ? evalRange(tSatCond, thresholds.presionAltaTsat) : evalRange(presAlta, thresholds.presionAlta),
     presBaja: ptSupported ? evalRange(tSatEvap, thresholds.presionBajaTsat) : evalRange(presBaja, thresholds.presionBaja),
@@ -1421,18 +1460,22 @@ function evalReading(params, n, fla, refrigerante, tipo, eq){
     deltaTAgua: esChiller ? levelOf(deltaTAgua, thresholds.deltaTAgua, true) : -1,
     tension: mono ? levelOf(Math.abs(tensionDevPct), TENSION_MONO_BAND, false) : -1
   };
-  // Inverter: corriente, presión baja y SH/SC varían con la velocidad del compresor. Se evalúan
-  // como orientativos: no pueden llevar el equipo por encima de "atención" (nivel 1).
+  // Inverter con corriente baja respecto a la nominal es normal (marcha a baja velocidad): solo atención.
+  if (inv && usaFlaRef && desvioIRefPct < 0 && subs.cargaPct > 1) subs.cargaPct = 1;
+  // Inverter: presión baja, SH y SC varían con la velocidad del compresor. Se evalúan como
+  // orientativos: no pueden llevar el equipo por encima de "atención" (nivel 1).
+  // La corriente (% de carga vs RLA) y la presión alta NO se limitan: una sobrecorriente es real
+  // aunque el compresor sea inverter.
   const invCapped = [];
   if (inv){
-    const etiquetas = {cargaPct:'% de carga', presBaja:'presión baja', presAlta:'presión alta', superheat:'recalentamiento (SH)', subenfriamiento:'subenfriamiento (SC)'};
+    const etiquetas = {presBaja:'presión baja', superheat:'recalentamiento (SH)', subenfriamiento:'subenfriamiento (SC)'};
     for (const k of Object.keys(etiquetas)){
       if (subs[k] > 1){ invCapped.push(etiquetas[k]); subs[k] = 1; }
     }
   }
   let overall = 0;
   for (const k in subs) if (subs[k] > overall) overall = subs[k];
-  return { subs, overall, deltaT, desbV, desbI, cargaPct, iAvg, velAire, presAlta, presBaja, filtro,
+  return { subs, overall, deltaT, desbV, desbI, cargaPct, usaFlaRef, flaRef, desvioIRefPct, iAvg, velAire, presAlta, presBaja, filtro,
     tempSuccion, tempLiquido, superheat, subcooling, tSatCond, tSatEvap, ptSupported, refrigerante: refrigerante||'',
     esChiller, tempAguaRetorno, tempAguaSuministro, caudalAgua, deltaTAgua,
     mono, inv, invCapped, tensionV, vNom, tensionDevPct,
@@ -1470,12 +1513,12 @@ function diagnoseEquipo(k){
 // ═══════════════════════════════════════════════════════════
 //  5. IMPORT (Excel / CSV)
 // ═══════════════════════════════════════════════════════════
-const TEMPLATE_HEADERS = ['TAG','Tipo','Ambiente','Ubicacion','Capacidad','UnidadCapacidad','Refrigerante','FLA_A','Fecha','Temp_Entrada_C','Temp_Salida_C','Temp_Ambiente_C','Presion_Alta_bar','Presion_Baja_bar','Temp_Succion_C','Temp_Liquido_C','I_R_A','I_S_A','I_T_A','V_RS_V','V_ST_V','V_TR_V','V_RN_V','V_SN_V','V_TN_V','Velocidad_Aire_ms','Estado_Filtro','Temp_Agua_Retorno_C','Temp_Agua_Suministro_C','Caudal_Agua_m3h','Observaciones'];
+const TEMPLATE_HEADERS = ['TAG','Tipo','Ambiente','Ubicacion','Capacidad','UnidadCapacidad','Refrigerante','FLA_A','FLA_Refrig_A','Alimentacion','Tension_Nominal_V','Tecnologia','Fecha','Temp_Entrada_C','Temp_Salida_C','Temp_Ambiente_C','Presion_Alta_bar','Presion_Baja_bar','Temp_Succion_C','Temp_Liquido_C','I_R_A','I_S_A','I_T_A','V_RS_V','V_ST_V','V_TR_V','V_RN_V','V_SN_V','V_TN_V','Velocidad_Aire_ms','Estado_Filtro','Temp_Agua_Retorno_C','Temp_Agua_Suministro_C','Caudal_Agua_m3h','Observaciones'];
 
 function downloadTemplate(){
   const sample = [
     TEMPLATE_HEADERS,
-    ['AC-SALA-CONTROL','AC Precisión','Sala de control','Planta - techo sala eléctrica',5,'TR','R410A',8.5,'2026-08-01',24,15,22,12.5,5.2,11,20,8.1,7.9,8.0,380,381,379,220,221,219,3.1,'Bueno','','','','Ejemplo — V_RS/V_ST/V_TR son tensión de línea (obligatorio); V_RN/V_SN/V_TN son fase-neutro (opcional). Temp_Succion_C y Temp_Liquido_C habilitan el cálculo de Recalentamiento (SH) y Subenfriamiento (SC) por tabla P-T del refrigerante. FLA_A es la corriente de placa del compresor; Estado_Filtro: Bueno / Sucio / Muy sucio'],
+    ['AC-SALA-CONTROL','AC Precisión','Sala de control','Planta - techo sala eléctrica',5,'TR','R410A',8.5,'','Trifásico',380,'Convencional','2026-08-01',24,15,22,12.5,5.2,11,20,8.1,7.9,8.0,380,381,379,220,221,219,3.1,'Bueno','','','','Ejemplo — V_RS/V_ST/V_TR son tensión de línea (obligatorio); V_RN/V_SN/V_TN son fase-neutro (opcional). Temp_Succion_C y Temp_Liquido_C habilitan el cálculo de Recalentamiento (SH) y Subenfriamiento (SC) por tabla P-T del refrigerante. FLA_A es la corriente de placa del compresor; FLA_Refrig_A (opcional) es la corriente nominal en modo refrigeración: si se carga, la corriente se evalúa contra ese valor; Alimentacion: Trifásico / Monofásico (en monofásico cargar la tensión en V_RN_V); Tension_Nominal_V: 220, 380…; Tecnologia: Convencional / Inverter; Estado_Filtro: Bueno / Sucio / Muy sucio'],
     ['CH-PLANTA-01','Chiller','Planta general','Sala de máquinas',80,'TR','R134a',95,'2026-08-01','','','',6.5,2.1,'','',65,66,64,380,381,379,220,221,219,'','Bueno',12.5,7.0,45,'Ejemplo Chiller — los tríos de tensión aplican igual. Temp_Agua_Retorno_C/Suministro_C habilitan el diagnóstico del lado de agua del evaporador (solo se evalúa cuando Tipo=Chiller). Caudal_Agua_m3h es opcional/informativo.'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(sample);
@@ -1523,6 +1566,34 @@ function findCol(row, names){
   }
   return '';
 }
+// Normalizadores para la ficha (Excel / capturas del Hub). Devuelven '' si el valor no es reconocible.
+function normAlimentacion(v){
+  const t = String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if (!t) return '';
+  if (t.startsWith('mono') || t === '1' || t === '1f' || t === '1ph') return 'Monofásico';
+  if (t.startsWith('tri') || t === '3' || t === '3f' || t === '3ph') return 'Trifásico';
+  return '';
+}
+function normTecnologia(v){
+  const t = String(v||'').trim().toLowerCase();
+  if (!t) return '';
+  if (t.includes('inv')) return 'Inverter';
+  if (t.startsWith('conv') || t.includes('on/off') || t.includes('on-off') || t.includes('fija')) return 'Convencional';
+  return '';
+}
+// Completa SOLO lo que falta en la ficha de un equipo existente (nunca pisa lo ya cargado).
+// ficha: {fla, flaRef, alimentacion, vNominal, tecnologia}. Devuelve true si cambió algo.
+function completarFicha(eqId, ficha){
+  const ex = equiposRegistry.get(eqId); if (!ex) return false;
+  const nuevo = {...ex}; let cambio = false;
+  if (!(ex.fla > 0) && ficha.fla > 0){ nuevo.fla = ficha.fla; cambio = true; }
+  if (!(ex.flaRef > 0) && ficha.flaRef > 0){ nuevo.flaRef = ficha.flaRef; cambio = true; }
+  if (!(ex.vNominal > 0) && ficha.vNominal > 0){ nuevo.vNominal = ficha.vNominal; cambio = true; }
+  if (!ex.alimentacion && ficha.alimentacion){ nuevo.alimentacion = ficha.alimentacion; cambio = true; }
+  if (!ex.tecnologia && ficha.tecnologia){ nuevo.tecnologia = ficha.tecnologia; cambio = true; }
+  if (cambio) equiposRegistry.set(eqId, nuevo);
+  return cambio;
+}
 function numOrNaN(v){ if (v==='' || v===undefined || v===null) return NaN; const n = parseFloat(v); return isNaN(n) ? NaN : n; }
 
 function importRows(rows){
@@ -1536,9 +1607,16 @@ function importRows(rows){
     const ambiente = String(findCol(row,['Ambiente']) || '').trim();
     const ubicacion = String(findCol(row,['Ubicacion']) || '').trim();
     const capacidad = numOrNaN(findCol(row,['Capacidad'])) || 0;
-    const capUnidad = String(findCol(row,['UnidadCapacidad']) || 'TR').trim();
+    const capUnidad = normCapUnidad(findCol(row,['UnidadCapacidad']));
     const refrigerante = String(findCol(row,['Refrigerante']) || '').trim();
     const fla = numOrNaN(findCol(row,['FLA_A']));
+    const fichaRow = {
+      fla: isNaN(fla) ? 0 : fla,
+      flaRef: numOrNaN(findCol(row,['FLA_Refrig_A','FLA_Ref_A'])) || 0,
+      alimentacion: normAlimentacion(findCol(row,['Alimentacion','Alimentación'])),
+      vNominal: numOrNaN(findCol(row,['Tension_Nominal_V','Tensión_Nominal_V','Tension_Nominal'])) || 0,
+      tecnologia: normTecnologia(findCol(row,['Tecnologia','Tecnología']))
+    };
     let fechaRaw = findCol(row,['Fecha']);
     let fecha;
     if (fechaRaw instanceof Date) fecha = fechaRaw;
@@ -1553,11 +1631,14 @@ function importRows(rows){
     }
     if (!eqId){
       eqId = genId();
-      equiposRegistry.set(eqId, {tag, tipo, ambiente, ubicacion, capacidad, capUnidad, refrigerante, fla: isNaN(fla)?0:fla});
+      equiposRegistry.set(eqId, {tag, tipo, ambiente, ubicacion, capacidad, capUnidad, refrigerante, fla: fichaRow.fla,
+        flaRef: fichaRow.flaRef, alimentacion: fichaRow.alimentacion || 'Trifásico',
+        vNominal: fichaRow.vNominal, tecnologia: fichaRow.tecnologia || 'Convencional'});
       equiposCreated++;
-    } else if (!isNaN(fla) && fla>0){
-      const ex = equiposRegistry.get(eqId);
-      if (ex && !ex.fla) equiposRegistry.set(eqId, {...ex, fla});
+    } else {
+      // Equipo existente: la planilla solo completa lo que falta en la ficha, no pisa lo ya cargado.
+      // (Para cambiar alimentación/tecnología de un equipo ya creado, usar Equipos → Guardar ficha.)
+      completarFicha(eqId, fichaRow);
     }
 
     const tempEntrada = numOrNaN(findCol(row,['Temp_Entrada_C']));
@@ -1649,6 +1730,8 @@ function openManualEntry(){
 
   ['me_tempEntrada','me_tempSalida','me_tempAmb','me_presAlta','me_presBaja','me_tempSuccion','me_tempLiquido','me_iR','me_iS','me_iT','me_vRS','me_vST','me_vTR','me_vRN','me_vSN','me_vTN','me_velAire','me_newEqTag','me_obs','me_tempAguaRetorno','me_tempAguaSuministro','me_caudalAgua'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('me_filtro').value = '';
+  document.getElementById('me_newEqAli').value = 'Trifásico'; document.getElementById('me_newEqTec').value = 'Convencional';
+  document.getElementById('me_newEqVNom').value = ''; document.getElementById('me_newEqFlaRef').value = '';
   document.getElementById('me_fecha').value = new Date().toISOString().slice(0,10);
 
   onManualEquipoChange();
@@ -1661,6 +1744,7 @@ function onManualEquipoChange(){
   const isNew = sel.value === '__new';
   document.getElementById('me_newEqTagWrap').classList.toggle('hidden', !isNew);
   document.getElementById('me_newEqTipoWrap').classList.toggle('hidden', !isNew);
+  ['me_newEqAliWrap','me_newEqVNomWrap','me_newEqTecWrap','me_newEqFlaRefWrap'].forEach(id => document.getElementById(id).classList.toggle('hidden', !isNew));
   updateAguaFieldsVisibility();
   updateFasesVisibility();
 }
@@ -1668,10 +1752,11 @@ function onManualEquipoChange(){
 // Equipo monofásico: una sola corriente (I_R) y una sola tensión (V_RN); se ocultan las otras fases.
 function updateFasesVisibility(){
   const sel = document.getElementById('me_eqSel');
-  const mono = sel.value !== '__new' && esMono(equiposRegistry.get(sel.value));
+  const mono = sel.value === '__new' ? document.getElementById('me_newEqAli').value === 'Monofásico' : esMono(equiposRegistry.get(sel.value));
   const hide = (id, h) => { const el = document.getElementById(id); const f = el && (el.closest('.fld') || el); if (f) f.classList.toggle('hidden', h); };
   ['me_iS','me_iT','me_vSN','me_vTN'].forEach(id => hide(id, mono));
   document.getElementById('me_vLineaWrap').classList.toggle('hidden', mono);
+  document.getElementById('me_lblVRN').textContent = mono ? 'Tensión (V)' : 'R-N (V)';
   document.getElementById('me_tIcorr').textContent = mono ? '⚡ Corriente del compresor (A)' : '⚡ Corrientes de línea del compresor (A)';
   document.getElementById('me_tVfn').textContent = mono ? '🔻 Tensión de alimentación (V) — fase-neutro o fase-fase' : '🔻 Tensión fase-neutro (opcional, si hay neutro)';
 }
@@ -1735,7 +1820,15 @@ function saveManualReading(){
     const tipo = document.getElementById('me_newEqTipo').value;
     eqId = null;
     for (const [id, ev] of equiposRegistry.entries()) if (ev.tag.toLowerCase()===tag.toLowerCase()) { eqId = id; break; }
-    if (!eqId){ eqId = genId(); equiposRegistry.set(eqId, {tag, tipo, ambiente:'', ubicacion:'', capacidad:0, capUnidad:'TR', refrigerante:'', fla:0}); publicarEquipoEnHub(tag, tipo); }
+    if (!eqId){
+      eqId = genId();
+      equiposRegistry.set(eqId, {tag, tipo, ambiente:'', ubicacion:'', capacidad:0, capUnidad:'TR', refrigerante:'', fla:0,
+        flaRef: parseFloat(document.getElementById('me_newEqFlaRef').value) || 0,
+        alimentacion: document.getElementById('me_newEqAli').value,
+        vNominal: parseFloat(document.getElementById('me_newEqVNom').value) || 0,
+        tecnologia: document.getElementById('me_newEqTec').value});
+      publicarEquipoEnHub(tag, tipo);
+    }
   }
 
   const tempEntrada = numOrUndef('me_tempEntrada');
@@ -1971,6 +2064,7 @@ function diagnosisMessages(diag){
           : `${fmt(diag.presBaja,1)} bar. Posible sobrecarga de refrigerante o válvula de expansión abierta de más.`);
     }
   }
+  const _nAntesSHSC = msgs.length;
   if (diag.ptSupported){
     const shVal = diag.superheat, scVal = diag.subcooling;
     const shLevel = diag.subs.superheat, scLevel = diag.subs.subenfriamiento;
@@ -2003,7 +2097,17 @@ function diagnosisMessages(diag){
       }
     }
   } else if (diag.refrigerante === 'Otro' && (!isNaN(diag.tempSuccion) || !isNaN(diag.tempLiquido))){
-    push('elevated', 'ℹ️ SH/SC no calculados', `El equipo tiene refrigerante "Otro" — no hay tabla presión-temperatura cargada para calcular Recalentamiento/Subenfriamiento. Seleccioná un refrigerante soportado (R410A, R22, R134a, R407C, R404A) para habilitar el cálculo.`);
+    msgs.push({sev:'elevated', info:true, title:'ℹ️ SH/SC no calculados', action: `El equipo tiene refrigerante "Otro" — no hay tabla presión-temperatura cargada para calcular Recalentamiento/Subenfriamiento. Seleccioná un refrigerante soportado (R410A, R22, R134a, R407C, R404A) para habilitar el cálculo.`});
+  }
+
+  // Inverter: SH/SC varían con la velocidad del compresor. Los patrones SH/SC (falta de carga, etc.) no pueden
+  // salir como "alerta": se bajan a atención y se rotulan como orientativos, coherente con el aviso de inverter.
+  if (diag.inv){
+    for (let i = _nAntesSHSC; i < msgs.length; i++){
+      if (msgs[i].info) continue;
+      msgs[i].sev = 'elevated';
+      msgs[i].title += ' (orientativo, inverter)';
+    }
   }
 
   // Aviso explícito de lo que NO se pudo evaluar por datos faltantes (no es una falla).
@@ -2050,10 +2154,22 @@ function diagnosisMessages(diag){
     push(diag.subs.desbV===3?'critical':'warning', '⚖️ Desbalance de tensión en el compresor',
       `${fmt(diag.desbV,1)}% de desbalance de tensión. Verificar el alimentador aguas arriba; el desbalance de tensión afecta especialmente al motor del compresor (sobrecalentamiento).`);
   }
-  if (diag.subs.cargaPct >= 2){
+  if (diag.usaFlaRef && diag.subs.cargaPct >= 1){
+    const alta = diag.desvioIRefPct > 0;
+    const dev = `${fmt(diag.iAvg,1)} A medidos contra ${fmt(diag.flaRef,1)} A nominales en refrigeración (${alta?'+':''}${fmt(diag.desvioIRefPct,0)}%).`;
+    if (diag.subs.cargaPct === 1){
+      push('elevated', alta ? '⚡ Corriente algo alta vs. nominal de refrigeración' : '⚡ Corriente algo baja vs. nominal de refrigeración', `${dev} Monitorear en la próxima ronda.`);
+    } else if (alta){
+      push(diag.subs.cargaPct===3?'critical':'warning', '⚡ Compresor con sobrecorriente vs. nominal de refrigeración',
+        `${dev} Riesgo de sobrecalentamiento del motor y disparo térmico. Revisar sobrecarga de refrigerante, condensador sucio/obstruido, ventilador de condensador fallando, tensión baja o motor con desgaste.`);
+    } else {
+      push(diag.subs.cargaPct===3?'critical':'warning', '⚡ Corriente muy baja vs. nominal de refrigeración',
+        `${dev} Posible falta de carga de refrigerante, evaporador/filtro sucio con poca carga térmica, compresor con baja capacidad de compresión o equipo trabajando a régimen parcial. Contrastar con presiones, SH y SC.`);
+    }
+  } else if (diag.subs.cargaPct >= 2){
     push(diag.subs.cargaPct===3?'critical':'warning', '⚡ Compresor con sobrecarga de corriente (%FLA alto)',
       `Corriente promedio de ${fmt(diag.iAvg,1)} A equivale a ${fmt(diag.cargaPct,0)}% del FLA/RLA de placa. Riesgo de sobrecalentamiento del motor y disparo térmico. Revisar sobrecarga de refrigerante, condensador sucio/obstruido, ventilador de condensador fallando o motor con desgaste; confirmar que el FLA cargado corresponda a la placa real del compresor.`);
-  } else if (diag.subs.cargaPct === 1){
+  } else if (!diag.usaFlaRef && diag.subs.cargaPct === 1){
     push('elevated', '⚡ % de Carga del compresor levemente elevado', `${fmt(diag.cargaPct,0)}% del FLA/RLA de placa. Monitorear en la próxima ronda.`);
   }
 
@@ -2064,14 +2180,20 @@ function diagnosisMessages(diag){
     } else if (diag.subs.deltaTAgua === 1){
       push('elevated', '💧 ΔT de agua levemente bajo', 'Rendimiento del lado de agua algo por debajo de lo esperado. Monitorear caudal y estado del intercambiador en la próxima ronda.');
     } else if (isNaN(diag.deltaTAgua)){
-      push('elevated', 'ℹ️ Sin datos del lado de agua', 'Este chiller no tiene cargadas las temperaturas de agua de retorno/suministro del evaporador. Cargalas para habilitar el diagnóstico del lado de agua.');
+      info('ℹ️ Sin datos del lado de agua', 'Este chiller no tiene cargadas las temperaturas de agua de retorno/suministro del evaporador. Cargalas para habilitar el diagnóstico del lado de agua.');
     }
   }
 
   if (!msgs.some(m => !m.info)){
     push('good', '✅ Sin hallazgos relevantes', 'Todos los parámetros dentro de rango normal. Continuar con el plan de mantenimiento establecido.');
   }
-  return msgs;
+  // Orden por gravedad (crítico → alerta → atención → avisos informativos). sort() es estable.
+  const rank = m => m.info ? 4 : ({critical:0, warning:1, elevated:2, good:3}[m.sev] ?? 3);
+  return msgs.sort((a,b)=>rank(a)-rank(b));
+}
+// Hallazgos reales (sin "good" ni avisos informativos). msgs[0] de esta lista es el principal.
+function hallazgosPrincipales(diag){
+  return diagnosisMessages(diag).filter(m => m.sev !== 'good' && !m.info);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2104,8 +2226,8 @@ const TREND_METRICS = [
   { key:'deltaT',   label:'ΔT Aire',            unit:'°C', direction:'higherIsBetter', get:(p,i)=> p.TempEntrada?.[i]-p.TempSalida?.[i] },
   { key:'presAlta', label:'Presión Alta',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresAlta?.[i] },
   { key:'presBaja', label:'Presión Baja',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresBaja?.[i] },
-  { key:'desbI',    label:'Desb. Corriente',     unit:'%',  direction:'lowerIsBetter',  get:(p,i)=> p.DesbI?.[i] },
-  { key:'cargaPct', label:'% Carga (I/FLA)',     unit:'%',  direction:'lowerIsBetter',  get:(p,i,fla)=> computeCargaPct(avgCorriente(p.I_R?.[i],p.I_S?.[i],p.I_T?.[i]), fla) },
+  { key:'desbI',    label:'Desb. Corriente',     unit:'%',  direction:'lowerIsBetter',  hideMono:true,  get:(p,i)=> computeDesbalance(p.I_R?.[i], p.I_S?.[i], p.I_T?.[i]) },
+  { key:'cargaPct', label:'% Carga (I/nominal)',  unit:'%',  direction:'lowerIsBetter',  get:(p,i,fla)=> computeCargaPct(avgCorriente(p.I_R?.[i],p.I_S?.[i],p.I_T?.[i]), fla) },
   { key:'deltaTAgua', label:'ΔT Agua (Evap.)',   unit:'°C', direction:'higherIsBetter', onlyFor:'Chiller', get:(p,i)=> p.TempAguaRetorno?.[i]-p.TempAguaSuministro?.[i] }
 ];
 
@@ -2118,12 +2240,12 @@ function computeTrends(k, N){
   const total = d.dates.length;
   const start = Math.max(0, total - N);
   const results = [];
-  const metrics = TREND_METRICS.filter(m => !m.onlyFor || m.onlyFor === eq.tipo);
+  const metrics = TREND_METRICS.filter(m => (!m.onlyFor || m.onlyFor === eq.tipo) && !(m.hideMono && esMono(eq)));
   const t0 = d.dates[start].getTime();
   for (const m of metrics){
     const xs=[], ys=[];
     for (let i=start;i<total;i++){
-      const v = m.get(d.params, i, eq.fla);
+      const v = m.get(d.params, i, eq.flaRef > 0 ? eq.flaRef : eq.fla);
       if (v===undefined || v===null || isNaN(v)) continue;
       xs.push((d.dates[i].getTime() - t0) / 86400000); // días transcurridos desde la primera lectura de la ventana
       ys.push(v);
@@ -2200,7 +2322,7 @@ function openDetail(k){
     <div class="mstat"><div class="mstat-lbl">Vel. Aire</div><div class="mstat-val">${!isNaN(diag.velAire)?fmt(diag.velAire,1)+' m/s':'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Filtro</div><div class="mstat-val">${diag.filtro||'—'}</div></div>
     <div class="mstat"><div class="mstat-lbl">Desb. Corriente</div><div class="mstat-val">${!isNaN(diag.desbI)?fmt(diag.desbI,1)+'%':'—'}</div></div>
-    <div class="mstat"><div class="mstat-lbl">% Carga (I/FLA)</div><div class="mstat-val">${!isNaN(diag.cargaPct)?fmt(diag.cargaPct,0)+'%':(eq.fla?'—':'Sin FLA cargado')}</div></div>
+    <div class="mstat"><div class="mstat-lbl">${diag.usaFlaRef?'% Carga (I/I nom. refrig.)':'% Carga (I/FLA)'}</div><div class="mstat-val">${!isNaN(diag.cargaPct)?fmt(diag.cargaPct,0)+'%':((eq.fla||eq.flaRef)?'—':'Sin FLA cargado')}</div></div>
     <div class="mstat"><div class="mstat-lbl">Corriente Prom.</div><div class="mstat-val">${!isNaN(diag.iAvg)?fmt(diag.iAvg,1)+' A':'—'}</div></div>
   </div>
 
@@ -2281,7 +2403,7 @@ function openDetail(k){
 
   const diagBox = document.getElementById('modalDiagBox');
   diagBox.innerHTML = diagnosisMessages(diag).map(m=>`
-    <div class="diag-box ${m.sev==='good'?'':m.sev}">
+    <div class="diag-box ${m.info?'info':(m.sev==='good'?'':m.sev)}">
       <div class="diag-title">${m.title}</div>
       <div class="diag-action">${m.action}</div>
     </div>`).join('');
@@ -2339,17 +2461,19 @@ function createEquipo(){
   const capUnidad = document.getElementById('newEqCapUnidad').value;
   const refrigerante = document.getElementById('newEqRefrigerante').value;
   const fla = parseFloat(document.getElementById('newEqFLA').value) || 0;
+  const flaRef = parseFloat(document.getElementById('newEqFlaRef').value) || 0;
   const alimentacion = document.getElementById('newEqAlimentacion').value;
   const vNominal = parseFloat(document.getElementById('newEqVNominal').value) || 0;
   const tecnologia = document.getElementById('newEqTecnologia').value;
   const id = genId();
-  equiposRegistry.set(id, {tag, tipo, ambiente, ubicacion, capacidad, capUnidad, refrigerante, fla, alimentacion, vNominal, tecnologia});
+  equiposRegistry.set(id, {tag, tipo, ambiente, ubicacion, capacidad, capUnidad, refrigerante, fla, flaRef, alimentacion, vNominal, tecnologia});
   publicarEquipoEnHub(tag, tipo, {ubicacion});
   document.getElementById('newEqTag').value='';
   document.getElementById('newEqAmbiente').value='';
   document.getElementById('newEqUbicacion').value='';
   document.getElementById('newEqCapacidad').value='';
   document.getElementById('newEqFLA').value='';
+  document.getElementById('newEqFlaRef').value='';
   document.getElementById('newEqVNominal').value='';
   document.getElementById('newEqAlimentacion').value='Trifásico';
   document.getElementById('newEqTecnologia').value='Convencional';
@@ -2385,11 +2509,16 @@ function renderEquiposList(){
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
         ${[
+          ['Tipo', `<select id="tipo_${id}" style="${estS}">${TIPOS_EQUIPO.map(t=>`<option value="${t}"${e.tipo===t?' selected':''}>${t}</option>`).join('')}${e.tipo && !TIPOS_EQUIPO.includes(e.tipo)?`<option value="${escHtml(e.tipo)}" selected>${escHtml(e.tipo)}</option>`:''}</select>`],
+          ['Capacidad', `<span style="display:flex;gap:4px;"><input type="number" step="0.1" id="cap_${id}" value="${e.capacidad||''}" placeholder="0" style="${estS}width:70px;"><select id="capu_${id}" style="${estS}">${CAP_UNIDADES.map(u=>`<option value="${u}"${(e.capUnidad||'TR')===u?' selected':''}>${u}</option>`).join('')}</select></span>`],
+          ['Ambiente', `<input type="text" id="amb_${id}" value="${escHtml(e.ambiente||'')}" placeholder="Ej: Sala de control" style="${estS}width:130px;">`],
+          ['Ubicación', `<input type="text" id="ubi_${id}" value="${escHtml(e.ubicacion||'')}" placeholder="Ej: Planta - techo" style="${estS}width:150px;">`],
           ['Refrigerante', `<select id="ref_${id}" style="${estS}"><option value="">—</option>${REFRIGERANTES.map(r=>`<option value="${r}"${e.refrigerante===r?' selected':''}>${r}</option>`).join('')}</select>`],
           ['Alimentación', `<select id="ali_${id}" style="${estS}"><option value="Trifásico"${!esMono(e)?' selected':''}>Trifásico</option><option value="Monofásico"${esMono(e)?' selected':''}>Monofásico</option></select>`],
           ['Tensión nominal (V)', `<input type="number" step="1" id="vn_${id}" value="${e.vNominal||''}" placeholder="220" style="${estS}width:80px;">`],
           ['Tecnología', `<select id="tec_${id}" style="${estS}"><option value="Convencional"${!esInverter(e)?' selected':''}>Convencional</option><option value="Inverter"${esInverter(e)?' selected':''}>Inverter</option></select>`],
-          ['FLA/RLA (A)', `<input type="number" step="0.1" value="${e.fla||''}" id="fla_${id}" style="${estS}width:70px;">`]
+          ['FLA/RLA (A)', `<input type="number" step="0.1" value="${e.fla||''}" id="fla_${id}" style="${estS}width:70px;">`],
+          ['I nominal refrig. (A)', `<input type="number" step="0.1" value="${e.flaRef||''}" id="flaref_${id}" placeholder="opcional" style="${estS}width:80px;">`]
         ].map(([l,c])=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--muted);">${l}${c}</label>`).join('')}
         <button class="btn-small" style="padding:5px 12px;" onclick="actualizarFichaEquipo('${escJs(id)}')">💾 Guardar ficha</button>
       </div>
@@ -2401,11 +2530,17 @@ function actualizarFichaEquipo(id){
   if (!e) return;
   const v = x => document.getElementById(x+'_'+id);
   equiposRegistry.set(id, {...e,
+    tipo: v('tipo').value || e.tipo,
+    capacidad: parseFloat(v('cap').value) || 0,
+    capUnidad: v('capu').value || 'TR',
+    ambiente: v('amb').value.trim(),
+    ubicacion: v('ubi').value.trim(),
     refrigerante: v('ref').value,
     alimentacion: v('ali').value,
     vNominal: parseFloat(v('vn').value) || 0,
     tecnologia: v('tec').value,
-    fla: parseFloat(v('fla').value) || 0 });
+    fla: parseFloat(v('fla').value) || 0,
+    flaRef: parseFloat(v('flaref').value) || 0 });
   saveState();
   renderAll();
 }
@@ -2519,7 +2654,7 @@ function generateOfflineReport(){
     const diag = diagnoseEquipo(k);
     if (!diag || diag.overall < 1) continue;
     const health = healthScoreFromLevel(diag.overall, diag.subs);
-    const msgs = diagnosisMessages(diag).filter(m=>m.sev!=='good');
+    const msgs = hallazgosPrincipales(diag);
     const accion = msgs.length ? msgs[0].title.replace(/^[^\w]+/,'') : 'Revisar parámetros fuera de rango';
     const plazo = diag.overall===3?'Inmediato':diag.overall===2?'7 días':'30 días';
     actionItems.push({
@@ -2674,7 +2809,7 @@ async function publicarAnalisisRefrigeracion(eqId){
   if (!tag) return null;
   const health = healthScoreFromLevel(diag.overall, diag.subs);
   const nivel  = STATUS[diag.overall];
-  const msgs   = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+  const msgs   = hallazgosPrincipales(diag);
   const resumen = `${tag}: ` + (msgs.length ? msgs[0].title.replace(/^[^\w]+/, '') : 'Sin hallazgos relevantes');
   try {
     await SatSync.guardarAnalisis({
@@ -2697,8 +2832,16 @@ async function publicarAnalisisRefrigeracion(eqId){
         presBaja: diag.presBaja, tSatEvap: diag.tSatEvap,
         superheat: diag.superheat, subcooling: diag.subcooling,
         // Lado eléctrico
-        iAvg: diag.iAvg, fla: eq?.fla, cargaPct: diag.cargaPct,
+        iAvg: diag.iAvg, fla: eq?.fla, flaRef: eq?.flaRef || null, desvioIRefPct: isN(diag.desvioIRefPct) ? diag.desvioIRefPct : null, cargaPct: diag.cargaPct,
         desbI: diag.desbI, desbV: diag.desbV,
+        // Ficha y monofásico / inverter
+        alimentacion: eq?.alimentacion || 'Trifásico',
+        tecnologia: eq?.tecnologia || 'Convencional',
+        vNominal: eq?.vNominal || null,
+        tensionV: diag.mono && isN(diag.tensionV) ? diag.tensionV : null,
+        tensionDevPct: diag.mono && isN(diag.tensionDevPct) ? diag.tensionDevPct : null,
+        invCapped: diag.inv ? diag.invCapped : [],
+        avisos: diagnosisMessages(diag).filter(m => m.info).map(m => m.title.replace(/^[^\w]+/, '')),
         // Lado agua (solo Chillers)
         esChiller: diag.esChiller,
         deltaTAgua: diag.deltaTAgua,
@@ -2979,7 +3122,8 @@ function buscarOCrearEquipoPorTag(tag){
     if ((e.tag||'').toLowerCase() === tag.toLowerCase()) return id;
   }
   const id = genId();
-  equiposRegistry.set(id, {tag, tipo:'AC Split', ambiente:'', ubicacion:'', capacidad:0, capUnidad:'TR', refrigerante:'', fla:0});
+  equiposRegistry.set(id, {tag, tipo:'AC Split', ambiente:'', ubicacion:'', capacidad:0, capUnidad:'TR', refrigerante:'', fla:0,
+    flaRef:0, alimentacion:'Trifásico', vNominal:0, tecnologia:'Convencional'});
   publicarEquipoEnHub(tag, 'AC Split');
   return id;
 }
@@ -2997,7 +3141,19 @@ function copiarCapturaAFormulario(i){
   const eqId = buscarOCrearEquipoPorTag(tag);
   // Datos del equipo que viajan en la captura del Hub de Campo: solo completan lo que falta, nunca pisan
   { const eqx = equiposRegistry.get(eqId);
-    if (eqx){ if (!eqx.refrigerante && d.refrigerante) eqx.refrigerante = d.refrigerante; if (!(eqx.fla > 0) && d.fla > 0) eqx.fla = d.fla; } }
+    if (eqx){
+      if (!eqx.refrigerante && d.refrigerante) eqx.refrigerante = d.refrigerante;
+      // Ficha eléctrica: la captura puede traerla; si el equipo se acaba de crear con valores por defecto, se pisan
+      // solo esos defaults (un equipo ya editado a mano no se toca).
+      const recienCreado = !(readingsData.get(eqId)?.dates.length) && !eqx.fla && !eqx.flaRef && !eqx.vNominal;
+      const ali = normAlimentacion(d.alimentacion), tec = normTecnologia(d.tecnologia);
+      if (recienCreado){
+        if (ali) eqx.alimentacion = ali;
+        if (tec) eqx.tecnologia = tec;
+      }
+      completarFicha(eqId, {fla: parseFloat(d.fla)||0, flaRef: parseFloat(d.flaRef ?? d.fla_ref ?? d.fla_refrigeracion)||0,
+        vNominal: parseFloat(d.vNominal ?? d.tension_nominal ?? d.tensionNominal)||0, alimentacion: ali, tecnologia: tec});
+    } }
   saveState();
 
   const eqSel = document.getElementById('me_eqSel');
@@ -3069,7 +3225,8 @@ function buildAIPayload(){
     if (!diag || diag.overall < 0) continue;
     const eq = equiposRegistry.get(k) || {};
     const health = healthScoreFromLevel(diag.overall, diag.subs);
-    const msgs = diagnosisMessages(diag).filter(m => m.sev !== 'good');
+    const msgs = hallazgosPrincipales(diag);
+    const avisos = diagnosisMessages(diag).filter(m => m.info).map(m => m.title.replace(/^[^\w]+/, ''));
     equipos.push({
       equipo: eq.tag || k,
       tipo: eq.tipo || null,
@@ -3080,9 +3237,12 @@ function buildAIPayload(){
       capUnidad: eq.capUnidad || null,
       ficha: {
         fla_rla_placa_A: eq.fla || null,
+        corriente_nominal_refrigeracion_A: eq.flaRef || null,
         alimentacion: eq.alimentacion || 'Trifásico',
         tension_nominal_V: eq.vNominal || null,
-        tecnologia_compresor: eq.tecnologia || 'Convencional'
+        tecnologia_compresor: eq.tecnologia || 'Convencional',
+        es_monofasico: !!diag.mono,
+        es_inverter: !!diag.inv
       },
       diagnostico: {
         nivel: STATUS[diag.overall],
@@ -3102,11 +3262,18 @@ function buildAIPayload(){
         // Eléctrico
         iAvg_A: isN(diag.iAvg) ? +diag.iAvg.toFixed(2) : null,
         cargaPct: isN(diag.cargaPct) ? +diag.cargaPct.toFixed(0) : null,
+        cargaPct_base: diag.usaFlaRef ? 'corriente_nominal_refrigeracion' : 'fla_rla_placa',
+        desvioCorrienteRef_pct: isN(diag.desvioIRefPct) ? +diag.desvioIRefPct.toFixed(0) : null,
         desbI_pct: isN(diag.desbI) ? +diag.desbI.toFixed(2) : null,
         desbV_pct: isN(diag.desbV) ? +diag.desbV.toFixed(2) : null,
-        vRS_V: isN(diag.vRS) ? +diag.vRS.toFixed(1) : null,
-        vST_V: isN(diag.vST) ? +diag.vST.toFixed(1) : null,
-        vTR_V: isN(diag.vTR) ? +diag.vTR.toFixed(1) : null,
+        vRS_V: (!diag.mono && isN(diag.vRS)) ? +diag.vRS.toFixed(1) : null,
+        vST_V: (!diag.mono && isN(diag.vST)) ? +diag.vST.toFixed(1) : null,
+        vTR_V: (!diag.mono && isN(diag.vTR)) ? +diag.vTR.toFixed(1) : null,
+        // Monofásico: una sola tensión medida contra la nominal de la ficha
+        tensionMedida_V: (diag.mono && isN(diag.tensionV)) ? +diag.tensionV.toFixed(1) : null,
+        tensionDesvio_pct: (diag.mono && isN(diag.tensionDevPct)) ? +diag.tensionDevPct.toFixed(1) : null,
+        // Inverter: magnitudes que quedaron limitadas a "atención" por variar con la velocidad
+        inverter_valores_orientativos: diag.inv ? diag.invCapped : [],
         // Lado agua (solo Chillers)
         esChiller: !!diag.esChiller,
         deltaTAgua_C: (diag.esChiller && isN(diag.deltaTAgua)) ? +diag.deltaTAgua.toFixed(2) : null,
@@ -3115,6 +3282,8 @@ function buildAIPayload(){
         caudalAgua_m3h: (diag.esChiller && isN(diag.caudalAgua)) ? +diag.caudalAgua.toFixed(1) : null
       },
       ultimaMedicion: fmtDate(diag.date),
+      // Datos que NO se pudieron evaluar (no son fallas): falta de una presión, tensión nominal sin cargar, etc.
+      avisos_datos_faltantes: avisos,
       hallazgos: msgs.map(m => ({
         severidad: m.sev,
         titulo: m.title.replace(/^[^\w]+/, ''),
@@ -3159,8 +3328,15 @@ Cada equipo trae su diagnóstico YA CALCULADO por Refrigeración Pro:
     En este caso indicá expresamente que falta cargar un refrigerante soportado
     para obtener el análisis completo.
 
-- Corriente promedio del compresor y %Carga (I_medida / FLA·RLA de placa).
-- Desbalances NEMA MG-1: tensión (desbV_pct) y corriente (desbI_pct).
+- Corriente promedio del compresor y %Carga. Si la ficha trae corriente_nominal_refrigeracion_A, el %Carga se
+  calcula contra ESA corriente (100 % = nominal en modo frío) y desvioCorrienteRef_pct es el desvío (+ alta, − baja);
+  el FLA de placa de la unidad completa NO se usa para evaluar. Si no la trae, el %Carga es I_medida / FLA·RLA de placa.
+  Una corriente ALTA es riesgo para el compresor; una corriente BAJA sugiere falta de carga, poca carga térmica o
+  compresor con baja capacidad (cruzalo con presiones, SH y SC).
+- Desbalances NEMA MG-1: tensión (desbV_pct) y corriente (desbI_pct). Solo aplican a equipos trifásicos.
+- ficha.es_monofasico / ficha.es_inverter: flags de la ficha del equipo (ver reglas 4 a 6).
+- tensionMedida_V y tensionDesvio_pct: solo en monofásicos (desvío % de la tensión medida contra tension_nominal_V).
+- avisos_datos_faltantes: lo que NO se pudo evaluar por datos incompletos. NO es una falla.
 
 - SOLO para Chillers (esChiller = true):
   LADO DE AGUA del evaporador. ΔT agua (retorno − suministro), caudal y temperaturas.
@@ -3198,6 +3374,28 @@ REGLAS DE INTERPRETACIÓN POR TIPO DE EQUIPO
    valores en bar y aclará en el informe que faltaría cargar un refrigerante
    soportado (R410A, R22, R134a, R407C, R404A) para el análisis completo.
 
+4) Equipo MONOFÁSICO (ficha.es_monofasico = true):
+   - NO hay desbalance de tensión ni de corriente entre fases: desbV_pct y desbI_pct vienen en null y NO
+     debés mencionarlos. vRS_V / vST_V / vTR_V también vienen en null.
+   - Evaluá la tensión con tensionMedida_V y tensionDesvio_pct contra tension_nominal_V
+     (banda: ver tensionMono_desvio_pct). Tensión BAJA → el compresor consume más corriente y se calienta
+     (revisar caída en el alimentador, empalmes, contactos). Tensión ALTA → riesgo para el aislamiento del
+     motor y la electrónica.
+   - Si tension_nominal_V es null, indicá que falta cargarla en la ficha; no inventes un valor.
+
+5) Compresor INVERTER (ficha.es_inverter = true):
+   - Presión baja, SH y SC varían con la velocidad del compresor: los valores listados en
+     inverter_valores_orientativos son ORIENTATIVOS. Tratalos como atención, no como falla, y recomendá
+     repetir la medición con el compresor a régimen estable y carga térmica similar.
+   - La CORRIENTE (cargaPct) y la presión alta NO se relativizan: una corriente sobre el RLA es un problema
+     real aunque el compresor sea inverter.
+   - No interpretes los patrones canónicos de SH/SC como diagnóstico firme en un inverter.
+
+6) Datos incompletos (avisos_datos_faltantes):
+   - Si falta la presión alta, NO evalúes condensación ni subenfriamiento (SC). Si falta la presión baja,
+     NO evalúes evaporación ni recalentamiento (SH). Decí qué quedó sin evaluar y qué medición lo habilitaría.
+   - Un aviso informativo no es un hallazgo: no lo uses como causa principal ni como motivo de prioridad.
+
 CUANDO GENERES HALLAZGOS:
 - Citá valores concretos (ej: "SH=15.2°C sobre el máximo de 12°C").
 - Si el diagnóstico de Refrigeración Pro ya trae hallazgos, usalos como base;
@@ -3215,6 +3413,7 @@ ${JSON.stringify({
   desbV_pct: thresholds.desbV,
   desbI_pct: thresholds.desbI,
   cargaPct_FLA: thresholds.cargaPct,
+  desvioCorrienteRef_pct: DESVIO_I_REF_BAND,
   velAire_ms: thresholds.velAire,
   presAltaTsat_C: thresholds.presionAltaTsat,
   presBajaTsat_C: thresholds.presionBajaTsat,
@@ -3222,7 +3421,8 @@ ${JSON.stringify({
   presBaja_bar: thresholds.presionBaja,
   superheat_C: thresholds.superheat,
   subcooling_C: thresholds.subenfriamiento,
-  deltaTAgua_C: thresholds.deltaTAgua
+  deltaTAgua_C: thresholds.deltaTAgua,
+  tensionMono_desvio_pct: TENSION_MONO_BAND
 }, null, 2)}
 
 Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta
