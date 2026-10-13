@@ -946,13 +946,13 @@ function satTempCond(refrigerante, presAltaBar){
 }
 // Recalentamiento (superheat) = Temp. real en línea de succión − Temp. de saturación a la presión de baja
 function computeSuperheat(refrigerante, presBajaBar, tempSuccionC){
-  if (!PT_TABLES[refrigerante] || isNaN(presBajaBar) || isNaN(tempSuccionC)) return NaN;
+  if (!PT_TABLES[refrigerante] || !isN(presBajaBar) || !isN(tempSuccionC)) return NaN;   // isN: null (dato vacío guardado en la BD) NO cuenta como 0
   const tSat = satTempEvap(refrigerante, presBajaBar);
   return isNaN(tSat) ? NaN : (tempSuccionC - tSat);
 }
 // Subenfriamiento (subcooling) = Temp. de saturación a la presión de alta − Temp. real en línea de líquido
 function computeSubcooling(refrigerante, presAltaBar, tempLiquidoC){
-  if (!PT_TABLES[refrigerante] || isNaN(presAltaBar) || isNaN(tempLiquidoC)) return NaN;
+  if (!PT_TABLES[refrigerante] || !isN(presAltaBar) || !isN(tempLiquidoC)) return NaN;   // isN: null (dato vacío guardado en la BD) NO cuenta como 0
   const tSat = satTempCond(refrigerante, presAltaBar);
   return isNaN(tSat) ? NaN : (tSat - tempLiquidoC);
 }
@@ -1122,7 +1122,7 @@ function computeCargaPct(iAvg, fla){
 // fla: corriente nominal de placa (FLA/RLA, en A) del equipo — opcional, habilita % de Carga.
 function evalReading(params, n, fla, refrigerante, tipo){
   const p = params;
-  const deltaT  = (p.TempEntrada?.[n] - p.TempSalida?.[n]);
+  const deltaT  = (isN(p.TempEntrada?.[n]) && isN(p.TempSalida?.[n])) ? (p.TempEntrada[n] - p.TempSalida[n]) : NaN;
   const desbV   = p.DesbV?.[n];
   const desbI   = p.DesbI?.[n];
   const velAire = p.VelAire?.[n];
@@ -1796,7 +1796,7 @@ function linRegTrend(xs, ys){
 // direction indica qué sentido de la pendiente es una mejora, para colorear el veredicto.
 // onlyFor restringe la métrica a un tipo de equipo específico (p.ej. lado de agua → solo Chillers).
 const TREND_METRICS = [
-  { key:'deltaT',   label:'ΔT Aire',            unit:'°C', direction:'higherIsBetter', get:(p,i)=> p.TempEntrada?.[i]-p.TempSalida?.[i] },
+  { key:'deltaT',   label:'ΔT Aire',            unit:'°C', direction:'higherIsBetter', get:(p,i)=> (isN(p.TempEntrada?.[i]) && isN(p.TempSalida?.[i])) ? p.TempEntrada[i]-p.TempSalida[i] : NaN },
   { key:'presAlta', label:'Presión Alta',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresAlta?.[i] },
   { key:'presBaja', label:'Presión Baja',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresBaja?.[i] },
   { key:'desbI',    label:'Desb. Corriente',     unit:'%',  direction:'lowerIsBetter',  get:(p,i)=> p.DesbI?.[i] },
@@ -1931,7 +1931,7 @@ function openDetail(k){
   <div class="modal-section-title">Historial reciente</div>
   <div style="overflow-x:auto;">
     <table class="rtable">
-      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Pres.Alta</th><th>T°sat.Cond</th><th>Pres.Baja</th><th>T°sat.Evap</th><th>SH</th><th>SC</th><th>Vel.Aire</th><th>% Carga</th><th>Filtro</th>${esChiller?'<th>Agua Ret.</th><th>Agua Sum.</th><th>ΔT Agua</th>':''}</tr></thead>
+      <thead><tr><th>Fecha</th><th>ΔT (°C)</th><th>Pres.Alta</th><th>T°sat.Cond</th><th>Pres.Baja</th><th>T°sat.Evap</th><th>SH</th><th>SC</th><th>Vel.Aire</th><th>% Carga</th><th>Filtro</th>${esChiller?'<th>Agua Ret.</th><th>Agua Sum.</th><th>ΔT Agua</th>':''}<th></th></tr></thead>
       <tbody>${d.dates.map((dt,i)=>{
         const ev = evalReading(d.params, i, eq.fla, eq.refrigerante, eq.tipo);
         return `<tr>
@@ -1949,10 +1949,11 @@ function openDetail(k){
           ${esChiller?`<td data-label="Agua Ret.">${!isNaN(ev.tempAguaRetorno)?fmt(ev.tempAguaRetorno,1)+'°C':'—'}</td>
           <td data-label="Agua Sum.">${!isNaN(ev.tempAguaSuministro)?fmt(ev.tempAguaSuministro,1)+'°C':'—'}</td>
           <td data-label="ΔT Agua">${!isNaN(ev.deltaTAgua)?fmt(ev.deltaTAgua,1)+'°C':'—'}</td>`:''}
-        </tr>`;
-      }).reverse().slice(0,15).join('')}</tbody>
+        <td data-label=""><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-small" onclick="event.stopPropagation();histEditar('${escJs(k)}',${i})">Editar</button><button class="btn-small danger" onclick="event.stopPropagation();histBorrar('${escJs(k)}',${i})">Eliminar</button></span></td></tr>`;
+      }).reverse().slice(0,histLimite()).join('')}</tbody>
     </table>
   </div>
+  ${histBotonVerTodo(k, d.dates.length)}
 
   <div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <span>🛠️ Últimas intervenciones</span>
@@ -1989,7 +1990,7 @@ function openDetail(k){
     if (!ctx) return;
     if (detailChart) detailChart.destroy();
     const labels = d.dates.map(fmtDate);
-    const deltaTSeries = d.dates.map((_,i)=> (d.params.TempEntrada[i] - d.params.TempSalida[i]));
+    const deltaTSeries = d.dates.map((_,i)=> (isN(d.params.TempEntrada[i]) && isN(d.params.TempSalida[i])) ? (d.params.TempEntrada[i] - d.params.TempSalida[i]) : NaN);
     const presAltaSeries = d.params.PresAlta;
     detailChart = new Chart(ctx, {
       type:'line',
@@ -3391,6 +3392,101 @@ if (voltagesMigrated){
   const status = document.getElementById('loadStatus');
   status.className = 'load-status ok';
   status.textContent = '⚠️ Tensiones migradas: V_R/V_S/V_T se reinterpretaron como V_RS/V_ST/V_TR (línea-línea). Los datos previos a esta versión asumen medición entre fases.';
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  HISTORIAL: ver completo · editar · eliminar lecturas
+// ═══════════════════════════════════════════════════════════
+let _histVerTodo = false;
+let _histEd = null;
+const _hNum = v => typeof v === 'number' && isFinite(v);
+const _hKey = d => { try { return new Date(d).toISOString().slice(0,19); } catch { return String(d).slice(0,19); } };
+function histLimite(){ return _histVerTodo ? 100000 : 15; }
+function histToggleTodo(k){ _histVerTodo = !_histVerTodo; openDetail(k); }
+function histBotonVerTodo(k, n){
+  if (n <= 15) return '';
+  return `<div style="margin:8px 0 0;"><button class="btn-small" onclick="histToggleTodo('${escJs(k)}')">${_histVerTodo ? 'Ver solo las últimas 15' : 'Ver historial completo (' + n + ' lecturas)'}</button></div>`;
+}
+// Avisa a la nube que una lectura (por su fecha) dejó de existir con esa fecha.
+function histNubeBorrar(k, fechaKey){
+  // Refrigeración Pro guarda las lecturas solo en este dispositivo: no hay nada que borrar en la nube.
+}
+function histBorrar(k, i){
+  const d = readingsData.get(k); if (!d || i < 0 || i >= d.dates.length) return;
+  if (!confirm(`¿Eliminar la lectura del ${fmtDate(d.dates[i])}?` + '')) return;
+  const fk = _hKey(d.dates[i]);
+  histNubeBorrar(k, fk);
+  d.dates.splice(i,1); if (d.obs) d.obs.splice(i,1);
+  for (const pk of Object.keys(d.params)) d.params[pk].splice(i,1);
+  if (d.ref === fk) d.ref = null;
+  if (!d.dates.length) readingsData.delete(k);
+  saveState(); renderAll();
+  if (readingsData.has(k)) openDetail(k); else closeDetail();
+}
+function histCerrarEditor(){ const o = document.getElementById('histEdOverlay'); if (o) o.remove(); _histEd = null; }
+function histEditar(k, i){
+  const d = readingsData.get(k); if (!d || i < 0 || i >= d.dates.length) return;
+  histCerrarEditor();
+  _histEd = {k, i};
+  const t = new Date(d.dates[i]), p = n => String(n).padStart(2,'0');
+  const local = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}T${p(t.getHours())}:${p(t.getMinutes())}`;
+  const inp = 'width:100%;box-sizing:border-box;background:var(--card,#111c2e);border:1px solid var(--border,#1e2d45);color:var(--text,#cdd9f0);border-radius:8px;padding:7px 10px;font-size:.9rem;';
+  const campos = Object.keys(d.params).map(pk => {
+    const arr = d.params[pk], v = arr[i];
+    const esTxt = arr.some(x => typeof x === 'string');
+    const val = esTxt ? (v == null ? '' : v) : (_hNum(v) ? v : '');
+    return `<label style="display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--muted,#5e7a9a);">${escHtml(pk)}
+      <input data-pk="${escHtml(pk)}" data-txt="${esTxt?1:0}" ${esTxt?'type="text"':'type="number" step="any"'} value="${escHtml(String(val))}" style="${inp}"></label>`;
+  }).join('');
+  const ov = document.createElement('div');
+  ov.id = 'histEdOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.onclick = e => { if (e.target === ov) histCerrarEditor(); };
+  ov.innerHTML = `<div style="background:var(--surface,#0d1626);border:1px solid var(--border,#1e2d45);border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;color:var(--text,#cdd9f0);">
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px;">✏️ Editar lectura</div>
+    <div style="font-size:.78rem;color:var(--muted,#5e7a9a);margin-bottom:12px;">Los campos vacíos quedan como "sin dato". Los cambios se guardan también en la nube.</div>
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--muted,#5e7a9a);margin-bottom:10px;">Fecha y hora
+      <input id="histEdFecha" type="datetime-local" value="${local}" style="${inp}"></label>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">${campos}</div>
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:.72rem;color:var(--muted,#5e7a9a);margin-top:10px;">Observaciones
+      <textarea id="histEdObs" rows="2" style="${inp}resize:vertical;">${escHtml((d.obs && d.obs[i]) || '')}</textarea></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;">
+      <button class="btn-small" onclick="histCerrarEditor()">Cancelar</button>
+      <button class="btn-small danger" onclick="histBorrarDesdeEditor()">Eliminar</button>
+      <button class="btn-small" style="background:#3b82f6;color:#fff;border-color:#3b82f6;" onclick="histGuardarEdicion()">Guardar cambios</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+}
+function histBorrarDesdeEditor(){ if (!_histEd) return; const {k,i} = _histEd; histCerrarEditor(); histBorrar(k,i); }
+function histGuardarEdicion(){
+  if (!_histEd) return;
+  const {k, i} = _histEd, d = readingsData.get(k); if (!d) return histCerrarEditor();
+  const nueva = new Date(document.getElementById('histEdFecha').value);
+  if (isNaN(nueva)) { alert('La fecha no es válida.'); return; }
+  const kOld = _hKey(d.dates[i]), kNew = _hKey(nueva);
+  if (kNew !== kOld && d.dates.some((x,j) => j !== i && _hKey(x) === kNew)) {
+    alert('Ya existe otra lectura con esa misma fecha y hora. Cambiá el horario o editá esa lectura.'); return;
+  }
+  document.querySelectorAll('#histEdOverlay [data-pk]').forEach(el => {
+    const pk = el.dataset.pk, raw = el.value.trim();
+    if (el.dataset.txt === '1') d.params[pk][i] = raw;
+    else { const n = parseFloat(raw.replace(',', '.')); d.params[pk][i] = (raw !== '' && isFinite(n)) ? n : NaN; }
+  });
+  if (!d.obs) d.obs = d.dates.map(() => '');
+  d.obs[i] = document.getElementById('histEdObs').value.trim();
+  if (kNew !== kOld) {
+    histNubeBorrar(k, kOld);            // la fecha vieja deja de existir en la nube
+    d.dates[i] = nueva;
+    if (d.ref === kOld) d.ref = kNew;
+    // reordena cronológicamente todos los arreglos en paralelo
+    const ord = d.dates.map((x,j) => j).sort((a,b) => d.dates[a] - d.dates[b]);
+    d.dates = ord.map(j => d.dates[j]);
+    d.obs = ord.map(j => d.obs[j]);
+    for (const pk of Object.keys(d.params)) { const a = d.params[pk]; d.params[pk] = ord.map(j => a[j]); }
+  }
+  histCerrarEditor();
+  saveState(); renderAll(); openDetail(k);
 }
 
 </script>
