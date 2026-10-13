@@ -454,6 +454,8 @@ header{
   <button class="btn-small" onclick="downloadTemplate()">⬇️ Descargar plantilla</button>
   <button class="btn-small" onclick="exportCSV()">⬇️ Exportar historial CSV</button>
   <span class="load-status" id="loadStatus"></span>
+  <span id="nubeEstado" style="font-size:.78rem;color:var(--muted);margin-left:10px;"></span>
+  <button class="btn-small" id="btnRecargarNube" onclick="recargarDesdeNube()" title="Sube lo pendiente y trae el último estado de Supabase" style="margin-left:6px;">🔄 Recargar</button>
   <div class="sep"></div>
   <button class="btn-small danger" onclick="clearAllData()">🗑️ Borrar todos los datos</button>
 </div>
@@ -946,13 +948,13 @@ function satTempCond(refrigerante, presAltaBar){
 }
 // Recalentamiento (superheat) = Temp. real en línea de succión − Temp. de saturación a la presión de baja
 function computeSuperheat(refrigerante, presBajaBar, tempSuccionC){
-  if (!PT_TABLES[refrigerante] || !isN(presBajaBar) || !isN(tempSuccionC)) return NaN;   // isN: null (dato vacío guardado en la BD) NO cuenta como 0
+  if (!PT_TABLES[refrigerante] || isNaN(presBajaBar) || isNaN(tempSuccionC)) return NaN;
   const tSat = satTempEvap(refrigerante, presBajaBar);
   return isNaN(tSat) ? NaN : (tempSuccionC - tSat);
 }
 // Subenfriamiento (subcooling) = Temp. de saturación a la presión de alta − Temp. real en línea de líquido
 function computeSubcooling(refrigerante, presAltaBar, tempLiquidoC){
-  if (!PT_TABLES[refrigerante] || !isN(presAltaBar) || !isN(tempLiquidoC)) return NaN;   // isN: null (dato vacío guardado en la BD) NO cuenta como 0
+  if (!PT_TABLES[refrigerante] || isNaN(presAltaBar) || isNaN(tempLiquidoC)) return NaN;
   const tSat = satTempCond(refrigerante, presAltaBar);
   return isNaN(tSat) ? NaN : (tSat - tempLiquidoC);
 }
@@ -1008,6 +1010,12 @@ let voltagesMigrated = false; // true si se reinterpretaron V_R/V_S/V_T como V_R
 let statusFilter    = 'all';
 let currentKey      = null;
 let detailChart      = null;
+// ── Sincronización con Supabase (ver sección 3b) ──
+const MODULO = 'refrigeracion_pro';   // clave de ficha/mediciones/config en la nube
+let _sucia = false, _cfgSucia = false, _pend = [], _ver = 0, _subiendo = false, _tSubida = null;
+let _equipoIds = new Map();           // tag -> equipos.id (Supabase)
+let _hashes = new Map();              // lo último sincronizado: 'f:tag' / 'm:tag|fecha' -> JSON
+let _ultimaBajada = 0, _migrar = false;
 
 // ═══════════════════════════════════════════════════════════
 //  3. PERSISTENCE
@@ -1042,22 +1050,250 @@ function loadState() {
       }
     }
     if (Array.isArray(c.intervenciones)) intervenciones = c.intervenciones;
+    if (c.nube){ _sucia = !!c.nube.sucia; _cfgSucia = !!c.nube.cfgSucia; _pend = c.nube.pend || []; }
+    else if (equiposRegistry.size || readingsData.size){ _sucia = true; _migrar = true; }  // datos locales previos a la nube: se suben una vez
     // Guardar recién acá (con intervenciones ya cargadas) para no pisarlas.
     if (voltagesMigrated) saveState();
   } catch(e){ console.warn('loadState error', e); }
 }
-function saveState() {
+function escribirCache() {
   const rdSerial = {};
   for (const [k,v] of readingsData.entries()) {
     rdSerial[k] = { dates: v.dates.map(d=>d.toISOString()), params: v.params, obs: v.obs || [] };
   }
-  localStorage.setItem('refrigeracion_pro_cfg', JSON.stringify({
-    thresholds,
-    equiposRegistry: Object.fromEntries(equiposRegistry),
-    readingsData: rdSerial,
-    intervenciones
-  }));
+  try{
+    localStorage.setItem('refrigeracion_pro_cfg', JSON.stringify({
+      thresholds,
+      equiposRegistry: Object.fromEntries(equiposRegistry),
+      readingsData: rdSerial,
+      intervenciones,
+      nube: {sucia:_sucia, cfgSucia:_cfgSucia, pend:_pend}
+    }));
+  }catch(e){ console.warn('[caché] no se pudo escribir en el navegador; los datos siguen yendo a la nube', e); }
 }
+// cfgChanged=true cuando lo que cambió son los umbrales (config_apps), no los equipos/lecturas.
+function saveState(cfgChanged) {
+  _sucia = true;
+  if (cfgChanged) _cfgSucia = true;
+  _ver++;
+  escribirCache();
+  programarSubida();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  3b. SINCRONIZACIÓN CON SUPABASE (SatSync)
+// ═══════════════════════════════════════════════════════════
+// Cada equipo es una fila de `equipos` (tag único); su ficha propia de este módulo vive en
+// equipos.ficha.refrigeracion_pro y cada lectura es una fila de `mediciones` (equipo + fecha).
+// Así todos los dispositivos ven los mismos equipos y lecturas. Sin conexión se trabaja
+// en el navegador y los cambios suben solos al reconectar.
+const NUM_KEYS = ['TempEntrada','TempSalida','TempAmb','PresAlta','PresBaja','TempSuccion','TempLiquido',
+  'I_R','I_S','I_T','V_RS','V_ST','V_TR','V_RN','V_SN','V_TN','DesbI','DesbV','VelAire',
+  'TempAguaRetorno','TempAguaSuministro','CaudalAgua'];
+const STR_KEYS = ['Filtro'];
+function fechaNube(d){ return new Date(d).toISOString().slice(0,19) + 'Z'; }   // misma precisión que la deduplicación local
+function fichaNube(eqId){
+  const e = equiposRegistry.get(eqId); if (!e) return null;
+  // equipos.tipo es una columna compartida entre módulos: el tipo propio vive solo en la ficha.
+  return { tag:e.tag, tipo:null, ubicacion:e.ubicacion || null, criticidad:null,
+    ficha:{tipo:e.tipo||'', ambiente:e.ambiente||'', ubicacion:e.ubicacion||'', capacidad:e.capacidad||0,
+           capUnidad:e.capUnidad||'TR', refrigerante:e.refrigerante||'', fla:e.fla||0} };
+}
+function datosDeLectura(params, i){
+  const d = {};
+  Object.keys(params).forEach(k => {
+    const v = params[k]?.[i];
+    d[k] = (typeof v === 'string') ? (v || null) : (isN(v) ? v : null);   // NaN/undefined -> null
+  });
+  return d;
+}
+function nubeEstado(est, msg){
+  const el = document.getElementById('nubeEstado'); if (!el) return;
+  const T = {
+    ok:['☁️ Sincronizado','#10c98a'], subiendo:['☁️ Guardando…','#f0b429'], pendiente:['☁️ Cambios por guardar…','#f0b429'],
+    bajando:['☁️ Cargando…','#f0b429'], offline:['⚠️ Sin conexión: se guarda en este equipo y sube al reconectar','#f97316'],
+    error:['⚠️ No se pudo sincronizar','#ef4444']
+  }[est] || ['',''];
+  el.textContent = T[0] + (msg ? ' — ' + msg : ''); el.style.color = T[1]; el.title = msg || '';
+}
+const nubeLista = () => typeof SatSync !== 'undefined' && (SatSync.estaConfigurado() || SatSync.init());
+function programarSubida(){
+  nubeEstado('pendiente');
+  clearTimeout(_tSubida);
+  _tSubida = setTimeout(() => subirCambios(), 1500);
+}
+// Marca un equipo/lectura eliminados para que se borren de la nube en la próxima subida.
+function nubeBorrarEquipo(tag){
+  _pend.push({t:'eq', tag});
+  for (const k of [..._hashes.keys()]) if (k === 'f:' + tag || k.startsWith('m:' + tag + '|')) _hashes.delete(k);
+}
+function nubeBorrarLectura(tag, fechaKey){   // fechaKey: _hKey (19 caracteres, sin Z)
+  _pend.push({t:'med', tag, fecha: fechaKey + 'Z'});
+  _hashes.delete('m:' + tag + '|' + fechaKey + 'Z');
+}
+
+// ── Subida (solo lo que cambió respecto de lo último sincronizado) ──
+async function subirCambios(opts = {}){
+  if (_subiendo){ programarSubida(); return false; }
+  if (!nubeLista()){ nubeEstado('offline'); return false; }
+  _subiendo = true; nubeEstado('subiendo');
+  const ver0 = _ver;
+  try{
+    // 1) borrados pendientes, en el orden en que ocurrieron
+    while (_pend.length){
+      const p = _pend[0];
+      const eq = _equipoIds.has(p.tag) ? {id:_equipoIds.get(p.tag)} : await SatSync.buscarEquipoPorTag(p.tag);
+      if (eq){
+        if (p.t === 'eq'){ await SatSync.quitarModuloDeEquipo(MODULO, eq.id); _equipoIds.delete(p.tag); }
+        else if (p.t === 'med') await SatSync.borrarMedicion(MODULO, eq.id, p.fecha);
+      }
+      _pend.shift(); escribirCache();
+    }
+    // 2) fichas de equipos nuevas o modificadas
+    const fichas = [], hf = [];
+    for (const id of equiposRegistry.keys()){
+      const f = fichaNube(id), h = JSON.stringify(f);
+      if (_hashes.get('f:' + f.tag) !== h || !_equipoIds.has(f.tag)){ fichas.push(f); hf.push(['f:' + f.tag, h]); }
+    }
+    if (fichas.length){
+      const filas = await SatSync.guardarFichas(MODULO, fichas, {noPisar: !!opts.migracion});
+      filas.forEach(e => { _equipoIds.set(e.tag, e.id); equiposHub.set(e.tag, {tag:e.tag, nombre:e.nombre, tipo:e.tipo}); });
+      hf.forEach(([k,h]) => _hashes.set(k, h));
+    }
+    // 3) lecturas nuevas o modificadas (una fila por equipo y fecha)
+    const meds = [], hm = [];
+    for (const [id, e] of equiposRegistry.entries()){
+      const eqId = _equipoIds.get(e.tag), d = readingsData.get(id); if (!eqId || !d) continue;
+      for (let i = 0; i < d.dates.length; i++){
+        const fecha = fechaNube(d.dates[i]);
+        const fila = {equipo_id:eqId, fecha, datos:datosDeLectura(d.params, i), obs:(d.obs && d.obs[i]) || null};
+        const h = JSON.stringify([fila.datos, fila.obs]), k = 'm:' + e.tag + '|' + fecha;
+        if (_hashes.get(k) !== h){ meds.push(fila); hm.push([k,h]); }
+      }
+    }
+    if (meds.length){ await SatSync.guardarMediciones(MODULO, meds); hm.forEach(([k,h]) => _hashes.set(k, h)); }
+    // 4) umbrales (solo si se editaron en este dispositivo)
+    if (_cfgSucia){ await SatSync.guardarConfigApp(MODULO, {thresholds}); _cfgSucia = false; }
+
+    if (_ver === ver0){ _sucia = false; nubeEstado('ok'); } else programarSubida();
+    escribirCache();
+    return true;
+  }catch(err){
+    console.error('[SatSync] error subiendo cambios', err);
+    nubeEstado('error', err.message || String(err));
+    clearTimeout(_tSubida); _tSubida = setTimeout(() => subirCambios(), 30000);
+    return false;
+  }finally{ _subiendo = false; }
+}
+
+// ── Descarga: reconstruye equipos y lecturas desde Supabase ──
+async function bajarTodo(){
+  nubeEstado('bajando');
+  const [equipos, meds, cfg] = await Promise.all([
+    SatSync.listarEquipos(), SatSync.listarMediciones(MODULO), SatSync.cargarConfigApp(MODULO)
+  ]);
+  // Se conserva el id local de cada TAG para no perder el equipo abierto ni referencias en pantalla.
+  const idDeTag = new Map([...equiposRegistry.entries()].map(([id,e]) => [e.tag, id]));
+  const registro = new Map(), ids = new Map(), tagDeEq = new Map(), idLocalDeEq = new Map();
+  for (const e of equipos){
+    const f = e.ficha && e.ficha[MODULO];
+    if (!f || f.eliminada) continue;   // sin ficha de este módulo: es un equipo de otro módulo
+    const id = idDeTag.get(e.tag) || genId();
+    registro.set(id, {
+      tag:e.tag, tipo:f.tipo || e.tipo || 'AC Split', ambiente:f.ambiente || '',
+      ubicacion: e.ubicacion != null ? e.ubicacion : (f.ubicacion || ''),
+      capacidad:f.capacidad || 0, capUnidad:f.capUnidad || 'TR', refrigerante:f.refrigerante || '', fla:f.fla || 0
+    });
+    ids.set(e.tag, e.id); tagDeEq.set(e.id, e.tag); idLocalDeEq.set(e.id, id);
+  }
+  const lect = new Map();
+  for (const m of meds){
+    const id = idLocalDeEq.get(m.equipo_id); if (!id) continue;
+    const datos = m.datos || {};
+    if (!lect.has(id)){
+      const params = {}; [...NUM_KEYS, ...STR_KEYS].forEach(k => params[k] = []);
+      lect.set(id, {dates:[], params, obs:[]});
+    }
+    const r = lect.get(id);
+    // columnas nuevas que aparezcan en la nube se agregan, rellenando con "sin dato" lo anterior
+    for (const k of Object.keys(datos)) if (!r.params[k]) r.params[k] = r.dates.map(() => (typeof datos[k] === 'string' ? '' : NaN));
+    r.dates.push(new Date(m.fecha)); r.obs.push(m.obs || '');
+    for (const k of Object.keys(r.params)){
+      const v = datos[k];
+      r.params[k].push(STR_KEYS.includes(k) || typeof v === 'string' ? (v || '') : (isN(v) ? v : NaN));
+    }
+  }
+  for (const r of lect.values()){   // orden cronológico, por si las filas llegaron desordenadas
+    const idx = r.dates.map((_,i)=>i).sort((a,b)=>r.dates[a]-r.dates[b]);
+    r.dates = idx.map(i=>r.dates[i]); r.obs = idx.map(i=>r.obs[i]);
+    r.params = Object.fromEntries(Object.entries(r.params).map(([k,v])=>[k, idx.map(i=>v[i])]));
+  }
+  equiposRegistry = registro; readingsData = lect; _equipoIds = ids; _hashes = new Map();
+  for (const id of registro.keys()) _hashes.set('f:' + registro.get(id).tag, JSON.stringify(fichaNube(id)));
+  for (const [id, r] of lect.entries()){
+    const tag = registro.get(id).tag;
+    for (let i = 0; i < r.dates.length; i++){
+      _hashes.set('m:' + tag + '|' + fechaNube(r.dates[i]), JSON.stringify([datosDeLectura(r.params, i), r.obs[i] || null]));
+    }
+  }
+  if (cfg && cfg.thresholds){
+    const c = cfg.thresholds, D = DEFAULT_THRESHOLDS;
+    thresholds = {...D, ...c};
+    for (const k of ['presionAltaTsat','presionBajaTsat','presionAlta','presionBaja','superheat','subenfriamiento']) thresholds[k] = {...D[k], ...(c[k]||{})};
+  }
+  _ultimaBajada = Date.now(); _sucia = false; _cfgSucia = false;
+  escribirCache(); nubeEstado('ok');
+}
+
+async function iniciarNube(){
+  if (!nubeLista()){ nubeEstado('offline'); return; }
+  try{
+    // Cambios locales sin subir (trabajo offline o datos previos a la nube): primero se suben.
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios({migracion: _migrar});
+      if (!ok) return;            // si no se pudo subir no se baja nada: no se pisa el trabajo local
+      _migrar = false;
+    }
+    await bajarTodo();
+    renderAll();
+  }catch(err){
+    console.error('[SatSync] error cargando desde la nube', err);
+    nubeEstado('error', err.message || String(err));
+  }
+}
+async function recargarDesdeNube(){
+  const btn = document.getElementById('btnRecargarNube');
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  try{
+    if (_sucia || _cfgSucia || _pend.length){
+      const ok = await subirCambios();
+      if (!ok){ alert('Hay cambios sin subir y no se pudieron guardar. Revisá la conexión antes de recargar.'); return; }
+    }
+    await bajarTodo();
+    renderAll();
+    if (currentKey && !equiposRegistry.has(currentKey) && typeof closeDetail === 'function') closeDetail();
+    nubeEstado('ok', 'recargado ' + new Date().toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}));
+  }catch(err){
+    nubeEstado('error', err.message || String(err));
+    alert('No se pudo recargar: ' + (err.message || err));
+  }finally{ if (btn) btn.disabled = false; }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden){ if (_sucia || _cfgSucia || _pend.length) subirCambios(); return; }
+  if (!_sucia && !_cfgSucia && !_pend.length && !_subiendo && Date.now() - _ultimaBajada > 60000 && !document.querySelector('.modal-overlay.open') && !document.getElementById('histEdOverlay') && nubeLista()){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar', err); }
+  }
+});
+window.addEventListener('online', async () => {
+  if (_sucia || _cfgSucia || _pend.length){
+    const ok = await subirCambios();
+    if (!ok) return;
+  }
+  if (!document.hidden && !document.querySelector('.modal-overlay.open') && !document.getElementById('histEdOverlay')){
+    try{ await bajarTodo(); renderAll(); }catch(err){ console.warn('[SatSync] no se pudo refrescar al reconectar', err); }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 //  4. HELPERS
@@ -1122,7 +1358,7 @@ function computeCargaPct(iAvg, fla){
 // fla: corriente nominal de placa (FLA/RLA, en A) del equipo — opcional, habilita % de Carga.
 function evalReading(params, n, fla, refrigerante, tipo){
   const p = params;
-  const deltaT  = (isN(p.TempEntrada?.[n]) && isN(p.TempSalida?.[n])) ? (p.TempEntrada[n] - p.TempSalida[n]) : NaN;
+  const deltaT  = (p.TempEntrada?.[n] - p.TempSalida?.[n]);
   const desbV   = p.DesbV?.[n];
   const desbI   = p.DesbI?.[n];
   const velAire = p.VelAire?.[n];
@@ -1796,7 +2032,7 @@ function linRegTrend(xs, ys){
 // direction indica qué sentido de la pendiente es una mejora, para colorear el veredicto.
 // onlyFor restringe la métrica a un tipo de equipo específico (p.ej. lado de agua → solo Chillers).
 const TREND_METRICS = [
-  { key:'deltaT',   label:'ΔT Aire',            unit:'°C', direction:'higherIsBetter', get:(p,i)=> (isN(p.TempEntrada?.[i]) && isN(p.TempSalida?.[i])) ? p.TempEntrada[i]-p.TempSalida[i] : NaN },
+  { key:'deltaT',   label:'ΔT Aire',            unit:'°C', direction:'higherIsBetter', get:(p,i)=> p.TempEntrada?.[i]-p.TempSalida?.[i] },
   { key:'presAlta', label:'Presión Alta',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresAlta?.[i] },
   { key:'presBaja', label:'Presión Baja',        unit:'bar', direction:'neutral',       get:(p,i)=> p.PresBaja?.[i] },
   { key:'desbI',    label:'Desb. Corriente',     unit:'%',  direction:'lowerIsBetter',  get:(p,i)=> p.DesbI?.[i] },
@@ -1990,7 +2226,7 @@ function openDetail(k){
     if (!ctx) return;
     if (detailChart) detailChart.destroy();
     const labels = d.dates.map(fmtDate);
-    const deltaTSeries = d.dates.map((_,i)=> (isN(d.params.TempEntrada[i]) && isN(d.params.TempSalida[i])) ? (d.params.TempEntrada[i] - d.params.TempSalida[i]) : NaN);
+    const deltaTSeries = d.dates.map((_,i)=> (d.params.TempEntrada[i] - d.params.TempSalida[i]));
     const presAltaSeries = d.params.PresAlta;
     detailChart = new Chart(ctx, {
       type:'line',
@@ -2047,6 +2283,7 @@ function createEquipo(){
 }
 function deleteEquipo(id){
   if (!confirm('¿Eliminar este equipo y todas sus mediciones asociadas?')) return;
+  const _e = equiposRegistry.get(id); if (_e) nubeBorrarEquipo(_e.tag);
   equiposRegistry.delete(id);
   readingsData.delete(id);
   saveState();
@@ -2148,14 +2385,14 @@ function saveThresholdsFromUI(){
   if (!isNaN(shMax)) thresholds.superheat.max = shMax;
   if (!isNaN(scMin)) thresholds.subenfriamiento.min = scMin;
   if (!isNaN(scMax)) thresholds.subenfriamiento.max = scMax;
-  saveState();
+  saveState(true);
   renderAll();
   alert('Umbrales guardados.');
 }
 function resetThresholds(){
   if (!confirm('¿Restaurar los umbrales por defecto?')) return;
   thresholds = JSON.parse(JSON.stringify(DEFAULT_THRESHOLDS));
-  saveState();
+  saveState(true);
   renderAll();
 }
 
@@ -2293,6 +2530,7 @@ function exportCSV(){
 
 function clearAllData(){
   if (!confirm('¿Borrar TODOS los equipos, lecturas e intervenciones? Esta acción no se puede deshacer.')) return;
+  for (const e of equiposRegistry.values()) nubeBorrarEquipo(e.tag);
   equiposRegistry.clear(); readingsData.clear(); intervenciones = [];
   saveState();
   renderAll();
@@ -3387,6 +3625,7 @@ loadState();
 populateEquipoTypeSelect();
 renderAll();
 sincronizarEquiposHub(true); // silencioso: si no hay conexión configurada, no molesta
+iniciarNube(); // sube lo pendiente (si lo hay) y baja el estado actual de Supabase
 actualizarBadgeCapturas();   // avisa si hay capturas del hub sin importar
 if (voltagesMigrated){
   const status = document.getElementById('loadStatus');
@@ -3410,7 +3649,7 @@ function histBotonVerTodo(k, n){
 }
 // Avisa a la nube que una lectura (por su fecha) dejó de existir con esa fecha.
 function histNubeBorrar(k, fechaKey){
-  // Refrigeración Pro guarda las lecturas solo en este dispositivo: no hay nada que borrar en la nube.
+  const e = equiposRegistry.get(k); if (e) nubeBorrarLectura(e.tag, fechaKey);
 }
 function histBorrar(k, i){
   const d = readingsData.get(k); if (!d || i < 0 || i >= d.dates.length) return;
